@@ -1,21 +1,27 @@
 export interface Rule {
   id: string;
+  description: string;
   match: {
-    labels?: string[];
-    title?: string[];
-    body?: string[];
+    title_contains?: string[];
+    label_contains?: string[];
+    body_contains?: string[];
   };
-  docs?: string[];
-  template?: string;
+  docs: string[];
+  hints: string[];
 }
 
 export interface RulesFile {
-  version: string;
+  version: 1;
   rules: Rule[];
+  defaults?: {
+    docs?: string[];
+    hints?: string[];
+  };
 }
 
 export interface Config {
+  repoPath: string;           // absolute path to the target repo root
+  specAgentDir: string;       // absolute path to .spec-agent/
   rulesFile: RulesFile;
-  repoPath: string;
-  specAgentDir: string;
+  promptTemplate: string | null;  // null if .spec-agent/prompt-template.md not found
 }
