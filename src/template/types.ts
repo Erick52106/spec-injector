@@ -1,10 +1,14 @@
-import type { Issue } from '../github/types.js';
-import type { MatchResult } from '../rules/types.js';
-import type { DocSection } from '../docs/types.js';
-
 export interface TemplateVars {
-  issue: Issue;
-  matches: MatchResult[];
-  docs: DocSection[];
-  generatedAt: string;
+  issue_title: string;
+  issue_number: string;
+  issue_url: string;
+  issue_body: string;
+  issue_labels: string;
+  issue_checklist: string;
+  matched_rule_ids: string;
+  matched_rule_descriptions: string;
+  matched_hints: string;
+  doc_sections: string;
+  repo_path: string;
+  generated_at: string;
 }

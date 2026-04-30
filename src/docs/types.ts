@@ -1,5 +1,5 @@
 export interface DocSection {
-  filePath: string;
-  content: string;
-  heading?: string;
+  filePath: string;   // relative path as listed in rules.yaml
+  content: string;    // full file content
+  found: boolean;     // false if file was missing
 }

@@ -1,17 +1,41 @@
-export const DEFAULT_TEMPLATE: string = `# Task Package — Issue #{{issue.number}}: {{issue.title}}
+export const DEFAULT_TEMPLATE = `# Task Package: {{issue_title}}
 
-Generated: {{generatedAt}}
-Issue URL: {{issue.url}}
+**Issue:** [#{{issue_number}}]({{issue_url}})
+**Generated:** {{generated_at}}
+**Matched rules:** {{matched_rule_ids}}
+**Repo:** \`{{repo_path}}\`
 
-## Issue Body
+---
 
-{{issue.body}}
+## Issue Description
 
-## Matched Rules
+{{issue_body}}
 
-{{matches}}
+---
 
-## Relevant Docs
+## Labels
 
-{{docs}}
+{{issue_labels}}
+
+---
+
+## Implementation Scope
+
+Based on matched rules: **{{matched_rule_descriptions}}**
+
+{{matched_hints}}
+
+---
+
+## Relevant Documentation
+
+{{doc_sections}}
+
+---
+
+## Acceptance Checklist
+
+> Auto-extracted from issue body (edit as needed)
+
+{{issue_checklist}}
 `;

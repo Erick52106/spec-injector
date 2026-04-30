@@ -2,10 +2,5 @@ import type { Rule } from '../config/types.js';
 
 export interface MatchResult {
   rule: Rule;
-  score: number;
-  matchedOn: {
-    labels: string[];
-    titlePatterns: string[];
-    bodyPatterns: string[];
-  };
+  matchedOn: string[];  // which fields triggered the match, e.g. ["title_contains:backend"]
 }

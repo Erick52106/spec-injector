@@ -1,5 +1,9 @@
 import type { TemplateVars } from './types.js';
 
-export function renderTemplate(_template: string, _vars: TemplateVars): string {
-  throw new Error('not implemented');
+export function renderTemplate(template: string, vars: TemplateVars): string {
+  let result = template;
+  for (const [key, value] of Object.entries(vars)) {
+    result = result.replaceAll(`{{${key}}}`, value);
+  }
+  return result;
 }
