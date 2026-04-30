@@ -22,7 +22,7 @@ interface ParsedLine {
   lineNo: number;
   /** Number of leading spaces. */
   indent: number;
-  /** Content after stripping leading spaces and inline comments. */
+  /** Content after stripping leading spaces only — inline comments are stripped later during scalar parsing. */
   content: string;
 }
 
