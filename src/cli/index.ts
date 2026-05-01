@@ -32,7 +32,7 @@ program
 // validate subcommand
 program
   .command('validate')
-  .description('Validate .spec-agent/rules.yaml syntax')
+  .description('Validate .spec-injector/rules.json syntax')
   .option('--repo <path>', 'Path to target repo (default: CWD)')
   .action(async (opts: { repo?: string }) => {
     const { validate } = await import('./validate.js');
