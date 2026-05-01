@@ -2,7 +2,7 @@ import path from 'path';
 import { fetchIssue } from '../github/issue.js';
 import { loadConfig } from '../config/loader.js';
 import { matchRules } from '../rules/engine.js';
-import { loadExplicitDocs, discoverRelevantDocs } from '../docs/finder.js';
+import { loadExplicitDocs, discoverRelevantDocs, loadCorePreset } from '../docs/finder.js';
 import { renderTemplate } from '../template/renderer.js';
 import { DEFAULT_TEMPLATE } from '../template/default-template.js';
 import { writePackage } from '../output/writer.js';
@@ -36,12 +36,14 @@ export async function plan(
     for (const m of matches) console.log(`  ${m.rule.id}: ${m.matchedOn.join(', ')}`);
   }
 
-  // 4. Always-read docs
-  const alwaysDocs = await loadExplicitDocs(
+  // 4. Always-read docs (explicit config + core preset always appended)
+  const explicitAlwaysDocs = await loadExplicitDocs(
     config.rulesFile.always_read ?? [],
     repoPath,
     'always'
   );
+  const corePreset = await loadCorePreset();
+  const alwaysDocs = [...explicitAlwaysDocs, corePreset];
 
   // 5. Rule-matched docs (deduplicated across all matched rules)
   const ruleDocPaths = [...new Set(matches.flatMap((m) => m.rule.docs))];
