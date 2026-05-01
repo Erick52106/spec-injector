@@ -1,18 +1,17 @@
 import path from 'path';
 import fs from 'fs';
 import { safeReadFile } from '../utils/fs.js';
-import { parseYaml } from './yaml-parser.js';
 import type { Config, RulesFile, Rule } from './types.js';
 
 export async function loadConfig(repoPath: string): Promise<Config> {
   const resolved = path.resolve(repoPath);
   const specAgentDir = findSpecAgentDir(resolved);
 
-  const rulesPath = path.join(specAgentDir, 'rules.yaml');
+  const rulesPath = path.join(specAgentDir, 'rules.json');
   const rulesText = await safeReadFile(rulesPath);
   if (rulesText === null) {
     throw new Error(
-      `No .spec-agent/rules.yaml found in ${resolved}. Run "spec init" to create one.`
+      `No .spec-injector/rules.json found in ${resolved}. Run "spec init" to create one.`
     );
   }
 
@@ -20,24 +19,20 @@ export async function loadConfig(repoPath: string): Promise<Config> {
   try {
     rulesFile = parseAndValidateRules(rulesText, rulesPath);
   } catch (err) {
-    throw new Error(`Invalid rules.yaml: ${(err as Error).message}`);
+    throw new Error(`Invalid rules.json: ${(err as Error).message}`);
   }
-
-  const templatePath = path.join(specAgentDir, 'prompt-template.md');
-  const promptTemplate = await safeReadFile(templatePath);
 
   return {
     repoPath: resolved,
     specAgentDir,
     rulesFile,
-    promptTemplate,
   };
 }
 
 function findSpecAgentDir(startPath: string): string {
   let current = startPath;
   for (let i = 0; i < 6; i++) {
-    const candidate = path.join(current, '.spec-agent');
+    const candidate = path.join(current, '.spec-injector');
     if (fs.existsSync(candidate) && fs.statSync(candidate).isDirectory()) {
       return candidate;
     }
@@ -46,15 +41,23 @@ function findSpecAgentDir(startPath: string): string {
     current = parent;
   }
   throw new Error(
-    `No .spec-agent/ directory found in or above ${startPath}. Run "spec init" to create one.`
+    `No .spec-injector/ directory found in or above ${startPath}. Run "spec init" to create one.`
   );
 }
 
+function requireStringArray(val: unknown, field: string): string[] {
+  if (!Array.isArray(val)) throw new Error(`${field} must be an array, got ${typeof val}`);
+  for (let i = 0; i < val.length; i++) {
+    if (typeof val[i] !== 'string') throw new Error(`${field}[${i}] must be a string, got ${typeof val[i]}`);
+  }
+  return val as string[];
+}
+
 function parseAndValidateRules(text: string, filePath: string): RulesFile {
-  const raw = parseYaml(text) as Record<string, unknown>;
+  const raw = JSON.parse(text) as Record<string, unknown>;
 
   if (!raw || typeof raw !== 'object') {
-    throw new Error(`${filePath} is empty or not a valid YAML mapping`);
+    throw new Error(`${filePath} is empty or not a valid JSON object`);
   }
 
   const version = raw['version'];
@@ -64,7 +67,7 @@ function parseAndValidateRules(text: string, filePath: string): RulesFile {
 
   const rawRules = raw['rules'];
   if (!Array.isArray(rawRules)) {
-    throw new Error('rules must be a sequence');
+    throw new Error('rules must be an array');
   }
 
   const rules: Rule[] = rawRules.map((r: unknown, i: number) => {
@@ -73,19 +76,17 @@ function parseAndValidateRules(text: string, filePath: string): RulesFile {
     if (typeof rule['description'] !== 'string') throw new Error(`rules[${i}].description must be a string`);
 
     const match = (rule['match'] ?? {}) as Record<string, unknown>;
-    const docs = Array.isArray(rule['docs']) ? (rule['docs'] as string[]) : [];
-    const hints = Array.isArray(rule['hints']) ? (rule['hints'] as string[]) : [];
 
     return {
       id: rule['id'],
       description: rule['description'],
       match: {
-        title_contains: toStringArray(match['title_contains']),
-        label_contains: toStringArray(match['label_contains']),
-        body_contains: toStringArray(match['body_contains']),
+        title_contains: requireStringArray(match['title_contains'] ?? [], `rules[${i}].match.title_contains`),
+        label_contains: requireStringArray(match['label_contains'] ?? [], `rules[${i}].match.label_contains`),
+        body_contains: requireStringArray(match['body_contains'] ?? [], `rules[${i}].match.body_contains`),
       },
-      docs,
-      hints,
+      docs: requireStringArray(rule['docs'] ?? [], `rules[${i}].docs`),
+      hints: requireStringArray(rule['hints'] ?? [], `rules[${i}].hints`),
     };
   });
 
@@ -96,14 +97,9 @@ function parseAndValidateRules(text: string, filePath: string): RulesFile {
     rules,
     defaults: rawDefaults
       ? {
-          docs: toStringArray(rawDefaults['docs']),
-          hints: toStringArray(rawDefaults['hints']),
+          docs: requireStringArray(rawDefaults['docs'] ?? [], 'defaults.docs'),
+          hints: requireStringArray(rawDefaults['hints'] ?? [], 'defaults.hints'),
         }
       : undefined,
   };
-}
-
-function toStringArray(val: unknown): string[] {
-  if (!Array.isArray(val)) return [];
-  return val.filter((v): v is string => typeof v === 'string');
 }

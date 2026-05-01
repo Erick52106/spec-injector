@@ -8,15 +8,15 @@ export async function fetchIssue(urlOrNumber: string, repoPath?: string): Promis
   }
 
   // Derive --repo flag from URL or skip (gh uses git remote)
-  const repoFlag = deriveRepoFlag(urlOrNumber, repoPath);
+  const repoArgs = deriveRepoFlag(urlOrNumber);
 
   // Extract just the issue number from a URL if needed
   const issueRef = extractIssueRef(urlOrNumber);
 
   const fields = 'number,title,body,labels,url,state';
-  const cmd = `gh issue view ${issueRef} ${repoFlag} --json ${fields}`;
+  const argv = ['gh', 'issue', 'view', issueRef, ...repoArgs, '--json', fields];
 
-  const result = run(cmd, { cwd: repoPath });
+  const result = run(argv, { cwd: repoPath });
 
   if (result.exitCode !== 0) {
     const hint = result.stderr.includes('authentication')
@@ -53,10 +53,10 @@ function extractIssueRef(urlOrNumber: string): string {
   throw new Error(`Cannot parse issue reference: "${urlOrNumber}". Use a number or full GitHub URL.`);
 }
 
-function deriveRepoFlag(urlOrNumber: string, _repoPath?: string): string {
+function deriveRepoFlag(urlOrNumber: string): string[] {
   // If a full URL is given, extract owner/repo from it
   const urlMatch = urlOrNumber.match(/github\.com\/([^/]+\/[^/]+)\/issues/);
-  if (urlMatch) return `--repo ${urlMatch[1]}`;
-  // If only a number, let gh use the git remote from repoPath
-  return '';
+  if (urlMatch) return ['--repo', urlMatch[1]];
+  // If only a number, let gh use the git remote
+  return [];
 }

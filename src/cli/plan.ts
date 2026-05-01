@@ -54,8 +54,7 @@ export async function plan(
   const vars: TemplateVars = buildTemplateVars(issue, matches, allHints, docSections, repoPath);
 
   // 6. Render
-  const template = config.promptTemplate ?? DEFAULT_TEMPLATE;
-  const rendered = renderTemplate(template, vars);
+  const rendered = renderTemplate(DEFAULT_TEMPLATE, vars);
 
   // 7. Output
   if (opts.dryRun) {

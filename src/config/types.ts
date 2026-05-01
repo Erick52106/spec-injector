@@ -21,7 +21,6 @@ export interface RulesFile {
 
 export interface Config {
   repoPath: string;           // absolute path to the target repo root
-  specAgentDir: string;       // absolute path to .spec-agent/
+  specAgentDir: string;       // absolute path to .spec-injector/
   rulesFile: RulesFile;
-  promptTemplate: string | null;  // null if .spec-agent/prompt-template.md not found
 }

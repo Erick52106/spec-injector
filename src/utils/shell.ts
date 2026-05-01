@@ -1,4 +1,4 @@
-import { execSync } from 'child_process';
+import { execFileSync } from 'child_process';
 
 export interface ShellResult {
   stdout: string;
@@ -6,9 +6,9 @@ export interface ShellResult {
   exitCode: number;
 }
 
-export function run(cmd: string, opts?: { cwd?: string }): ShellResult {
+export function run(argv: string[], opts?: { cwd?: string }): ShellResult {
   try {
-    const stdout = execSync(cmd, {
+    const stdout = execFileSync(argv[0], argv.slice(1), {
       cwd: opts?.cwd,
       encoding: 'utf8',
       stdio: ['pipe', 'pipe', 'pipe'],
