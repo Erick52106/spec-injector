@@ -27,6 +27,50 @@
 - 嚴格遵守 Issue scope，不修改無關檔案
 - 不確定時先詢問，不自行擴展範圍
 
+## `/spec-plan <issue>` 工作流
+當使用者在 Claude Code 中輸入：
+
+```bash
+/spec-plan <issue>
+```
+
+Claude 必須先使用 compact prompt mode 執行：
+
+```bash
+spec plan <issue> --repo . --dry-run --format prompt --verbose
+```
+
+若 `spec` 指令不存在，Claude 必須回報此狀態，並建議使用者先執行：
+- `npm run build`
+- `npm link`
+- 或使用 repo-local executable
+
+Claude 不得因為 `spec` 指令不存在而自行修改、建立或刪除檔案。
+
+讀取 prompt output 後，Claude 必須摘要：
+- source issue
+- detected domains
+- matched guardrails
+- relevant file references
+- missing files
+- implementation constraints
+- suggested verification checklist
+
+接著 Claude 必須產生 implementation plan，並列出：
+- 預計修改檔案
+- 不包含範圍
+- 風險
+- 驗證方式
+
+最後必須停下來等待人類批准。未經批准，Claude 不得：
+- 修改檔案
+- 建立檔案
+- 刪除檔案
+- commit
+- push
+- 開 PR
+- merge PR
+
 ## 實作工作流程
 1. 閱讀需求與相關檔案
 2. 提出計畫並說明風險
