@@ -1,3 +1,9 @@
+export interface DiscoveryConfig {
+  source_paths?: string[];
+  max_docs?: number;
+  max_source_files?: number;
+}
+
 export interface Rule {
   id: string;
   description: string;
@@ -13,6 +19,7 @@ export interface Rule {
 export interface RulesFile {
   version: 1;
   always_read?: string[];   // included in every task package regardless of rule match
+  discovery?: DiscoveryConfig;
   rules: Rule[];
   defaults?: {
     docs?: string[];

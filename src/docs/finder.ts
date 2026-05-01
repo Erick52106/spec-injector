@@ -46,7 +46,8 @@ export async function loadCorePreset(): Promise<DocSection> {
 export async function discoverRelevantDocs(
   issue: Issue,
   repoPath: string,
-  excludePaths: Set<string>
+  excludePaths: Set<string>,
+  maxDocs: number = 5
 ): Promise<DocSection[]> {
   const keywords = tokenize(`${issue.title} ${issue.body}`);
   if (keywords.length === 0) return [];
@@ -64,7 +65,7 @@ export async function discoverRelevantDocs(
 
   scored.sort((a, b) => b.score - a.score);
 
-  return scored.slice(0, 5).map(({ filePath, content }) => ({
+  return scored.slice(0, maxDocs).map(({ filePath, content }) => ({
     filePath,
     content,
     found: true,
@@ -134,10 +135,80 @@ function tokenize(text: string): string[] {
 
 function scoreDoc(keywords: string[], filePath: string, content: string): number {
   const pathLower = filePath.toLowerCase();
+  const baseLower = path.basename(filePath).toLowerCase();
   const sample = content.slice(0, 2000).toLowerCase();
   let score = 0;
   for (const kw of keywords) {
     if (pathLower.includes(kw)) score += 2;
+    if (baseLower.includes(kw)) score += 2;
+    if (sample.includes(kw)) score += 1;
+  }
+  return score;
+}
+
+// --- source discovery ---
+
+const SOURCE_EXTENSIONS = new Set(['.ts', '.tsx', '.js', '.jsx', '.py', '.go', '.rs', '.java', '.sol', '.rb']);
+const SKIP_DIRS = new Set(['node_modules', '.git', 'dist', 'build', '.cache', 'vendor', 'coverage']);
+
+export async function discoverSourceFiles(
+  issue: Issue,
+  repoPath: string,
+  sourcePaths: string[],
+  maxFiles: number
+): Promise<DocSection[]> {
+  if (sourcePaths.length === 0 || maxFiles <= 0) return [];
+
+  const keywords = tokenize(`${issue.title} ${issue.body}`);
+  if (keywords.length === 0) return [];
+
+  const candidates: string[] = [];
+  for (const srcPath of sourcePaths) {
+    const absolute = path.resolve(repoPath, srcPath);
+    if (fs.existsSync(absolute) && fs.statSync(absolute).isDirectory()) {
+      walkSource(absolute, repoPath, candidates);
+    }
+  }
+
+  const scored: Array<{ filePath: string; score: number; content: string }> = [];
+  for (const relPath of candidates) {
+    const absolute = path.resolve(repoPath, relPath);
+    const raw = await safeReadFile(absolute);
+    if (raw === null) continue;
+    const score = scoreSrc(keywords, relPath, raw);
+    if (score > 0) scored.push({ filePath: relPath, score, content: raw.slice(0, 500) });
+  }
+
+  scored.sort((a, b) => b.score - a.score);
+
+  return scored.slice(0, maxFiles).map(({ filePath, content }) => ({
+    filePath,
+    content,
+    found: true,
+    kind: 'source' as DocSourceKind,
+  }));
+}
+
+function walkSource(dir: string, repoPath: string, results: string[]): void {
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    if (SKIP_DIRS.has(entry.name)) continue;
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      walkSource(full, repoPath, results);
+    } else if (entry.isFile() && SOURCE_EXTENSIONS.has(path.extname(entry.name))) {
+      results.push(path.relative(repoPath, full));
+    }
+  }
+}
+
+function scoreSrc(keywords: string[], filePath: string, content: string): number {
+  const pathLower = filePath.toLowerCase();
+  const baseLower = path.basename(filePath).toLowerCase();
+  const sample = content.slice(0, 2000).toLowerCase();
+  let score = 0;
+  for (const kw of keywords) {
+    if (pathLower.includes(kw)) score += 2;
+    if (baseLower.includes(kw)) score += 2;
     if (sample.includes(kw)) score += 1;
   }
   return score;

@@ -39,6 +39,12 @@ Based on matched rules: **{{matched_rule_descriptions}}**
 
 ---
 
+## Auto-Discovered Source Files
+
+{{discovered_sources}}
+
+---
+
 ## Rule-Matched Documentation
 
 {{rule_docs}}

@@ -10,9 +10,7 @@ export async function loadConfig(repoPath: string): Promise<Config> {
   const rulesPath = path.join(specAgentDir, 'rules.json');
   const rulesText = await safeReadFile(rulesPath);
   if (rulesText === null) {
-    throw new Error(
-      `No .spec-injector/rules.json found in ${resolved}. Run "spec init" to create one.`
-    );
+    return { repoPath: resolved, specAgentDir, rulesFile: { version: 1, rules: [] } };
   }
 
   let rulesFile: RulesFile;
@@ -96,9 +94,20 @@ function parseAndValidateRules(text: string, filePath: string): RulesFile {
     ? requireStringArray(raw['always_read'], 'always_read')
     : undefined;
 
+  const rawDiscovery = raw['discovery'] as Record<string, unknown> | undefined;
+
   return {
     version: 1,
     always_read: alwaysRead,
+    discovery: rawDiscovery
+      ? {
+          source_paths: rawDiscovery['source_paths'] !== undefined
+            ? requireStringArray(rawDiscovery['source_paths'], 'discovery.source_paths')
+            : undefined,
+          max_docs: typeof rawDiscovery['max_docs'] === 'number' ? rawDiscovery['max_docs'] : undefined,
+          max_source_files: typeof rawDiscovery['max_source_files'] === 'number' ? rawDiscovery['max_source_files'] : undefined,
+        }
+      : undefined,
     rules,
     defaults: rawDefaults
       ? {
