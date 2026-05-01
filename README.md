@@ -79,9 +79,7 @@ Edit `.spec-injector/config.json` in your target repo:
     "AGENTS.md"
   ],
   "discovery": {
-    "docs": [
-      "docs/architecture.md"
-    ],
+    "docs": [],
     "source": [
       "src"
     ],
