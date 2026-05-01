@@ -39,4 +39,7 @@ program
     await validate(opts);
   });
 
-program.parseAsync(process.argv);
+program.parseAsync(process.argv).catch((err: unknown) => {
+  console.error(`✗ ${(err as Error).message}`);
+  process.exit(1);
+});
