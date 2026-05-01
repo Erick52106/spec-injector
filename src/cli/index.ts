@@ -22,7 +22,7 @@ program
 // init subcommand
 program
   .command('init')
-  .description('Scaffold .spec-agent/ config in target repo')
+  .description('Scaffold .spec-injector/config.json in target repo')
   .option('--repo <path>', 'Path to target repo (default: CWD)')
   .action(async (opts: { repo?: string }) => {
     const { init } = await import('./init.js');
@@ -32,7 +32,7 @@ program
 // validate subcommand
 program
   .command('validate')
-  .description('Validate .spec-injector/rules.json syntax')
+  .description('Validate .spec-injector/config.json against schema v2')
   .option('--repo <path>', 'Path to target repo (default: CWD)')
   .action(async (opts: { repo?: string }) => {
     const { validate } = await import('./validate.js');
