@@ -6,6 +6,7 @@ import { loadExplicitDocs, discoverRelevantDocs, loadCorePreset } from '../docs/
 import { renderTemplate } from '../template/renderer.js';
 import { DEFAULT_TEMPLATE } from '../template/default-template.js';
 import { writePackage } from '../output/writer.js';
+import { classifyDomains } from '../classifier/domain.js';
 import type { TemplateVars } from '../template/types.js';
 import type { MatchResult } from '../rules/types.js';
 import type { Issue } from '../github/types.js';
@@ -23,6 +24,8 @@ export async function plan(
   if (opts.verbose) console.log('→ Fetching issue...');
   const issue = await fetchIssue(issueRef, repoPath);
   console.log(`✓ Issue #${issue.number} fetched: ${issue.title}${issue.state === 'closed' ? ' [CLOSED]' : ''}`);
+  const domains = classifyDomains(issue);
+  console.log(`✓ Detected domains: ${domains.join(', ') || '(none)'}`);
 
   // 2. Load config
   if (opts.verbose) console.log('→ Loading config...');
