@@ -14,7 +14,11 @@ const EXAMPLE_CONFIG = {
   discovery: {
     docs: [],
     source: ["src"],
-    exclude: [],
+    exclude: [
+      "node_modules",
+      "dist",
+      "docs/superpowers",
+    ],
     max_docs: 5,
     max_source_files: 5,
   },

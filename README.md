@@ -85,7 +85,8 @@ Edit `.spec-injector/config.json` in your target repo:
     ],
     "exclude": [
       "node_modules",
-      "dist"
+      "dist",
+      "docs/superpowers"
     ],
     "max_docs": 5,
     "max_source_files": 5
@@ -107,7 +108,7 @@ Edit `.spec-injector/config.json` in your target repo:
 - **always_read**: List of files that are always included in every task package.
 - **discovery.docs**: Explicit paths to documentation files to always include.
 - **discovery.source**: Directories to scan for auto-discovered source files.
-- **discovery.exclude**: Paths or directories to skip during auto-discovery.
+- **discovery.exclude**: Paths or directories to skip during auto-discovery. Use it to keep generated planning docs, AI scratch docs, and temporary agent notes out of task packages; for example, add a repo-local scratch directory such as `docs/superpowers` when you use one.
 - **discovery.max_docs**: Maximum number of auto-discovered docs (default: 5).
 - **discovery.max_source_files**: Maximum number of auto-discovered source files (default: 5).
 - **guardrails**:
