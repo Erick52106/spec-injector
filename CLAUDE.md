@@ -46,7 +46,8 @@
 3. Push feature branch 到 origin
 4. 建立 PR，目標分支為 main
 5. 使用倉庫 PR 範本（`.github/pull_request_template.md`）
-6. 不自行 merge PR，由人類決定
+6. merge 前，在來源 issue 留下實作證據 comment，並將 URL 填入 PR 的「實作證據」欄位
+7. 不自行 merge PR，由人類決定
 
 ## 禁止行為
 - 直接 push 到 main

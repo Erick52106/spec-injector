@@ -33,7 +33,8 @@
 2. 確認 scope（列出允許修改的檔案）
 3. 逐步實作
 4. 執行必要的驗證指令
-5. 回報結果給 Claude 審查
+5. 輸出實作證據摘要（修改檔案、驗證方式、風險範圍、commit hash），供 Claude 在來源 issue 留下 comment
+6. 回報結果給 Claude 審查
 
 ## 驗證指令
 實作完成後必須執行：
@@ -54,7 +55,8 @@ npm test
 2. 禁止直接 push 到 main
 3. Push feature branch 到 origin
 4. 通知 Claude 建立 PR
-5. 不自行 merge PR
+5. 確認 Claude 已在來源 issue 填入實作證據 comment URL
+6. 不自行 merge PR
 
 ## 禁止行為
 - 直接 push 到 main
