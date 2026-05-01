@@ -10,7 +10,6 @@ const EXAMPLE_CONFIG = {
   always_read: [
     "CLAUDE.md",
     "AGENTS.md",
-    "docs/architecture.md",
   ],
   discovery: {
     docs: [],
