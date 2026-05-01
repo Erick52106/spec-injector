@@ -4,6 +4,7 @@ import { loadConfig } from '../config/loader.js';
 import { loadExplicitDocs, discoverRelevantDocs, loadCorePreset, discoverSourceFiles } from '../docs/finder.js';
 import { renderTemplate } from '../template/renderer.js';
 import { DEFAULT_TEMPLATE } from '../template/default-template.js';
+import { PROMPT_TEMPLATE } from '../template/prompt-template.js';
 import { writePackage } from '../output/writer.js';
 import { classifyDomains } from '../classifier/domain.js';
 import type { TemplateVars } from '../template/types.js';
@@ -13,9 +14,13 @@ import type { DocSection } from '../docs/types.js';
 
 export async function plan(
   issueRef: string,
-  opts: { repo?: string; dryRun?: boolean; verbose?: boolean }
+  opts: { repo?: string; dryRun?: boolean; verbose?: boolean; format?: string }
 ): Promise<void> {
   const repoPath = path.resolve(opts.repo ?? process.cwd());
+  const format = opts.format ?? 'full';
+  if (!['full', 'prompt'].includes(format)) {
+    throw new Error(`Unsupported plan format: ${format}. Expected "full" or "prompt".`);
+  }
 
   if (opts.verbose) console.log(`→ Target repo: ${repoPath}`);
 
@@ -74,7 +79,8 @@ export async function plan(
 
   // 8. Build vars and render
   const vars = buildTemplateVars(issue, domains, matchedGuardrails, alwaysDocs, discoveredDocs, discoveryDocs, missingDocs, repoPath, discoveredSources);
-  const rendered = renderTemplate(DEFAULT_TEMPLATE, vars);
+  const template = format === 'prompt' ? PROMPT_TEMPLATE : DEFAULT_TEMPLATE;
+  const rendered = renderTemplate(template, vars);
 
   // 9. Output
   if (opts.dryRun) {
@@ -92,6 +98,17 @@ function renderDocList(docs: DocSection[]): string {
   return docs
     .map((d) => `### ${d.filePath}\n\n${d.content.trim()}`)
     .join('\n\n---\n\n');
+}
+
+function renderPathList(docs: DocSection[]): string {
+  if (docs.length === 0) return '(none)';
+  return docs.map((d) => `- \`${d.filePath}\``).join('\n');
+}
+
+function renderImplementationConstraints(matchedGuardrails: Guardrail[]): string {
+  const constraints = matchedGuardrails.map((g) => `- ${g.id}: ${g.risk}`);
+  constraints.push('- Stay within the source issue scope and referenced files.');
+  return constraints.join('\n');
 }
 
 function buildTemplateVars(
@@ -130,6 +147,11 @@ function buildTemplateVars(
       ? matchedGuardrails.map(g => `- **${g.id}**: ${g.risk}`).join('\n')
       : '(none matched)',
     matched_hints: '(none)',
+    prompt_always_files: renderPathList(alwaysDocs.filter((d) => d.found)),
+    prompt_discovered_docs: renderPathList(discoveredDocs),
+    prompt_rule_docs: renderPathList(discoveryDocs.filter((d) => d.found)),
+    prompt_discovered_sources: renderPathList(discoveredSources),
+    prompt_implementation_constraints: renderImplementationConstraints(matchedGuardrails),
     always_docs: renderDocList(alwaysDocs.filter((d) => d.found)),
     discovered_docs: renderDocList(discoveredDocs),
     rule_docs: renderDocList(discoveryDocs.filter((d) => d.found)),

@@ -14,7 +14,8 @@ program
   .option('--repo <path>', 'Path to target repo (default: CWD)')
   .option('--dry-run', 'Print output to stdout, do not write file')
   .option('--verbose', 'Show detailed matching steps')
-  .action(async (issue: string, opts: { repo?: string; dryRun?: boolean; verbose?: boolean }) => {
+  .option('--format <format>', 'Output format: full or prompt (default: full)')
+  .action(async (issue: string, opts: { repo?: string; dryRun?: boolean; verbose?: boolean; format?: string }) => {
     const { plan } = await import('./plan.js');
     await plan(issue, opts);
   });
