@@ -1,6 +1,15 @@
 ## Source of truth
 
-Closes #<!-- issue number -->
+- Closes #<issue-number>
+- refs #<issue-number>
+- Related docs/specs:
+  - ...
+
+<!--
+請將 `<issue-number>` 替換成來源 issue 編號。
+若此 PR merge 後應自動關閉 issue，請保留 `Closes #<issue-number>`。
+若此 PR 不應關閉任何 issue，請改成 `Closes: N/A` 並說明原因。
+-->
 
 ## 修改內容
 
