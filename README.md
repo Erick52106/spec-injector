@@ -22,6 +22,16 @@ Requires: Node.js 20+, [`gh`](https://cli.github.com/) authenticated.
 
 ## Usage
 
+### AI Workflow Usage
+
+人類可在 Claude Code 中輸入 `/spec-plan <issue>`，讓 AI 先執行：
+
+```bash
+spec plan <issue> --repo . --dry-run --format prompt --verbose
+```
+
+AI 會先產生 implementation plan，並在人類批准後才進入實作。這是 repo-level instruction，不是 spec-injector runtime CLI command；真正的 CLI command 仍是 `spec plan`。
+
 ### 1. Initialize a repo
 
 ```bash

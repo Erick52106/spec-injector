@@ -28,6 +28,15 @@
 - 不重構無關程式碼
 - 不確定時先確認，不自行假設
 
+## `/spec-plan <issue>` 委派實作規範
+Codex 若被委派 `/spec-plan <issue>` 後的實作任務，必須：
+- 先確認 Claude 產出的 task package / implementation plan
+- 只依 approved plan 實作
+- 不得自行擴大 scope
+- 不得跳過 guardrails
+- 不得修改 approved plan 以外的檔案
+- 若發現需要修改 plan 以外的檔案，必須停止並回報
+
 ## 實作工作流程
 1. 從 Claude 接收已核准的計畫
 2. 確認 scope（列出允許修改的檔案）
