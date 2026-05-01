@@ -38,6 +38,7 @@ spec plan <issue-url>
 spec plan <issue-number> --repo /path/to/repo
 spec plan <issue-url> --dry-run    # print to stdout, don't write file
 spec plan <issue-url> --verbose    # show detailed pipeline steps
+spec plan <issue-url> --format prompt  # short AI planning prompt
 ```
 
 The pipeline:
@@ -45,6 +46,8 @@ The pipeline:
 2. **Classify & Match**: Keyword-based domain detection; matched domains trigger `guardrails`.
 3. **Load Docs & Source**: Loads `always_read` and `discovery.docs`; auto-discovers docs and source files; reports missing files.
 4. **Render**: Writes task package to `.spec-injector/out/issue-<number>-task-package.md` (or prints with `--dry-run`).
+
+By default, `spec plan` renders the full task package with inline context. Use `--format prompt` when a Layer 2 workflow or another AI should draft an implementation plan first: prompt output lists relevant references only, without inlining always-read docs, README content, discovered docs, or source snippets.
 
 ### 3. Validate config
 
