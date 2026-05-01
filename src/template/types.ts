@@ -12,6 +12,7 @@ export interface TemplateVars {
   discovered_docs: string;   // auto-discovered docs (keyword-scored)
   rule_docs: string;         // docs from matched rules
   missing_docs: string;      // files listed in always_read or rules that were not found
+  discovered_sources: string;  // auto-discovered source files
   repo_path: string;
   generated_at: string;
 }

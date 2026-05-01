@@ -1,4 +1,4 @@
-export type DocSourceKind = 'always' | 'discovered' | 'rule' | 'missing';
+export type DocSourceKind = 'always' | 'discovered' | 'rule' | 'missing' | 'source';
 
 export interface DocSection {
   filePath: string;         // relative path from repo root
