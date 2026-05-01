@@ -1,5 +1,8 @@
+export type DocSourceKind = 'always' | 'discovered' | 'rule' | 'missing';
+
 export interface DocSection {
-  filePath: string;   // relative path as listed in rules.yaml
-  content: string;    // full file content
-  found: boolean;     // false if file was missing
+  filePath: string;         // relative path from repo root
+  content: string;          // file content (empty string when missing)
+  found: boolean;
+  kind: DocSourceKind;
 }

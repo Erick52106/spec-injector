@@ -2,7 +2,7 @@ import path from 'path';
 import { fetchIssue } from '../github/issue.js';
 import { loadConfig } from '../config/loader.js';
 import { matchRules } from '../rules/engine.js';
-import { findDocSections } from '../docs/finder.js';
+import { loadExplicitDocs, discoverRelevantDocs } from '../docs/finder.js';
 import { renderTemplate } from '../template/renderer.js';
 import { DEFAULT_TEMPLATE } from '../template/default-template.js';
 import { writePackage } from '../output/writer.js';
@@ -27,36 +27,46 @@ export async function plan(
   // 2. Load config
   if (opts.verbose) console.log('→ Loading config...');
   const config = await loadConfig(repoPath);
-  if (opts.verbose) console.log(`  Config loaded from ${config.specAgentDir}`);
 
   // 3. Match rules
   const matches = matchRules(issue, config.rulesFile);
-  if (matches.length === 0) {
-    console.warn('⚠  No rules matched and no defaults defined. Proceeding with empty scope.');
-  }
-
   const ruleIds = matches.map((m) => m.rule.id).join(', ') || '(none)';
   console.log(`✓ Rules matched: ${ruleIds}`);
   if (opts.verbose) {
-    for (const m of matches) {
-      console.log(`  ${m.rule.id}: ${m.matchedOn.join(', ')}`);
-    }
+    for (const m of matches) console.log(`  ${m.rule.id}: ${m.matchedOn.join(', ')}`);
   }
 
-  // 4. Collect docs (merged, deduplicated across all matched rules)
-  const allDocPaths = [...new Set(matches.flatMap((m) => m.rule.docs))];
-  const docSections = await findDocSections(allDocPaths, repoPath);
-  const foundCount = docSections.filter((d) => d.found).length;
-  console.log(`✓ Docs loaded: ${foundCount}/${docSections.length} files found`);
+  // 4. Always-read docs
+  const alwaysDocs = await loadExplicitDocs(
+    config.rulesFile.always_read ?? [],
+    repoPath,
+    'always'
+  );
 
-  // 5. Build template vars
+  // 5. Rule-matched docs (deduplicated across all matched rules)
+  const ruleDocPaths = [...new Set(matches.flatMap((m) => m.rule.docs))];
+  const ruleDocs = await loadExplicitDocs(ruleDocPaths, repoPath, 'rule');
+
+  // 6. Auto-discover relevant docs (exclude already-loaded paths)
+  const loadedPaths = new Set([
+    ...alwaysDocs.map((d) => d.filePath),
+    ...ruleDocs.map((d) => d.filePath),
+  ]);
+  const discoveredDocs = await discoverRelevantDocs(issue, repoPath, loadedPaths);
+
+  // 7. Summarise
+  const missingDocs = [...alwaysDocs, ...ruleDocs].filter((d) => !d.found);
+  console.log(`✓ Docs — always: ${alwaysDocs.filter(d => d.found).length}, discovered: ${discoveredDocs.length}, rule: ${ruleDocs.filter(d => d.found).length}, missing: ${missingDocs.length}`);
+  if (missingDocs.length > 0) {
+    for (const d of missingDocs) console.warn(`  ⚠  Not found: ${d.filePath}`);
+  }
+
+  // 8. Build vars and render
   const allHints = [...new Set(matches.flatMap((m) => m.rule.hints))];
-  const vars: TemplateVars = buildTemplateVars(issue, matches, allHints, docSections, repoPath);
-
-  // 6. Render
+  const vars = buildTemplateVars(issue, matches, allHints, alwaysDocs, discoveredDocs, ruleDocs, missingDocs, repoPath);
   const rendered = renderTemplate(DEFAULT_TEMPLATE, vars);
 
-  // 7. Output
+  // 9. Output
   if (opts.dryRun) {
     console.log('\n' + rendered);
     return;
@@ -67,11 +77,21 @@ export async function plan(
   console.log(`✓ Task package written: ${path.relative(repoPath, outPath)}`);
 }
 
+function renderDocList(docs: DocSection[]): string {
+  if (docs.length === 0) return '(none)';
+  return docs
+    .map((d) => `### ${d.filePath}\n\n${d.content.trim()}`)
+    .join('\n\n---\n\n');
+}
+
 function buildTemplateVars(
   issue: Issue,
   matches: MatchResult[],
   allHints: string[],
-  docSections: DocSection[],
+  alwaysDocs: DocSection[],
+  discoveredDocs: DocSection[],
+  ruleDocs: DocSection[],
+  missingDocs: DocSection[],
   repoPath: string
 ): TemplateVars {
   const checklist = issue.body
@@ -79,10 +99,9 @@ function buildTemplateVars(
     .filter((l) => l.trim().startsWith('- [ ]'))
     .join('\n') || '(none found)';
 
-  const docContent = docSections
-    .filter((d) => d.found)
-    .map((d) => `### ${d.filePath}\n\n${d.content.trim()}`)
-    .join('\n\n---\n\n') || '(no docs loaded)';
+  const missingList = missingDocs.length > 0
+    ? missingDocs.map((d) => `- \`${d.filePath}\` — not found`).join('\n')
+    : '(none)';
 
   return {
     issue_title: issue.title,
@@ -94,7 +113,10 @@ function buildTemplateVars(
     matched_rule_ids: matches.map((m) => m.rule.id).join(', ') || '(none)',
     matched_rule_descriptions: matches.map((m) => m.rule.description).join(', ') || '(none)',
     matched_hints: allHints.map((h) => `- ${h}`).join('\n') || '(none)',
-    doc_sections: docContent,
+    always_docs: renderDocList(alwaysDocs.filter((d) => d.found)),
+    discovered_docs: renderDocList(discoveredDocs),
+    rule_docs: renderDocList(ruleDocs.filter((d) => d.found)),
+    missing_docs: missingList,
     repo_path: repoPath,
     generated_at: new Date().toISOString(),
   };

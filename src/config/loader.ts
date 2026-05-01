@@ -92,8 +92,13 @@ function parseAndValidateRules(text: string, filePath: string): RulesFile {
 
   const rawDefaults = raw['defaults'] as Record<string, unknown> | undefined;
 
+  const alwaysRead = raw['always_read'] !== undefined
+    ? requireStringArray(raw['always_read'], 'always_read')
+    : undefined;
+
   return {
     version: 1,
+    always_read: alwaysRead,
     rules,
     defaults: rawDefaults
       ? {

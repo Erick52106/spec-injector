@@ -27,9 +27,27 @@ Based on matched rules: **{{matched_rule_descriptions}}**
 
 ---
 
-## Relevant Documentation
+## Always-Read Documentation
 
-{{doc_sections}}
+{{always_docs}}
+
+---
+
+## Auto-Discovered Documentation
+
+{{discovered_docs}}
+
+---
+
+## Rule-Matched Documentation
+
+{{rule_docs}}
+
+---
+
+## Missing Files
+
+{{missing_docs}}
 
 ---
 

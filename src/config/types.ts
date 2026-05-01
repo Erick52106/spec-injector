@@ -12,6 +12,7 @@ export interface Rule {
 
 export interface RulesFile {
   version: 1;
+  always_read?: string[];   // included in every task package regardless of rule match
   rules: Rule[];
   defaults?: {
     docs?: string[];

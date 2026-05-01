@@ -8,7 +8,10 @@ export interface TemplateVars {
   matched_rule_ids: string;
   matched_rule_descriptions: string;
   matched_hints: string;
-  doc_sections: string;
+  always_docs: string;       // docs from always_read that were found
+  discovered_docs: string;   // auto-discovered docs (keyword-scored)
+  rule_docs: string;         // docs from matched rules
+  missing_docs: string;      // files listed in always_read or rules that were not found
   repo_path: string;
   generated_at: string;
 }

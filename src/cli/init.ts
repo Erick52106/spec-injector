@@ -3,6 +3,11 @@ import fs from 'fs';
 
 const EXAMPLE_RULES = {
   version: 1,
+  always_read: [
+    'CLAUDE.md',
+    'AGENTS.md',
+    'docs/architecture.md',
+  ],
   rules: [
     {
       id: 'backend',
