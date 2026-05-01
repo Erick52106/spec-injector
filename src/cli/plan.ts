@@ -147,7 +147,7 @@ function buildTemplateVars(
       ? matchedGuardrails.map(g => `- **${g.id}**: ${g.risk}`).join('\n')
       : '(none matched)',
     matched_hints: '(none)',
-    prompt_always_files: renderPathList(alwaysDocs),
+    prompt_always_files: renderPathList(alwaysDocs.filter((d) => d.found)),
     prompt_discovered_docs: renderPathList(discoveredDocs),
     prompt_rule_docs: renderPathList(discoveryDocs.filter((d) => d.found)),
     prompt_discovered_sources: renderPathList(discoveredSources),
