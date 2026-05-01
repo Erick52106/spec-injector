@@ -3,6 +3,12 @@
   "version": "0.1.0",
   "description": "Deterministic task package generator from GitHub issues",
   "type": "module",
+  "files": [
+    "dist",
+    "bin",
+    "presets",
+    "README.md"
+  ],
   "bin": {
     "spec": "./bin/spec.js"
   },

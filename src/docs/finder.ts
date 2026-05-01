@@ -1,5 +1,6 @@
 import path from 'path';
 import fs from 'fs';
+import { fileURLToPath } from 'url';
 import { safeReadFile } from '../utils/fs.js';
 import type { DocSection, DocSourceKind } from './types.js';
 import type { Issue } from '../github/types.js';
@@ -23,6 +24,21 @@ export async function loadExplicitDocs(
       return { filePath: docPath, content, found: true, kind };
     })
   );
+}
+
+// Load the built-in core preset from the spec-injector package directory.
+export async function loadCorePreset(): Promise<DocSection> {
+  const presetPath = fileURLToPath(new URL('../../presets/core/ai-collaboration.md', import.meta.url));
+  const content = await safeReadFile(presetPath);
+  if (content === null) {
+    throw new Error('Core preset not found: presets/core/ai-collaboration.md');
+  }
+  return {
+    filePath: 'presets/core/ai-collaboration.md',
+    content,
+    found: true,
+    kind: 'always',
+  };
 }
 
 // Scan the repo for relevant docs, score by keyword match, return top results.
