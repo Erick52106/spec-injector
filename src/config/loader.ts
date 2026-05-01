@@ -1,30 +1,26 @@
 import path from 'path';
 import fs from 'fs';
 import { safeReadFile } from '../utils/fs.js';
-import type { Config, RulesFile, Rule } from './types.js';
+import type { Config, SpecConfig, Guardrail } from './types.js';
 
 export async function loadConfig(repoPath: string): Promise<Config> {
   const resolved = path.resolve(repoPath);
   const specAgentDir = findSpecAgentDir(resolved);
 
-  const rulesPath = path.join(specAgentDir, 'rules.json');
-  const rulesText = await safeReadFile(rulesPath);
-  if (rulesText === null) {
-    return { repoPath: resolved, specAgentDir, rulesFile: { version: 1, rules: [] } };
+  const configPath = path.join(specAgentDir, 'config.json');
+  const configText = await safeReadFile(configPath);
+  if (configText === null) {
+    return { repoPath: resolved, specAgentDir, specConfig: { version: 2, guardrails: [] } };
   }
 
-  let rulesFile: RulesFile;
+  let specConfig: SpecConfig;
   try {
-    rulesFile = parseAndValidateRules(rulesText, rulesPath);
+    specConfig = parseAndValidateConfig(configText, configPath);
   } catch (err) {
-    throw new Error(`Invalid rules.json: ${(err as Error).message}`);
+    throw new Error(`Invalid config.json: ${(err as Error).message}`);
   }
 
-  return {
-    repoPath: resolved,
-    specAgentDir,
-    rulesFile,
-  };
+  return { repoPath: resolved, specAgentDir, specConfig };
 }
 
 function findSpecAgentDir(startPath: string): string {
@@ -35,7 +31,7 @@ function findSpecAgentDir(startPath: string): string {
       return candidate;
     }
     const parent = path.dirname(current);
-    if (parent === current) break; // reached filesystem root
+    if (parent === current) break;
     current = parent;
   }
   throw new Error(
@@ -51,7 +47,7 @@ function requireStringArray(val: unknown, field: string): string[] {
   return val as string[];
 }
 
-function parseAndValidateRules(text: string, filePath: string): RulesFile {
+function parseAndValidateConfig(text: string, filePath: string): SpecConfig {
   const raw = JSON.parse(text) as Record<string, unknown>;
 
   if (!raw || typeof raw !== 'object') {
@@ -59,61 +55,64 @@ function parseAndValidateRules(text: string, filePath: string): RulesFile {
   }
 
   const version = raw['version'];
-  if (version !== 1) {
-    throw new Error(`Expected version: 1, got: ${String(version)}`);
+  if (version !== 2) {
+    throw new Error(`Expected version: 2, got: ${String(version)}`);
   }
 
-  const rawRules = raw['rules'];
-  if (!Array.isArray(rawRules)) {
-    throw new Error('rules must be an array');
-  }
-
-  const rules: Rule[] = rawRules.map((r: unknown, i: number) => {
-    const rule = r as Record<string, unknown>;
-    if (typeof rule['id'] !== 'string') throw new Error(`rules[${i}].id must be a string`);
-    if (typeof rule['description'] !== 'string') throw new Error(`rules[${i}].description must be a string`);
-
-    const match = (rule['match'] ?? {}) as Record<string, unknown>;
-
-    return {
-      id: rule['id'],
-      description: rule['description'],
-      match: {
-        title_contains: requireStringArray(match['title_contains'] ?? [], `rules[${i}].match.title_contains`),
-        label_contains: requireStringArray(match['label_contains'] ?? [], `rules[${i}].match.label_contains`),
-        body_contains: requireStringArray(match['body_contains'] ?? [], `rules[${i}].match.body_contains`),
-      },
-      docs: requireStringArray(rule['docs'] ?? [], `rules[${i}].docs`),
-      hints: requireStringArray(rule['hints'] ?? [], `rules[${i}].hints`),
+  // project (optional)
+  let project: SpecConfig['project'];
+  if (raw['project'] !== undefined) {
+    const p = raw['project'] as Record<string, unknown>;
+    if (typeof p !== 'object' || p === null || Array.isArray(p)) {
+      throw new Error('project must be an object');
+    }
+    if (p['name'] !== undefined && typeof p['name'] !== 'string') {
+      throw new Error('project.name must be a string');
+    }
+    if (p['type'] !== undefined && typeof p['type'] !== 'string') {
+      throw new Error('project.type must be a string');
+    }
+    project = {
+      name: p['name'] as string | undefined,
+      type: p['type'] as string | undefined,
     };
-  });
+  }
 
-  const rawDefaults = raw['defaults'] as Record<string, unknown> | undefined;
-
+  // always_read (optional)
   const alwaysRead = raw['always_read'] !== undefined
     ? requireStringArray(raw['always_read'], 'always_read')
     : undefined;
 
-  const rawDiscovery = raw['discovery'] as Record<string, unknown> | undefined;
+  // discovery (optional)
+  let discovery: SpecConfig['discovery'];
+  if (raw['discovery'] !== undefined) {
+    const d = raw['discovery'] as Record<string, unknown>;
+    if (typeof d !== 'object' || d === null || Array.isArray(d)) {
+      throw new Error('discovery must be an object');
+    }
+    discovery = {
+      docs: d['docs'] !== undefined ? requireStringArray(d['docs'], 'discovery.docs') : undefined,
+      source: d['source'] !== undefined ? requireStringArray(d['source'], 'discovery.source') : undefined,
+      exclude: d['exclude'] !== undefined ? requireStringArray(d['exclude'], 'discovery.exclude') : undefined,
+      max_docs: typeof d['max_docs'] === 'number' ? d['max_docs'] : undefined,
+      max_source_files: typeof d['max_source_files'] === 'number' ? d['max_source_files'] : undefined,
+    };
+  }
 
-  return {
-    version: 1,
-    always_read: alwaysRead,
-    discovery: rawDiscovery
-      ? {
-          source_paths: rawDiscovery['source_paths'] !== undefined
-            ? requireStringArray(rawDiscovery['source_paths'], 'discovery.source_paths')
-            : undefined,
-          max_docs: typeof rawDiscovery['max_docs'] === 'number' ? rawDiscovery['max_docs'] : undefined,
-          max_source_files: typeof rawDiscovery['max_source_files'] === 'number' ? rawDiscovery['max_source_files'] : undefined,
-        }
-      : undefined,
-    rules,
-    defaults: rawDefaults
-      ? {
-          docs: requireStringArray(rawDefaults['docs'] ?? [], 'defaults.docs'),
-          hints: requireStringArray(rawDefaults['hints'] ?? [], 'defaults.hints'),
-        }
-      : undefined,
-  };
+  // guardrails (optional)
+  let guardrails: Guardrail[] | undefined;
+  if (raw['guardrails'] !== undefined) {
+    if (!Array.isArray(raw['guardrails'])) {
+      throw new Error('guardrails must be an array');
+    }
+    guardrails = (raw['guardrails'] as unknown[]).map((g: unknown, i: number) => {
+      const item = g as Record<string, unknown>;
+      if (typeof item['id'] !== 'string') throw new Error(`guardrails[${i}].id must be a string`);
+      if (typeof item['risk'] !== 'string') throw new Error(`guardrails[${i}].risk must be a string`);
+      const whenDetected = requireStringArray(item['when_detected'] ?? [], `guardrails[${i}].when_detected`);
+      return { id: item['id'] as string, when_detected: whenDetected, risk: item['risk'] as string };
+    });
+  }
+
+  return { version: 2, project, always_read: alwaysRead, discovery, guardrails };
 }

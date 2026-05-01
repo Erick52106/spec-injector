@@ -1,30 +1,31 @@
 import path from 'path';
 import fs from 'fs';
 
-const EXAMPLE_RULES = {
-  version: 1,
+const EXAMPLE_CONFIG = {
+  version: 2,
+  project: {
+    name: "example",
+    type: "fullstack",
+  },
   always_read: [
-    'CLAUDE.md',
-    'AGENTS.md',
-    'docs/architecture.md',
+    "CLAUDE.md",
+    "AGENTS.md",
+    "docs/architecture.md",
   ],
-  rules: [
+  discovery: {
+    docs: [],
+    source: ["src"],
+    exclude: [],
+    max_docs: 5,
+    max_source_files: 5,
+  },
+  guardrails: [
     {
-      id: 'backend',
-      description: 'Backend changes',
-      match: {
-        title_contains: ['[backend]'],
-        label_contains: ['backend'],
-        body_contains: [],
-      },
-      docs: ['docs/architecture.md'],
-      hints: ['Follow existing patterns in the codebase'],
+      id: "database-change",
+      when_detected: ["database"],
+      risk: "Database/schema changes require explicit issue scope and migration review.",
     },
   ],
-  defaults: {
-    docs: ['README.md'],
-    hints: ['Check existing patterns before implementing'],
-  },
 };
 
 export async function init(opts: { repo?: string }): Promise<void> {
@@ -40,15 +41,15 @@ export async function init(opts: { repo?: string }): Promise<void> {
 
   fs.mkdirSync(outDir, { recursive: true });
   fs.writeFileSync(
-    path.join(specInjectorDir, 'rules.json'),
-    JSON.stringify(EXAMPLE_RULES, null, 2),
+    path.join(specInjectorDir, 'config.json'),
+    JSON.stringify(EXAMPLE_CONFIG, null, 2),
     'utf8'
   );
   fs.writeFileSync(path.join(specInjectorDir, '.gitignore'), 'out/\n', 'utf8');
 
   console.log(`✓ .spec-injector/ initialized at ${specInjectorDir}`);
   console.log('  Files created:');
-  console.log('    .spec-injector/rules.json');
+  console.log('    .spec-injector/config.json');
   console.log('    .spec-injector/.gitignore  (ignores out/)');
-  console.log("\nEdit rules.json to match your repo's issue conventions.");
+  console.log("\nEdit config.json to match your repo's guardrail conventions.");
 }
