@@ -2,62 +2,65 @@ export const DEFAULT_TEMPLATE = `# Task Package: {{issue_title}}
 
 **Issue:** [#{{issue_number}}]({{issue_url}})
 **Generated:** {{generated_at}}
-**Matched rules:** {{matched_rule_ids}}
 **Repo:** \`{{repo_path}}\`
 
 ---
 
-## Issue Description
+## 1. Source Issue
+
+**Labels:** {{issue_labels}}
 
 {{issue_body}}
 
 ---
 
-## Labels
+## 2. Detected Domains
 
-{{issue_labels}}
-
----
-
-## Implementation Scope
-
-Based on matched rules: **{{matched_rule_descriptions}}**
-
-{{matched_hints}}
+{{detected_domains}}
 
 ---
 
-## Always-Read Documentation
+## 3. Always-Read Files
 
 {{always_docs}}
 
 ---
 
-## Auto-Discovered Documentation
+## 4. Auto-Discovered Documentation
 
 {{discovered_docs}}
 
 ---
 
-## Auto-Discovered Source Files
+## 5. Auto-Discovered Source Files
 
 {{discovered_sources}}
 
 ---
 
-## Rule-Matched Documentation
+## 6. Matched Guardrails
+
+{{matched_guardrails}}
+
+### Rule-Matched Documentation
 
 {{rule_docs}}
 
 ---
 
-## Missing Files
+## 7. Missing Files
 
 {{missing_docs}}
 
 ---
 
-## Acceptance Checklist
+## 8. Implementation Constraints
+
+{{matched_hints}}
+
+---
+
+## 9. Suggested Verification Checklist
 
 > Auto-extracted from issue body (edit as needed)
 

@@ -74,7 +74,7 @@ export async function plan(
 
   // 8. Build vars and render
   const allHints = [...new Set(matches.flatMap((m) => m.rule.hints))];
-  const vars = buildTemplateVars(issue, matches, allHints, alwaysDocs, discoveredDocs, ruleDocs, missingDocs, repoPath, discoveredSources);
+  const vars = buildTemplateVars(issue, domains, matches, allHints, alwaysDocs, discoveredDocs, ruleDocs, missingDocs, repoPath, discoveredSources);
   const rendered = renderTemplate(DEFAULT_TEMPLATE, vars);
 
   // 9. Output
@@ -97,6 +97,7 @@ function renderDocList(docs: DocSection[]): string {
 
 function buildTemplateVars(
   issue: Issue,
+  domains: string[],
   matches: MatchResult[],
   allHints: string[],
   alwaysDocs: DocSection[],
@@ -115,6 +116,8 @@ function buildTemplateVars(
     ? missingDocs.map((d) => `- \`${d.filePath}\` — not found`).join('\n')
     : '(none)';
 
+  const nonDefaultMatches = matches.filter((m) => m.rule.id !== '__defaults__');
+
   return {
     issue_title: issue.title,
     issue_number: String(issue.number),
@@ -122,8 +125,16 @@ function buildTemplateVars(
     issue_body: issue.body || '(no description provided)',
     issue_labels: issue.labels.join(', ') || '(none)',
     issue_checklist: checklist,
+    detected_domains: domains.length > 0
+      ? domains.map((d) => `- ${d}`).join('\n')
+      : '(none)',
     matched_rule_ids: matches.map((m) => m.rule.id).join(', ') || '(none)',
     matched_rule_descriptions: matches.map((m) => m.rule.description).join(', ') || '(none)',
+    matched_guardrails: nonDefaultMatches.length > 0
+      ? nonDefaultMatches
+          .map((m) => `- **${m.rule.id}**: ${m.rule.description}`)
+          .join('\n')
+      : '(none matched)',
     matched_hints: allHints.map((h) => `- ${h}`).join('\n') || '(none)',
     always_docs: renderDocList(alwaysDocs.filter((d) => d.found)),
     discovered_docs: renderDocList(discoveredDocs),

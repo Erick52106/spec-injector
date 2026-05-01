@@ -5,14 +5,16 @@ export interface TemplateVars {
   issue_body: string;
   issue_labels: string;
   issue_checklist: string;
+  detected_domains: string;
   matched_rule_ids: string;
   matched_rule_descriptions: string;
+  matched_guardrails: string;
   matched_hints: string;
-  always_docs: string;       // docs from always_read that were found
-  discovered_docs: string;   // auto-discovered docs (keyword-scored)
-  rule_docs: string;         // docs from matched rules
-  missing_docs: string;      // files listed in always_read or rules that were not found
-  discovered_sources: string;  // auto-discovered source files
+  always_docs: string;
+  discovered_docs: string;
+  rule_docs: string;
+  missing_docs: string;
+  discovered_sources: string;
   repo_path: string;
   generated_at: string;
 }
