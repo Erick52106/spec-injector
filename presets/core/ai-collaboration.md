@@ -32,6 +32,8 @@
 - Must explicitly state:
   - what is included
   - what is NOT included
+- Before merge, an implementation evidence comment must exist on the source issue
+- PR description must include the issue comment URL in the "Implementation Evidence" field
 
 ## Output Format (for AI)
 

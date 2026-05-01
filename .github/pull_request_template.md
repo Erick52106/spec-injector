@@ -31,6 +31,47 @@
 # 執行驗證指令
 ```
 
+## 實作證據 (Implementation Evidence)
+
+**Merge 前必須完成：** 在來源 issue 留下實作證據 comment，並將永久連結填入下方。
+
+Issue comment URL: <!-- https://github.com/owner/repo/issues/N#issuecomment-XXXXXXX -->
+
+<details>
+<summary>實作證據 comment 範本（展開複製至來源 issue）</summary>
+
+```markdown
+## 實作摘要
+
+<!-- 一句話說明此 PR 解決了什麼問題 -->
+
+## 修改檔案
+
+| 檔案 | 修改原因 |
+|---|---|
+| path/to/file | ... |
+
+## 驗證方式
+
+```bash
+# 驗證指令與預期輸出
+```
+
+## 風險 / 不包含範圍
+
+<!-- 明確說明邊界 -->
+
+## PR URL
+
+<!-- https://github.com/owner/repo/pull/N -->
+
+## Commit hash
+
+<!-- git log --oneline -1 -->
+```
+
+</details>
+
 ## Checklist
 
 - [ ] PR 只處理一個明確 scope
@@ -40,3 +81,4 @@
 - [ ] 沒有混入 unrelated refactor
 - [ ] 若有 breaking change，已明確標示
 - [ ] 若有 config/schema/CLI 行為變更，已更新文件
+- [ ] 已在來源 issue 留下實作證據 comment，並將 URL 填入上方「實作證據」欄位
