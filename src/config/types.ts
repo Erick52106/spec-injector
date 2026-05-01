@@ -1,34 +1,32 @@
+export interface ProjectConfig {
+  name?: string;
+  type?: string;
+}
+
 export interface DiscoveryConfig {
-  source_paths?: string[];
+  docs?: string[];
+  source?: string[];
+  exclude?: string[];
   max_docs?: number;
   max_source_files?: number;
 }
 
-export interface Rule {
+export interface Guardrail {
   id: string;
-  description: string;
-  match: {
-    title_contains?: string[];
-    label_contains?: string[];
-    body_contains?: string[];
-  };
-  docs: string[];
-  hints: string[];
+  when_detected: string[];
+  risk: string;
 }
 
-export interface RulesFile {
-  version: 1;
-  always_read?: string[];   // included in every task package regardless of rule match
+export interface SpecConfig {
+  version: 2;
+  project?: ProjectConfig;
+  always_read?: string[];
   discovery?: DiscoveryConfig;
-  rules: Rule[];
-  defaults?: {
-    docs?: string[];
-    hints?: string[];
-  };
+  guardrails?: Guardrail[];
 }
 
 export interface Config {
-  repoPath: string;           // absolute path to the target repo root
-  specAgentDir: string;       // absolute path to .spec-injector/
-  rulesFile: RulesFile;
+  repoPath: string;
+  specAgentDir: string;
+  specConfig: SpecConfig;
 }
