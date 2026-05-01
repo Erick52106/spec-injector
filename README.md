@@ -22,7 +22,7 @@ Requires: Node.js 20+, [`gh`](https://cli.github.com/) authenticated.
 
 ## Usage
 
-## AI Workflow Usage
+### AI Workflow Usage
 
 人類可在 Claude Code 中輸入 `/spec-plan <issue>`，讓 AI 先執行：
 
