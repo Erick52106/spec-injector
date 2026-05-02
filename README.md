@@ -118,7 +118,10 @@ Edit `.spec-injector/config.json` in your target repo:
 
 - **version**: Must be `2`.
 - **project.name / project.type**: Metadata for display in validation and reports.
-- **always_read**: List of files that are always included in every task package.
+- **always_read**: Team-defined files that should always be checked for every task package. `CLAUDE.md` and `AGENTS.md` in the example above are examples, not required files for every repository.
+  - Non-Claude/Codex teams can replace them with their own AI workflow, security, or architecture docs, such as `GEMINI.md`, `CURSOR.md`, `WINDSURF.md`, `docs/ai-guidelines.md`, `docs/security.md`, or `docs/architecture.md`.
+  - Missing `always_read` files are reported under **Missing Files** by `spec plan`; this warning means the config should be checked and is not necessarily a tool failure. Missing `always_read` files are not treated as fatal plan errors.
+  - In prompt mode, found `always_read` files are listed as references; their full contents are not inlined.
 - **discovery.docs**: Explicit paths to documentation files to always include.
 - **discovery.source**: Directories to scan for auto-discovered source files.
 - **discovery.exclude**: Paths or directories to skip during auto-discovery. Use it to keep generated planning docs, AI scratch docs, and temporary agent notes out of task packages; for example, add a repo-local scratch directory such as `docs/superpowers` when you use one.
