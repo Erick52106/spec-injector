@@ -10,6 +10,7 @@
 
 - Required validation 是 merge readiness 的最低門檻；若無法執行，必須在 PR body、issue evidence 與 final report 說明原因。
 - Recommended validation 應在成本低或變更風險較高時執行；若 reviewer 要求，應視為該 PR 的 required validation。
+- 若 PR 跨多個 change type，必須執行所有相關類型的 required validation；若 requirements 衝突、重疊或不確定，採較嚴格的 validation set，並在 PR body 說明實際採用的 validation 與原因。若無法執行任一 required validation，必須 stop-and-report 或清楚寫明 skipped reason。
 - Feature tests 與 implementation 不應依賴真實 GitHub API 或 network。若測試需要 GitHub output，應使用 fixture、fake `gh`、mocked process 或等價 isolation。
 - Package installation 與 normal `gh` workflow 是允許的 workflow I/O，例如 `pnpm install --frozen-lockfile`、`gh pr view`、`gh pr checks`、`gh issue comment`、push branch、create PR。這些不是 feature test dependency。
 - `gh pr view`、`gh pr checks`、`gh issue comment`、push branch、create PR 是 issue / PR workflow 操作，不代表 runtime 或 tests 可以打真 GitHub API。
