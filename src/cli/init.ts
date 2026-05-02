@@ -7,10 +7,7 @@ const EXAMPLE_CONFIG = {
     name: "example",
     type: "fullstack",
   },
-  always_read: [
-    "CLAUDE.md",
-    "AGENTS.md",
-  ],
+  always_read: [],
   discovery: {
     docs: [],
     source: ["src"],
