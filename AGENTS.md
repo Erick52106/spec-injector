@@ -74,9 +74,14 @@ PR body 必須包含：
 
 Source issue 必須有 implementation evidence comment。PR body 回填後必須用 `gh pr view` 或等價方式反查，確認不是空的，且包含 evidence URL 與 commit hash。
 
-## Labels
+## Labels / roadmap metadata
 
 - Issue 應有合理的 area / type / status labels。
+- Future issues 在 high-confidence classification 可行時，應有 roadmap milestone。
+- Future issues 在 high-confidence classification 可行時，應有一個 primary layer label。
+- PR 原則上沿用 linked issue 的 roadmap milestone 與 primary layer label。
+- 若 milestone / layer 無法高信心判斷，停下回報或列入 needs human review。
+- 未經明確 approval，不建立新的 roadmap / layer labels 或 milestones。
 - PR review 階段可用 `status:in-review`。
 - 完成後可用 `status:implemented`。
 - 不要隨意建立新 labels。
