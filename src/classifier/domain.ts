@@ -29,8 +29,8 @@ const DOMAIN_KEYWORDS: Record<string, string[]> = {
   database: ['database', 'db', 'sql', 'query', 'migration', 'schema', 'table', 'model', 'orm', 'postgres', 'mysql', 'mongo', 'redis', 'index', 'transaction'],
   infra: ['infra', 'deploy', 'docker', 'kubernetes', 'k8s', 'terraform', 'helm', 'nginx', 'network', 'devops', 'provision', 'cloud', 'vm', 'container'],
   'cloud-storage': ['s3', 'gcs', 'storage', 'bucket', 'upload', 'download', 'blob', 'cdn', 'file upload', 'asset', 'object storage'],
-  blockchain: ['blockchain', 'chain', 'block', 'hash', 'ledger', 'consensus', 'miner', 'ethereum', 'solana', 'web3', 'nft', 'defi'],
-  'smart-contract': ['smart contract', 'contract', 'solidity', 'abi', 'evm', 'vyper', 'bytecode', 'deploy contract'],
+  blockchain: ['blockchain', 'on-chain', 'transaction hash', 'tx hash', 'block height', 'contract address', 'token transfer', 'gas', 'nonce', 'ethereum', 'evm', 'solana', 'polygon', 'web3', 'nft', 'defi', 'ledger', 'consensus', 'miner'],
+  'smart-contract': ['smart contract', 'contract address', 'solidity', 'abi', 'evm', 'vyper', 'bytecode', 'deploy contract'],
   wallet: ['wallet', 'connect wallet', 'wallet address', 'private key', 'public key', 'address', 'signature', 'signing', 'transaction hash', 'tx hash', 'token transfer', 'on-chain', 'send', 'receive', 'balance', 'seed phrase', 'mnemonic'],
   i18n: ['i18n', 'l10n', 'locale', 'translation', 'lang', 'language', 'localize', 'multilang'],
   testing: ['test', 'spec', 'unit', 'integration', 'e2e', 'mock', 'stub', 'coverage', 'jest', 'vitest', 'playwright', 'cypress', 'assert', 'fixture'],
@@ -42,6 +42,9 @@ const DOMAIN_KEYWORDS: Record<string, string[]> = {
 const MAX_DOMAINS = 5;
 const GENERIC_WALLET_SIGNALS = ['transactions', 'transaction'];
 const GENERIC_WALLET_REASON = 'generic product transaction wording';
+const GENERIC_API_CONTRACT_SIGNALS = ['contract'];
+const GENERIC_API_CONTRACT_CONTEXT = ['api', 'endpoint', 'route', 'request', 'response', 'backend', 'frontend', 'dashboard', 'settings'];
+const GENERIC_API_CONTRACT_REASON = 'generic API contract wording';
 
 export function classifyDomains(issue: Issue): string[] {
   return classifyDomainsWithEvidence(issue).domains;
@@ -105,20 +108,44 @@ function buildRejectedDomainReasons(
   fields: Array<{ source: DomainEvidenceSource; value: string }>,
   detected: Set<string>
 ): RejectedDomainReason[] {
-  if (detected.has('wallet')) return [];
+  const rejected: RejectedDomainReason[] = [];
 
+  if (!detected.has('wallet')) {
+    const reason = findRejectedSignal(fields, GENERIC_WALLET_SIGNALS, GENERIC_WALLET_REASON, 'wallet');
+    if (reason) rejected.push(reason);
+  }
+
+  if (!detected.has('smart-contract') && hasGenericApiContractContext(fields)) {
+    const reason = findRejectedSignal(fields, GENERIC_API_CONTRACT_SIGNALS, GENERIC_API_CONTRACT_REASON, 'smart-contract');
+    if (reason) rejected.push(reason);
+  }
+
+  return rejected;
+}
+
+function findRejectedSignal(
+  fields: Array<{ source: DomainEvidenceSource; value: string }>,
+  signals: string[],
+  reason: string,
+  domain: string
+): RejectedDomainReason | undefined {
   for (const { source, value } of fields) {
-    for (const signal of GENERIC_WALLET_SIGNALS) {
+    for (const signal of signals) {
       if (value.includes(signal)) {
-        return [{
-          domain: 'wallet',
+        return {
+          domain,
           signal,
           source,
-          reason: GENERIC_WALLET_REASON,
-        }];
+          reason,
+        };
       }
     }
   }
 
-  return [];
+  return undefined;
+}
+
+function hasGenericApiContractContext(fields: Array<{ source: DomainEvidenceSource; value: string }>): boolean {
+  const text = fields.map(({ value }) => value).join(' ');
+  return GENERIC_API_CONTRACT_CONTEXT.some((term) => text.includes(term));
 }

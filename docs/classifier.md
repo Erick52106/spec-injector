@@ -38,6 +38,8 @@ Generic product wording 需要小心處理。某些字在不同 domain 中都可
 例如：
 
 - `transaction` 可以是 database transaction，也可以是 product wording。
+- `contract` 可以是 API / endpoint / request-response contract，不等於 smart contract。
+- `block` / `hash` 單字容易出現在 generic engineering wording，應偏好 `block height`、`transaction hash`、`tx hash` 等更明確 evidence。
 - `address` 可以是 wallet address，也可以是 shipping address、email address 或 UI copy。
 - `send` / `receive` 可以是 wallet 動作，也可以是 messaging 或 notification。
 
@@ -57,12 +59,16 @@ Generic product wording 需要小心處理。某些字在不同 domain 中都可
 - `mnemonic`
 - `on-chain`
 - `transaction hash` / `tx hash`
+- `contract address`
+- `block height`
 - `token transfer`
 - `ethereum`
+- `evm`
 - `solana`
+- `polygon`
 - `web3`
 
-Generic `transaction` 不應單獨代表 wallet。Legitimate wallet / blockchain evidence 應比 generic product wording 更強。
+Generic `transaction` 不應單獨代表 wallet。Generic API / endpoint `contract` 不應單獨代表 `smart-contract` 或 `blockchain`。Legitimate wallet / blockchain evidence 應比 generic product wording 更強。
 
 ## Classifier Output Is Advisory
 
