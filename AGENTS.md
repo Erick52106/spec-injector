@@ -6,7 +6,9 @@
 ## Default language
 
 - 預設以繁體中文回覆。
+- GitHub issue body、PR body、implementation evidence comment 與 final report 預設使用繁體中文。
 - 技術術語、檔名、函式名稱、CLI flags 與程式語言關鍵字保留英文。
+- CLI command、raw output 與錯誤輸出可保留英文。
 - 禁止使用簡體中文。
 
 ## Project positioning
@@ -79,9 +81,9 @@ Source issue 必須有 implementation evidence comment。PR body 回填後必須
 - Issue 應有合理的 area / type / status labels。
 - Future issues 在 high-confidence classification 可行時，應有 roadmap milestone。
 - Future issues 在 high-confidence classification 可行時，應有一個 primary layer label。
-- PR 原則上沿用 linked issue 的 roadmap milestone 與 primary layer label。
-- 若 milestone / layer 無法高信心判斷，停下回報或列入 needs human review。
-- 未經明確 approval，不建立新的 roadmap / layer labels 或 milestones。
+- PR 原則上沿用 linked issue 的 roadmap milestone、primary layer label 與合理 area / type labels。
+- 若 PR metadata 無法高信心判斷，停下回報或列入 needs human review。
+- 未經明確 approval，不建立新的 labels 或 milestones。
 - PR review 階段可用 `status:in-review`。
 - 完成後可用 `status:implemented`。
 - 不要隨意建立新 labels。

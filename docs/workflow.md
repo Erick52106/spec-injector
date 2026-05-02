@@ -76,6 +76,12 @@ Slug 應短、可讀，並對應 source issue。不要為同一 issue 建立多�
 
 Prompt 中的 suggestions 不等於 approval。若 prompt、issue、repo instructions 或 human message 互相衝突，停下回報並請 human 決定。
 
+## GitHub language rules
+
+GitHub issue body、PR body、implementation evidence comment、review note 與 final report 預設使用繁體中文。
+
+技術名詞、CLI commands、file paths、raw errors、raw command output、external API names、labels、milestones、commit hash 與必要的英文片段可保留英文。英文應用於精準表達技術內容，不應讓整份 issue / PR / evidence / report 預設變成英文。
+
 ## Issue workflow
 
 標準順序：
@@ -100,13 +106,17 @@ Issue body 應包含：
 - Validation
 - Completion criteria
 
+Issue body 預設使用繁體中文。技術名詞、commands、file paths 與 raw errors 可保留英文。
+
 Issue 應有合適 labels、roadmap milestone 與 primary layer label。Open implementation issue 進 PR review 後可用 `status:in-review`。Merge / complete 後可用 `status:implemented`。Ambiguous planning issue 應保留 `status:needs-design`，不要把 needs-design 當成 implementation approval。
 
 ## PR workflow
 
 PR 必須 ready for review，不要 draft，除非 issue 特別要求。
 
-PR 原則上沿用 linked issue 的 roadmap milestone 與 primary layer label。若 PR 對應多個 issues，選擇主要 milestone / layer，並在 PR body 說明判斷。若 PR 沒有 linked issue，但 scope 可高信心分類，依實際變更套用 milestone / layer；無法高信心判斷時列入 human review，不要硬套。
+PR body 預設使用繁體中文。技術名詞、commands、file paths、raw errors、external API names 與必要的英文片段可保留英文。
+
+PR 原則上沿用 linked issue 的 roadmap milestone、primary layer label 與合理 area / type labels。若 linked issue 缺少 metadata，PR 作者應在 final report 標記 follow-up；若目前 scope 明確允許 metadata 修正，才可補上。若 PR 對應多個 issues，選擇主要 milestone / layer，並在 PR body 說明判斷。若 PR 沒有 linked issue，但 scope 可高信心分類，依實際變更套用 metadata；無法高信心判斷時列入 needs human review，不要硬套。
 
 PR body 必須包含：
 
@@ -145,6 +155,7 @@ Rules:
 
 - 不要隨意建立新 labels。
 - 若缺 label taxonomy，先開 label taxonomy issue。
+- PR 應有合理 area / type labels；若 linked issue 有可沿用的 area / type labels，原則上沿用。
 - PR review 階段可使用 `status:in-review`。
 - Completed issue 可使用 `status:implemented`。
 - Closed as `NOT_PLANNED` 不應硬加 `status:implemented`。
@@ -180,6 +191,7 @@ Rules:
 
 - Issue 建立時，若 high-confidence classification 可行，應套用合理 roadmap milestone 與一個 primary layer label。
 - PR 原則上沿用 linked issue 的 roadmap milestone 與 primary layer label。
+- 若 linked issue 缺 milestone、primary layer label 或合理 area / type labels，PR 作者應在 final report 標記 follow-up；若 scope 明確允許 metadata 修正，才可補上。
 - 若 PR 對應多個 issues，選擇主要 milestone / layer，並在 PR body 說明。
 - 若 PR 沒有 linked issue，依實際 scope 高信心套用；無法判斷則列入 human review。
 - 不要同時套多個 layer labels，除非 human 明確要求。
@@ -191,6 +203,8 @@ Rules:
 ## Evidence workflow
 
 Implementation evidence comment 應寫回 source issue，讓 issue 讀者不用只靠 PR diff 才能知道實作結果。
+
+Implementation evidence comment 預設使用繁體中文。技術名詞、commands、file paths、raw errors、raw command output、commit hash 與 PR URL 可保留英文。
 
 Evidence comment 應包含：
 
