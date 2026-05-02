@@ -115,7 +115,11 @@ export function suggestAlwaysRead(repoPath: string): void {
 
 function fileExists(repoPath: string, relativePath: string): boolean {
   const absolutePath = path.join(repoPath, relativePath);
-  return fs.existsSync(absolutePath) && fs.statSync(absolutePath).isFile();
+  try {
+    return fs.statSync(absolutePath).isFile();
+  } catch {
+    return false;
+  }
 }
 
 function findIgnoredPaths(repoPath: string): IgnoredPath[] {
@@ -123,7 +127,11 @@ function findIgnoredPaths(repoPath: string): IgnoredPath[] {
 
   for (const [excludedPath, reason] of Object.entries(EXCLUDED_DIRS)) {
     const absolutePath = path.join(repoPath, excludedPath);
-    if (!fs.existsSync(absolutePath)) continue;
+    try {
+      fs.statSync(absolutePath);
+    } catch {
+      continue;
+    }
 
     ignored.push({
       filePath: excludedPath.endsWith('/') ? excludedPath : `${excludedPath}/`,
