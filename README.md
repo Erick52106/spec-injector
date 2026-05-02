@@ -68,11 +68,21 @@ spec validate --repo /path/to/repo
 
 Validates `.spec-injector/config.json` against the v2 schema and prints project metadata, always-read counts, discovery stats, and configured guardrails.
 
+### 4. Clean generated task packages
+
+```bash
+spec clean --repo /path/to/repo
+spec clean --repo /path/to/repo --issue 21
+```
+
+Removes only generated task package files matching `.spec-injector/out/issue-<number>-task-package.md`. Other files in `out/`, `.spec-injector/config.json`, `.spec-injector/.gitignore`, and repo docs are left untouched.
+
 ### 使用方式（中文）
 
 1. **初始化**：在目標 repo 執行 `spec init`，建立 `.spec-injector/config.json` 設定檔與 `.gitignore`（自動忽略 `out/` 目錄）。
 2. **產生任務包**：執行 `spec plan <issue-url>`。工具會依序執行：抓取 Issue、關鍵字領域分類、比對風險護欄、載入文件（固定載入與自動探索）、探索相關原始碼，最後將結果寫入 `.spec-injector/out/issue-<number>-task-package.md`。
 3. **驗證設定**：執行 `spec validate` 確認 `config.json` 格式正確，並查看專案資訊、探索設定與護欄清單。
+4. **清理任務包**：執行 `spec clean --repo .` 清理 `.spec-injector/out/` 中符合 `issue-<number>-task-package.md` 命名的 generated task packages；也可用 `--issue <number>` 只清理單一 issue。
 
 ---
 
