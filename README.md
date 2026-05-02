@@ -233,6 +233,7 @@ Important fields:
 ## Documentation links
 
 - Agent instructions: [AGENTS.md](AGENTS.md)
+- Agent handoff patterns: [docs/agent-handoff.md](docs/agent-handoff.md)
 - Architecture: [docs/architecture.md](docs/architecture.md)
 - Core concepts: [docs/concepts.md](docs/concepts.md)
 - Positioning and adjacent workflows: [docs/positioning.md](docs/positioning.md)
