@@ -23,7 +23,7 @@ import type { DomainClassificationResult } from '../classifier/domain.js';
 
 export async function plan(
   issueRef: string,
-  opts: { repo?: string; dryRun?: boolean; verbose?: boolean; format?: string }
+  opts: { repo?: string; config?: string; dryRun?: boolean; verbose?: boolean; format?: string }
 ): Promise<void> {
   const repoPath = path.resolve(opts.repo ?? process.cwd());
   const format = opts.format ?? 'full';
@@ -45,7 +45,7 @@ export async function plan(
 
   // 2. Load config
   if (opts.verbose) console.log('→ Loading config...');
-  const config = await loadConfig(repoPath);
+  const config = await loadConfig(repoPath, { configPath: opts.config });
 
   // 3. Match guardrails by detected domains
   const guardrails = config.specConfig.guardrails ?? [];
