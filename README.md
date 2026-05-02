@@ -230,6 +230,7 @@ Important fields:
 
 ## Documentation links
 
+- Agent instructions: [AGENTS.md](AGENTS.md)
 - Architecture: [docs/architecture.md](docs/architecture.md)
 - Core concepts: [docs/concepts.md](docs/concepts.md)
 - Classifier: [docs/classifier.md](docs/classifier.md)
