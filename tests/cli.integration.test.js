@@ -8,6 +8,65 @@ import { spawn } from 'node:child_process';
 const repoRoot = process.cwd();
 const cliPath = path.join(repoRoot, 'bin', 'spec.js');
 
+test('spec --help lists deterministic CLI purpose and available commands', async () => {
+  const result = await runSpec(['--help']);
+
+  assert.equal(result.code, 0, result.stderr);
+  assert.match(result.stdout, /deterministic/i);
+  assert.match(result.stdout, /\binit\b/);
+  assert.match(result.stdout, /\bvalidate\b/);
+  assert.match(result.stdout, /\bplan\b/);
+  assert.match(result.stdout, /\bconfig\b/);
+  assert.match(result.stdout, /\bclean\b/);
+  assert.match(result.stdout, /help \[command\]/i);
+});
+
+test('spec init and validate help explain created config files and validation expectations', async () => {
+  const initHelp = await runSpec(['init', '--help']);
+  assert.equal(initHelp.code, 0, initHelp.stderr);
+  assert.match(initHelp.stdout, /\.spec-injector\/config\.json/);
+  assert.match(initHelp.stdout, /\.spec-injector\/\.gitignore/);
+  assert.match(initHelp.stdout, /does not create github actions workflow files/i);
+  assert.match(initHelp.stdout, /does not modify runtime code/i);
+
+  const validateHelp = await runSpec(['validate', '--help']);
+  assert.equal(validateHelp.code, 0, validateHelp.stderr);
+  assert.match(validateHelp.stdout, /\.spec-injector\/config\.json/);
+  assert.match(validateHelp.stdout, /non-zero/i);
+  assert.match(validateHelp.stdout, /spec init/i);
+});
+
+test('spec plan/config/clean help describe AI-facing usage and safety constraints', async () => {
+  const planHelp = await runSpec(['plan', '--help']);
+  assert.equal(planHelp.code, 0, planHelp.stderr);
+  assert.match(planHelp.stdout, /gh cli/i);
+  assert.match(planHelp.stdout, /dry-run/i);
+  assert.match(planHelp.stdout, /do not write/i);
+  assert.match(planHelp.stdout, /format prompt/i);
+  assert.match(planHelp.stdout, /compact ai planning prompt/i);
+  assert.match(planHelp.stdout, /verbose/i);
+  assert.match(planHelp.stdout, /pipeline steps/i);
+  assert.match(planHelp.stdout, /\.spec-injector\/out\/issue-<number>-task-package\.md/);
+
+  const configHelp = await runSpec(['config', '--help']);
+  assert.equal(configHelp.code, 0, configHelp.stderr);
+  assert.match(configHelp.stdout, /always-read/i);
+  assert.match(configHelp.stdout, /\blist\b/);
+  assert.match(configHelp.stdout, /\badd\b/);
+  assert.match(configHelp.stdout, /\bremove\b/);
+  assert.match(configHelp.stdout, /\bsuggest\b/);
+  assert.match(configHelp.stdout, /does not modify config/i);
+  assert.match(configHelp.stdout, /add\/remove.*modify config/i);
+
+  const cleanHelp = await runSpec(['clean', '--help']);
+  assert.equal(cleanHelp.code, 0, cleanHelp.stderr);
+  assert.match(cleanHelp.stdout, /generated task package/i);
+  assert.match(cleanHelp.stdout, /issue-<number>-task-package\.md/);
+  assert.match(cleanHelp.stdout, /does not remove .*config\.json/i);
+  assert.match(cleanHelp.stdout, /unrelated files/i);
+  assert.match(cleanHelp.stdout, /--issue <number>/);
+});
+
 test('spec init scaffolds config files with default discovery settings', async (t) => {
   const repoDir = await createTempRepo(t);
 
