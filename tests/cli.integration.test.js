@@ -690,6 +690,96 @@ test('spec plan includes issue-mentioned docs and de-dupes with always_read', as
   assert.equal(countOccurrences(fullResult.stdout, '### AGENTS.md'), 1);
 });
 
+test('spec plan excludes docs/superpowers from auto-discovered docs by default', async (t) => {
+  const fixture = await createExplicitPathPlanFixture(t, {
+    issueNumber: 79,
+    title: 'Refine dashboard endpoint contract planning docs',
+    bodyLines: [
+      'Need plan discovery for dashboard refine endpoint contract updates.',
+      '',
+      'The old migration plan mentions dashboard refine endpoint contract wording too,',
+      'but the task package should prefer current dashboard docs over legacy planning docs.',
+    ],
+    repoFiles: {
+      'docs/superpowers/plans/old-plan.md': '# Old Plan\n\nLegacy dashboard refine endpoint contract migration plan.\nSUPERPOWERS_OLD_PLAN_SENTINEL\n',
+      'docs/dashboard-stack-evaluation.md': '# Dashboard Stack Evaluation\n\nCurrent dashboard refine endpoint contract notes.\nDASHBOARD_STACK_SENTINEL\n',
+    },
+  });
+
+  const promptResult = await runSpec(['plan', fixture.issueUrl, '--repo', fixture.repoDir, '--dry-run', '--format', 'prompt'], { env: fixture.env });
+  const fullResult = await runSpec(['plan', fixture.issueUrl, '--repo', fixture.repoDir, '--dry-run'], { env: fixture.env });
+
+  assert.equal(promptResult.code, 0, promptResult.stderr);
+  assert.equal(fullResult.code, 0, fullResult.stderr);
+  assert.match(promptResult.stdout, /docs\/dashboard-stack-evaluation\.md/);
+  assert.doesNotMatch(promptResult.stdout, /docs\/superpowers\/plans\/old-plan\.md/);
+  assert.match(fullResult.stdout, /### docs\/dashboard-stack-evaluation\.md/);
+  assert.match(fullResult.stdout, /DASHBOARD_STACK_SENTINEL/);
+  assert.doesNotMatch(fullResult.stdout, /docs\/superpowers\/plans\/old-plan\.md/);
+  assert.doesNotMatch(fullResult.stdout, /SUPERPOWERS_OLD_PLAN_SENTINEL/);
+});
+
+test('spec plan auto-discovery exclusion stays consistent with config suggest always-read ignored dirs', async (t) => {
+  const fixture = await createExplicitPathPlanFixture(t, {
+    issueNumber: 179,
+    title: 'Refine dashboard endpoint contract planning docs',
+    bodyLines: [
+      'Need plan discovery for dashboard refine endpoint contract updates.',
+      'Avoid pulling legacy migration plans when current dashboard docs exist.',
+    ],
+    repoFiles: {
+      'docs/superpowers/plans/old-plan.md': '# Old Plan\n\nLegacy dashboard refine endpoint contract migration plan.\n',
+      'docs/dashboard-stack-evaluation.md': '# Dashboard Stack Evaluation\n\nCurrent dashboard refine endpoint contract notes.\n',
+    },
+  });
+
+  const suggestResult = await runSpec(['config', 'suggest', 'always-read', '--repo', fixture.repoDir], { env: fixture.env });
+  const planResult = await runSpec(['plan', fixture.issueUrl, '--repo', fixture.repoDir, '--dry-run', '--format', 'prompt'], { env: fixture.env });
+
+  assert.equal(suggestResult.code, 0, suggestResult.stderr);
+  assert.equal(planResult.code, 0, planResult.stderr);
+  assert.match(suggestResult.stdout, /Ignored \/ excluded:/);
+  assert.match(suggestResult.stdout, /docs\/superpowers\/\s+— superpowers planning docs are not always_read candidates/);
+  assert.match(planResult.stdout, /docs\/dashboard-stack-evaluation\.md/);
+  assert.doesNotMatch(planResult.stdout, /docs\/superpowers\/plans\/old-plan\.md/);
+});
+
+test('spec plan keeps explicit superpowers docs issue-mentioned without reintroducing them via auto-discovery', async (t) => {
+  const fixture = await createExplicitPathPlanFixture(t, {
+    issueNumber: 180,
+    title: 'Review explicit dashboard planning references from issue body',
+    bodyLines: [
+      'Relevant docs and source files:',
+      '- `docs/superpowers/plans/old-plan.md`',
+      '- `docs/architecture.md`',
+      '- `apps/dashboard/src/providers/dataProvider.ts`',
+    ],
+    repoFiles: {
+      'docs/superpowers/plans/old-plan.md': '# Old Plan\n\nSUPERPOWERS_EXPLICIT_SENTINEL\n',
+      'docs/architecture.md': '# Architecture\n\nEXPLICIT_ARCHITECTURE_SENTINEL\n',
+      'apps/dashboard/src/providers/dataProvider.ts': 'export const provider = "EXPLICIT_SOURCE_SENTINEL";\n',
+    },
+  });
+
+  const promptResult = await runSpec(['plan', fixture.issueUrl, '--repo', fixture.repoDir, '--dry-run', '--format', 'prompt'], { env: fixture.env });
+  const fullResult = await runSpec(['plan', fixture.issueUrl, '--repo', fixture.repoDir, '--dry-run'], { env: fixture.env });
+
+  assert.equal(promptResult.code, 0, promptResult.stderr);
+  assert.equal(fullResult.code, 0, fullResult.stderr);
+  assert.match(promptResult.stdout, /`docs\/superpowers\/plans\/old-plan\.md` — mentioned in issue/);
+  assert.doesNotMatch(promptResult.stdout, /`docs\/superpowers\/plans\/old-plan\.md` — [^\n]*auto-discovered/);
+  assert.match(promptResult.stdout, /`docs\/architecture\.md` — mentioned in issue/);
+  assert.match(promptResult.stdout, /`apps\/dashboard\/src\/providers\/dataProvider\.ts` — mentioned in issue/);
+  assert.equal(countOccurrences(promptResult.stdout, 'docs/superpowers/plans/old-plan.md'), 1);
+  assert.match(fullResult.stdout, /### docs\/superpowers\/plans\/old-plan\.md\n\n_mentioned in issue_/);
+  assert.doesNotMatch(fullResult.stdout, /### docs\/superpowers\/plans\/old-plan\.md\n\n_[^\n]*auto-discovered_/);
+  assert.match(fullResult.stdout, /SUPERPOWERS_EXPLICIT_SENTINEL/);
+  assert.match(fullResult.stdout, /### docs\/architecture\.md/);
+  assert.match(fullResult.stdout, /EXPLICIT_ARCHITECTURE_SENTINEL/);
+  assert.match(fullResult.stdout, /### apps\/dashboard\/src\/providers\/dataProvider\.ts/);
+  assert.match(fullResult.stdout, /EXPLICIT_SOURCE_SENTINEL/);
+});
+
 test('spec plan reports missing explicit issue-mentioned file paths without failing', async (t) => {
   const fixture = await createExplicitPathPlanFixture(t, {
     issueNumber: 82,

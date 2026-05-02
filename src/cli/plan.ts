@@ -8,6 +8,7 @@ import {
   discoverSourceFiles,
   extractExplicitIssueFileReferences,
 } from '../docs/finder.js';
+import { getPlanDiscoveryExcludePaths } from '../docs/exclusions.js';
 import { renderTemplate } from '../template/renderer.js';
 import { DEFAULT_TEMPLATE } from '../template/default-template.js';
 import { PROMPT_TEMPLATE } from '../template/prompt-template.js';
@@ -66,7 +67,7 @@ export async function plan(
   const excludeSet = new Set<string>([
     ...alwaysDocs.map((d) => d.filePath),
     ...discoveryDocs.map((d) => d.filePath),
-    ...(config.specConfig.discovery?.exclude ?? []),
+    ...getPlanDiscoveryExcludePaths(config.specConfig.discovery?.exclude ?? []),
   ]);
   const maxDocs = config.specConfig.discovery?.max_docs ?? 5;
   const discoveredDocs = await discoverRelevantDocs(issue, repoPath, excludeSet, maxDocs);

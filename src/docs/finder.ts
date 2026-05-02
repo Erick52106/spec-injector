@@ -2,6 +2,7 @@ import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { safeReadFile } from '../utils/fs.js';
+import { isPlanDiscoveryExcluded } from './exclusions.js';
 import type { DocSection, DocSourceKind } from './types.js';
 import type { Issue } from '../github/types.js';
 
@@ -191,7 +192,7 @@ async function gatherCandidates(repoPath: string, exclude: Set<string>): Promise
 
   // Fixed high-value files
   for (const fixed of ['README.md', 'CLAUDE.md', 'AGENTS.md']) {
-    if (!exclude.has(fixed) && fs.existsSync(path.join(repoPath, fixed))) {
+    if (!isPlanDiscoveryExcluded(fixed, exclude) && fs.existsSync(path.join(repoPath, fixed))) {
       candidates.push(fixed);
     }
   }
@@ -214,10 +215,12 @@ function walkMarkdown(
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
     const full = path.join(dir, entry.name);
     if (entry.isDirectory()) {
+      const relDir = path.relative(repoPath, full);
+      if (isPlanDiscoveryExcluded(relDir, exclude)) continue;
       walkMarkdown(full, repoPath, exclude, results);
     } else if (entry.isFile() && entry.name.endsWith('.md')) {
       const rel = path.relative(repoPath, full);
-      if (!exclude.has(rel)) results.push(rel);
+      if (!isPlanDiscoveryExcluded(rel, exclude)) results.push(rel);
     }
   }
 }
