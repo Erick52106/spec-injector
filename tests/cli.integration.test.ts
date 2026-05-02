@@ -26,7 +26,60 @@ test('classifier does not treat dashboard transactions endpoint wording as walle
   assert.ok(domains.includes('frontend'), `Expected frontend in ${domains.join(', ')}`);
   assert.ok(domains.includes('api'), `Expected api in ${domains.join(', ')}`);
   assert.ok(domains.includes('backend'), `Expected backend in ${domains.join(', ')}`);
+  assert.ok(!domains.includes('blockchain'), `Expected blockchain to be absent from ${domains.join(', ')}`);
+  assert.ok(!domains.includes('smart-contract'), `Expected smart-contract to be absent from ${domains.join(', ')}`);
   assert.ok(!domains.includes('wallet'), `Expected wallet to be absent from ${domains.join(', ')}`);
+});
+
+test('classifier suppresses generic dashboard endpoint contract wording from blockchain domains', () => {
+  const result = classifyDomainsWithEvidence({
+    number: 114,
+    title: 'Dashboard transactions/settings endpoint contract alignment blocking release',
+    body: [
+      'Align the transactions endpoint and settings endpoint API contract.',
+      'This is a backend route handler contract and request / response contract issue for dashboard records.',
+      'Keep the frontend dashboard page and database-backed product transaction records in sync.',
+    ].join('\n'),
+    labels: ['frontend', 'api', 'backend'],
+    url: 'https://github.com/Erick52106/spec-injector/issues/114',
+    state: 'open',
+  });
+
+  assert.ok(result.domains.includes('frontend'), `Expected frontend in ${result.domains.join(', ')}`);
+  assert.ok(result.domains.includes('api'), `Expected api in ${result.domains.join(', ')}`);
+  assert.ok(result.domains.includes('backend'), `Expected backend in ${result.domains.join(', ')}`);
+  assert.ok(result.domains.includes('database'), `Expected database in ${result.domains.join(', ')}`);
+  assert.ok(!result.domains.includes('blockchain'), `Expected blockchain to be absent from ${result.domains.join(', ')}`);
+  assert.ok(!result.domains.includes('smart-contract'), `Expected smart-contract to be absent from ${result.domains.join(', ')}`);
+  assert.ok(!result.domains.includes('wallet'), `Expected wallet to be absent from ${result.domains.join(', ')}`);
+  assert.ok(result.rejected.some((r) =>
+    r.domain === 'smart-contract' &&
+    r.signal === 'contract' &&
+    r.source === 'title' &&
+    r.reason === 'generic API contract wording'
+  ));
+  assert.ok(result.rejected.length <= 2, `Expected only targeted rejected reasons, got ${JSON.stringify(result.rejected)}`);
+});
+
+test('classifier does not overfit non-tachigo transaction history API contract wording to blockchain', () => {
+  const result = classifyDomainsWithEvidence({
+    number: 114,
+    title: 'Admin dashboard transaction history API contract',
+    body: [
+      'Review the request / response contract for billing transaction history.',
+      'The backend route handler should return product transaction records from database rows.',
+    ].join('\n'),
+    labels: ['api', 'backend'],
+    url: 'https://github.com/example/product/issues/114',
+    state: 'open',
+  });
+
+  assert.ok(result.domains.includes('api'), `Expected api in ${result.domains.join(', ')}`);
+  assert.ok(result.domains.includes('backend'), `Expected backend in ${result.domains.join(', ')}`);
+  assert.ok(result.domains.includes('database'), `Expected database in ${result.domains.join(', ')}`);
+  assert.ok(!result.domains.includes('blockchain'), `Expected blockchain to be absent from ${result.domains.join(', ')}`);
+  assert.ok(!result.domains.includes('smart-contract'), `Expected smart-contract to be absent from ${result.domains.join(', ')}`);
+  assert.ok(!result.domains.includes('wallet'), `Expected wallet to be absent from ${result.domains.join(', ')}`);
 });
 
 test('classifier keeps wallet detection for explicit wallet and on-chain transaction evidence', () => {
@@ -43,6 +96,32 @@ test('classifier keeps wallet detection for explicit wallet and on-chain transac
   });
 
   assert.ok(domains.includes('wallet'), `Expected wallet in ${domains.join(', ')}`);
+});
+
+test('classifier keeps blockchain detection for legitimate smart contract and on-chain evidence', () => {
+  const result = classifyDomainsWithEvidence({
+    number: 114,
+    title: 'Smart contract on-chain tx hash contract address indexing',
+    body: [
+      'Index Ethereum EVM contract address activity with transaction hash and tx hash lookup.',
+      'Persist block height, gas, and nonce metadata for token transfer reconciliation.',
+    ].join('\n'),
+    labels: ['backend'],
+    url: 'https://github.com/Erick52106/spec-injector/issues/114',
+    state: 'open',
+  });
+
+  assert.ok(result.domains.includes('blockchain'), `Expected blockchain in ${result.domains.join(', ')}`);
+  assert.ok(result.domains.includes('smart-contract'), `Expected smart-contract in ${result.domains.join(', ')}`);
+  assert.ok(result.evidence.some((e) =>
+    e.domain === 'blockchain' && e.term === 'on-chain' && e.source === 'title'
+  ));
+  assert.ok(result.evidence.some((e) =>
+    e.domain === 'blockchain' && e.term === 'contract address' && e.source === 'title'
+  ));
+  assert.ok(result.evidence.some((e) =>
+    e.domain === 'smart-contract' && e.term === 'smart contract' && e.source === 'title'
+  ));
 });
 
 test('classifier does not overfit product transaction records to wallet', () => {
@@ -145,6 +224,35 @@ test('classifier reports wallet rejected reason for generic product transaction 
     signal: 'transactions',
     source: 'title',
     reason: 'generic product transaction wording',
+  }]);
+});
+
+test('classifier reports deterministic rejected reason for generic API contract wording only', () => {
+  const issue = {
+    number: 114,
+    title: 'Settings endpoint contract alignment',
+    body: [
+      'Review the backend route handler contract.',
+      'Keep the API request / response contract stable for dashboard settings.',
+    ].join('\n'),
+    labels: ['api', 'backend'],
+    url: 'https://github.com/Erick52106/spec-injector/issues/114',
+    state: 'open' as const,
+  };
+
+  const first = classifyDomainsWithEvidence(issue);
+  const second = classifyDomainsWithEvidence(issue);
+
+  assert.deepEqual(first, second);
+  assert.ok(first.domains.includes('api'), `Expected api in ${first.domains.join(', ')}`);
+  assert.ok(first.domains.includes('backend'), `Expected backend in ${first.domains.join(', ')}`);
+  assert.ok(!first.domains.includes('blockchain'), `Expected blockchain to be absent from ${first.domains.join(', ')}`);
+  assert.ok(!first.domains.includes('smart-contract'), `Expected smart-contract to be absent from ${first.domains.join(', ')}`);
+  assert.deepEqual(first.rejected, [{
+    domain: 'smart-contract',
+    signal: 'contract',
+    source: 'title',
+    reason: 'generic API contract wording',
   }]);
 });
 
