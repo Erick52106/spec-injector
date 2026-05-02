@@ -11,6 +11,8 @@
 - Required validation 是 merge readiness 的最低門檻；若無法執行，必須在 PR body、issue evidence 與 final report 說明原因。
 - Recommended validation 應在成本低或變更風險較高時執行；若 reviewer 要求，應視為該 PR 的 required validation。
 - 若 PR 跨多個 change type，必須執行所有相關類型的 required validation；若 requirements 衝突、重疊或不確定，採較嚴格的 validation set，並在 PR body 說明實際採用的 validation 與原因。若無法執行任一 required validation，必須 stop-and-report 或清楚寫明 skipped reason。
+- 若 PR 跨多個 roadmap layers 或多個 source issues，必須在 PR body 說明採用的主要 roadmap milestone / primary layer label 與原因。
+- PR review 前應確認 linked issue 與 PR 的 roadmap milestone / primary layer label 是否存在且合理；無法高信心分類時，必須 stop-and-report 或列為 needs human review。
 - Feature tests 與 implementation 不應依賴真實 GitHub API 或 network。若測試需要 GitHub output，應使用 fixture、fake `gh`、mocked process 或等價 isolation。
 - Package installation 與 normal `gh` workflow 是允許的 workflow I/O，例如 `pnpm install --frozen-lockfile`、`gh pr view`、`gh pr checks`、`gh issue comment`、push branch、create PR。這些不是 feature test dependency。
 - `gh pr view`、`gh pr checks`、`gh issue comment`、push branch、create PR 是 issue / PR workflow 操作，不代表 runtime 或 tests 可以打真 GitHub API。
@@ -168,6 +170,7 @@ Required review checks:
 Examples:
 
 - Issue labels.
+- Roadmap milestones / layer labels.
 - Issue closing or reopening.
 - Planning issue creation.
 - Evidence comments.
@@ -175,6 +178,7 @@ Examples:
 Required:
 
 - Confirm no repo file changes.
+- For metadata-only roadmap updates, confirm no repo file changes and list every milestone / layer label mutation.
 - Verify GitHub issue, label, and PR state with `gh issue view`, `gh pr view`, or equivalent commands.
 - Final report lists exact GitHub mutations.
 
@@ -184,6 +188,8 @@ Required review checks:
 - No unintended PR changes.
 - No non-target issue close.
 - Status labels do not conflict, for example `status:ready` and `status:implemented` on the same open implementation issue.
+- Roadmap milestone and primary layer label are present and reasonable when high-confidence classification is possible.
+- Missing milestone / layer label is explicitly reported as follow-up when the current PR scope does not include metadata changes.
 
 ### 10. Dogfood / target repo evaluation
 
@@ -242,6 +248,7 @@ PR body must include:
 - Scope guard / non-goals confirmation.
 - CI checks status or an explicit note that CI was not available / not applicable.
 - Explicit skipped reason for any required validation that could not run.
+- Primary roadmap milestone / layer label rationale when the PR crosses multiple change types, layers, or source issues.
 
 After backfill, use `gh pr view` or equivalent to confirm the PR body is non-empty and contains the evidence URL and commit hash.
 
@@ -271,6 +278,8 @@ A PR is ready for human review only when:
 - Source issue has implementation evidence comment.
 - PR body is backfilled with issue evidence URL.
 - PR body includes commit hash.
+- Linked issue and PR have a roadmap milestone and one primary layer label when high-confidence classification is possible.
+- If milestone / layer label is missing and the current PR does not scope metadata updates, PR body, final report, or review notes mark a follow-up.
 - `gh pr view` confirms PR body is non-empty and contains evidence URL and commit hash.
 - CI checks are reported.
 - Scope guard confirms non-goals.

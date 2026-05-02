@@ -100,11 +100,13 @@ Issue body 應包含：
 - Validation
 - Completion criteria
 
-Issue 應有合適 labels。Open implementation issue 進 PR review 後可用 `status:in-review`。Merge / complete 後可用 `status:implemented`。Ambiguous planning issue 應保留 `status:needs-design`，不要把 needs-design 當成 implementation approval。
+Issue 應有合適 labels、roadmap milestone 與 primary layer label。Open implementation issue 進 PR review 後可用 `status:in-review`。Merge / complete 後可用 `status:implemented`。Ambiguous planning issue 應保留 `status:needs-design`，不要把 needs-design 當成 implementation approval。
 
 ## PR workflow
 
 PR 必須 ready for review，不要 draft，除非 issue 特別要求。
+
+PR 原則上沿用 linked issue 的 roadmap milestone 與 primary layer label。若 PR 對應多個 issues，選擇主要 milestone / layer，並在 PR body 說明判斷。若 PR 沒有 linked issue，但 scope 可高信心分類，依實際變更套用 milestone / layer；無法高信心判斷時列入 human review，不要硬套。
 
 PR body 必須包含：
 
@@ -148,6 +150,43 @@ Rules:
 - Closed as `NOT_PLANNED` 不應硬加 `status:implemented`。
 - 避免 status labels 衝突，例如 `status:ready` 與 `status:implemented` 同時存在。
 - Labels 不取代 issue body，也不授權擴 scope。
+
+## Roadmap milestones and layer labels
+
+Roadmap milestone 表示主要 roadmap phase。Primary layer label 表示主要系統層。每個 issue / PR 原則上只使用一個 roadmap milestone 與一個 primary layer label；跨層工作應選主要責任層，並在 PR body 說明判斷。
+
+Fixed roadmap milestones:
+
+- `Layer 1 — Core Compiler`
+- `Layer 2 — Workflow Guardrails`
+- `Layer 3 — Protocolization`
+- `Layer 4 — Companion UX`
+
+Fixed layer labels:
+
+- `layer1 : Core Compiler`
+- `layer2 : Workflow Guardrails`
+- `layer3 : Protocolization`
+- `layer4 : Companion UX`
+
+Layer definitions:
+
+- `Layer 1 — Core Compiler` / `layer1 : Core Compiler`: 核心 deterministic issue-to-context compiler。包含 issue parsing、domain classifier、references / discovery core behavior、guardrails、safeReadFile、template rendering、task package output、CLI plan output、output correctness、core tests supporting compiler correctness。
+- `Layer 2 — Workflow Guardrails` / `layer2 : Workflow Guardrails`: 讓 core compiler 能安全、高速、可併發使用的 workflow / validation / evidence / worktree guardrails。包含 AGENTS.md / CLAUDE.md、isolated worktree workflow、validation matrix / quality gates、dirty target repo warning、dogfood、PR evidence workflow、issue label audit、worktree preflight checks、PR / evidence consistency checker、workflow metadata cleanup、CI / automation if primary goal is workflow guardrail。
+- `Layer 3 — Protocolization` / `layer3 : Protocolization`: 把 taxonomy / workflow 規則升級為穩定 catalog / protocol / machine-checkable contract。包含 catalog / protocol design、domain catalog、reference source catalog、guardrail catalog、task package section catalog、schema / compatibility rules、machine-checkable contract design、stable type naming、public vs internal contract boundaries。
+- `Layer 4 — Companion UX` / `layer4 : Companion UX`: Companion mascot / status layer / workflow observability UX。包含 companion mascot design、workflow status event schema、daemon / status runtime exploration、local status watcher、Tauri / browser overlay / local widget exploration、low-resource companion runtime、visual / mascot status layer planning。
+
+Rules:
+
+- Issue 建立時，若 high-confidence classification 可行，應套用合理 roadmap milestone 與一個 primary layer label。
+- PR 原則上沿用 linked issue 的 roadmap milestone 與 primary layer label。
+- 若 PR 對應多個 issues，選擇主要 milestone / layer，並在 PR body 說明。
+- 若 PR 沒有 linked issue，依實際 scope 高信心套用；無法判斷則列入 human review。
+- 不要同時套多個 layer labels，除非 human 明確要求。
+- Layer label 不是 area label 的替代品；area / type / status labels 仍應維持。
+- Milestone 不是 status label 的替代品；workflow state 仍由 status labels 與 PR state 表示。
+- 不要建立或提倡 `L1.5`、`Layer 1.5`、`layer1.5`、`layer:1`、`layer:1-core`、`layer:core` 或其他語意模糊 layer labels。
+- Closed as `NOT_PLANNED` 的 issue 仍可有 milestone / layer label 方便查詢，但不應硬套 `status:implemented`。
 
 ## Evidence workflow
 
