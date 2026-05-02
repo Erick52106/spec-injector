@@ -71,29 +71,45 @@ test('spec config list/add/remove always-read manages config entries idempotentl
   assert.match(duplicateRemove.stdout, /does not include: docs\/security\.md/);
 });
 
-test('spec config suggest always-read reports candidates and ignores excluded paths without mutating config', async (t) => {
+test('spec config suggest always-read scans fixed and scoring candidates with stable grouped output', async (t) => {
   const repoDir = await createTempRepo(t);
 
-  await writeFiles(repoDir, [
-    'CLAUDE.md',
-    'AGENTS.md',
-    'GEMINI.md',
-    'README.md',
-    'docs/security.md',
-    'docs/architecture.md',
-    'docs/superpowers/plans/test.md',
-    '.spec-injector/out/issue-1-task-package.md',
-    'node_modules/noise.md',
-    'dist/generated.md',
-    'build/generated.md',
-  ]);
+  await writeRepoFiles(repoDir, {
+    'CLAUDE.md': '# Claude\n',
+    'AGENTS.md': '# Agents\n',
+    'GEMINI.md': '# Gemini\n',
+    'README.md': '# Overview\n\nDevelopment workflow and project overview.\n',
+    'docs/security.md': '# Security\n\nDo not bypass guardrails.\n',
+    'docs/architecture.md': '# Architecture\n\nSystem architecture overview.\n',
+    'docs/engineering-guidelines.md': '# Engineering Guidelines\n\nDevelopers should follow conventions and workflow guidance.\n',
+    'docs/backend-principles.md': '# Backend Principles\n\nCoding conventions and policy notes.\n',
+    'docs/payment-architecture.md': '# Payment Architecture\n\nArchitecture and security constraints.\n',
+    'docs/team-conventions.md': '# Team Conventions\n\nTeam workflow and development conventions.\n',
+    '.github/copilot-instructions.md': '# AI Instructions\n\nCopilot should follow repository conventions.\n',
+    '.cursor/rules/spec-injector.md': 'Always follow workflow guardrails.\n',
+    '.windsurf/rules.md': '# Workflow\n\nDo not ignore policy.\n',
+    'docs/superpowers/plans/test.md': '# Plan\n',
+    'docs/archive/old-architecture.md': '# Architecture\n',
+    'archive/old-guidelines.md': '# Guidelines\n',
+    '.spec-injector/out/issue-1-task-package.md': '# Generated\n',
+    'node_modules/noise.md': '# Noise\n',
+    'dist/generated.md': '# Generated\n',
+    'build/generated.md': '# Generated\n',
+    'CHANGELOG.md': '# Changelog\n',
+    'docs/meeting-notes.md': '# Meeting Notes\n',
+    'docs/tmp-draft.md': '# Draft\n',
+  });
 
   const result = await runSpec(['config', 'suggest', 'always-read', '--repo', repoDir]);
+  const secondResult = await runSpec(['config', 'suggest', 'always-read', '--repo', repoDir]);
 
   assert.equal(result.code, 0, result.stderr);
+  assert.equal(secondResult.code, 0, secondResult.stderr);
+  assert.equal(secondResult.stdout, result.stdout);
   assert.match(result.stdout, /High confidence:/);
   assert.match(result.stdout, /Medium confidence:/);
   assert.match(result.stdout, /Ignored \/ excluded:/);
+  assert.match(result.stdout, /No changes were made to \.spec-injector\/config\.json\./);
 
   for (const file of [
     'CLAUDE.md',
@@ -102,21 +118,68 @@ test('spec config suggest always-read reports candidates and ignores excluded pa
     'README.md',
     'docs/security.md',
     'docs/architecture.md',
+    'docs/engineering-guidelines.md',
+    'docs/backend-principles.md',
+    'docs/payment-architecture.md',
+    'docs/team-conventions.md',
+    '.github/copilot-instructions.md',
+    '.cursor/rules/spec-injector.md',
+    '.windsurf/rules.md',
   ]) {
     assert.match(result.stdout, new RegExp(escapeRegExp(file)));
   }
 
   for (const file of [
     'docs/superpowers/plans/test.md',
+    'docs/archive/old-architecture.md',
+    'archive/old-guidelines.md',
     '.spec-injector/out/issue-1-task-package.md',
     'node_modules/noise.md',
     'dist/generated.md',
     'build/generated.md',
+    'CHANGELOG.md',
+    'docs/meeting-notes.md',
+    'docs/tmp-draft.md',
   ]) {
-    assert.doesNotMatch(result.stdout, new RegExp(escapeRegExp(file)));
+    assert.doesNotMatch(result.stdout, new RegExp(`\\n\\s*${escapeRegExp(file)}\\s+—`));
   }
 
+  assert.match(result.stdout, /\n\s*docs\/archive\/\s+—/);
+  assert.match(result.stdout, /\n\s*docs\/superpowers\/\s+—/);
+  assert.match(result.stdout, /\n\s*archive\/\s+—/);
+  assert.match(result.stdout, /\n\s*\.spec-injector\/out\/\s+—/);
+  assert.match(result.stdout, /\n\s*node_modules\/\s+—/);
+  assert.match(result.stdout, /\n\s*dist\/\s+—/);
+  assert.match(result.stdout, /\n\s*build\/\s+—/);
+
+  assert.equal(countOccurrences(result.stdout, 'README.md'), 1);
+  assert.equal(countOccurrences(result.stdout, 'docs/architecture.md'), 1);
+
+  const readmeIndex = result.stdout.indexOf('README.md');
+  const cursorIndex = result.stdout.indexOf('.cursor/rules/spec-injector.md');
+  assert.notEqual(readmeIndex, -1);
+  assert.notEqual(cursorIndex, -1);
+  assert.ok(cursorIndex < readmeIndex, result.stdout);
+
   await assert.rejects(fs.access(path.join(repoDir, '.spec-injector', 'config.json')));
+});
+
+test('spec config suggest always-read does not modify initialized config', async (t) => {
+  const repoDir = await createTempRepo(t);
+  await runSpec(['init', '--repo', repoDir]);
+  await writeRepoFiles(repoDir, {
+    'README.md': '# Overview\n',
+    'docs/payment-architecture.md': '# Payment Architecture\n\nArchitecture workflow.\n',
+  });
+
+  const configPath = path.join(repoDir, '.spec-injector', 'config.json');
+  const before = await fs.readFile(configPath, 'utf8');
+
+  const result = await runSpec(['config', 'suggest', 'always-read', '--repo', repoDir]);
+
+  assert.equal(result.code, 0, result.stderr);
+  assert.match(result.stdout, /docs\/payment-architecture\.md/);
+  assert.equal(await fs.readFile(configPath, 'utf8'), before);
 });
 
 test('spec clean removes generated task packages and preserves unrelated files', async (t) => {
@@ -212,6 +275,14 @@ async function writeFiles(repoDir, relativePaths) {
   }));
 }
 
+async function writeRepoFiles(repoDir, files) {
+  await Promise.all(Object.entries(files).map(async ([relativePath, content]) => {
+    const absolutePath = path.join(repoDir, relativePath);
+    await fs.mkdir(path.dirname(absolutePath), { recursive: true });
+    await fs.writeFile(absolutePath, content, 'utf8');
+  }));
+}
+
 async function readFile(filePath) {
   return fs.readFile(filePath, 'utf8');
 }
@@ -226,4 +297,8 @@ async function assertFileMissing(filePath) {
 
 function escapeRegExp(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function countOccurrences(value, needle) {
+  return value.split(needle).length - 1;
 }

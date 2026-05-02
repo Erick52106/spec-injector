@@ -81,7 +81,7 @@ spec config add always-read docs/security.md --repo .
 spec config remove always-read AGENTS.md --repo .
 ```
 
-The `suggest always-read` helper scans repo-level and common docs locations, then prints candidate files with reasons. It does not modify `.spec-injector/config.json`; to add a suggestion, run `spec config add always-read <path> --repo .`.
+The `suggest always-read` helper scans repo-level and common docs locations, then uses deterministic scoring to print candidate files with reasons. It does not modify `.spec-injector/config.json`; to add a suggestion, run `spec config add always-read <path> --repo .`. See [docs/always-read-suggestions.md](docs/always-read-suggestions.md) for the scan scope, exclusions, and confidence guidance.
 
 The `spec config` command currently manages the `always_read` list in `.spec-injector/config.json` and can suggest likely `always_read` candidates.
 
@@ -99,7 +99,7 @@ Removes only generated task package files matching `.spec-injector/out/issue-<nu
 1. **初始化**：在目標 repo 執行 `spec init`，建立 `.spec-injector/config.json` 設定檔與 `.gitignore`（自動忽略 `out/` 目錄）。
 2. **產生任務包**：執行 `spec plan <issue-url>`。工具會依序執行：抓取 Issue、關鍵字領域分類、比對風險護欄、載入文件（固定載入與自動探索）、探索相關原始碼，最後將結果寫入 `.spec-injector/out/issue-<number>-task-package.md`。
 3. **驗證設定**：執行 `spec validate` 確認 `config.json` 格式正確，並查看專案資訊、探索設定與護欄清單。
-4. **管理 always_read**：執行 `spec config list --repo .` 查看必讀文件，或用 `spec config suggest always-read --repo .` 掃描候選文件與 reasons；suggest 不會修改 config，若要加入請再執行 `spec config add always-read <path> --repo .`。也可用 `spec config add always-read docs/security.md --repo .` 與 `spec config remove always-read AGENTS.md --repo .` 更新清單。目前只支援管理與建議 `always_read`。
+4. **管理 always_read**：執行 `spec config list --repo .` 查看必讀文件，或用 `spec config suggest always-read --repo .` 以 deterministic scoring 掃描候選文件與 reasons；suggest 不會修改 config，若要加入請再執行 `spec config add always-read <path> --repo .`。也可用 `spec config add always-read docs/security.md --repo .` 與 `spec config remove always-read AGENTS.md --repo .` 更新清單。目前只支援管理與建議 `always_read`；掃描範圍與 confidence 說明請見 `docs/always-read-suggestions.md`。
 5. **清理任務包**：執行 `spec clean --repo .` 清理 `.spec-injector/out/` 中符合 `issue-<number>-task-package.md` 命名的 generated task packages；也可用 `--issue <number>` 只清理單一 issue。
 
 ---
