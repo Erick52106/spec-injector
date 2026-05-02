@@ -26,10 +26,14 @@ Dogfood report 應觀察：
 2. 檢查 target repo branch 與 worktree。
 3. 如果 target repo dirty，停下回報。
 4. 不自動 stash / clean / reset。
-5. 執行 `spec plan <issue> --repo <target-repo> --dry-run --format prompt --verbose`。
-6. 保存或摘要 output。
-7. 分析 observations、false positives、false negatives、follow-up issues。
-8. 不直接修改 target repo code，除非另有 approved implementation plan。
+5. 若 clean target repo 沒有 `.spec-injector/config.json`，準備 target repo 外部的 config file path。
+6. 執行 `spec plan <issue> --repo <target-repo> --config <external-config.json> --dry-run --format prompt --verbose`。
+   - 若 target repo 已有可使用的 `.spec-injector/config.json`，可省略 `--config`，維持預設讀取行為。
+   - `--config` 只讀取指定檔案；不要把 `.spec-injector/` 複製或建立到 target repo。
+   - Read-only dogfood 應保留 `--dry-run`，避免產生 task package output。
+7. 保存或摘要 output。
+8. 分析 observations、false positives、false negatives、follow-up issues。
+9. 不直接修改 target repo code，除非另有 approved implementation plan。
 
 ## Dirty Worktree Rule
 
