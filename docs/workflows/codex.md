@@ -30,7 +30,7 @@ This guide defines how Codex should use `spec-injector` when handling GitHub iss
 8. Summarize the plan and wait for user approval when requested.
 9. Create a branch from latest `main`.
 10. Implement only issue scope.
-11. Run `npm run build` and `npm test` when available.
+11. Run `pnpm build` and `pnpm test` when available.
 12. Leave implementation evidence comment.
 13. Create a ready-for-review PR.
 14. Update PR body and verify it with `gh pr view <PR_NUMBER> --json body --jq .body`.
@@ -43,7 +43,7 @@ This guide defines how Codex should use `spec-injector` when handling GitHub iss
 - Do not modify files outside allowed scope.
 - Do not create draft PR unless explicitly asked.
 - Do not claim PR body was updated without verifying.
-- Do not silently proceed if `gh`, `spec`, `npm`, or repo path fails.
+- Do not silently proceed if `gh`, `spec`, `pnpm`, or repo path fails.
 - Stop and report if branch protection or CI required checks are misconfigured.
 
 ## Output checklist

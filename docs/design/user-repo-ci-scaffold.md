@@ -19,8 +19,8 @@ The goals are to:
 ## Current state
 
 - The `spec-injector` repository already has CI.
-- CI runs `npm test`.
-- `npm test` covers core CLI commands.
+- CI runs `pnpm test`.
+- `pnpm test` covers core CLI commands.
 - `spec init` currently creates only `.spec-injector/config.json` and `.spec-injector/.gitignore`.
 - `spec init` currently does not create `.github/workflows`.
 - User repo CI scaffold is not implemented.
@@ -134,10 +134,13 @@ The following is a future candidate only. It is not an actual workflow file crea
           - name: Setup Node
             uses: actions/setup-node@v4
             with:
-              node-version: 20
+              node-version: 24
+
+          - name: Enable Corepack
+            run: corepack enable
 
           - name: Install spec-injector
-            run: npm install -g github:Erick52106/spec-injector
+            run: pnpm add --global github:Erick52106/spec-injector
 
           - name: Validate spec-injector config
             run: spec validate --repo .
