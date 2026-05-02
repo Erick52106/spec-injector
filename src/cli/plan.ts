@@ -14,6 +14,7 @@ import { DEFAULT_TEMPLATE } from '../template/default-template.js';
 import { PROMPT_TEMPLATE } from '../template/prompt-template.js';
 import { writePackage } from '../output/writer.js';
 import { classifyDomainsWithEvidence } from '../classifier/domain.js';
+import { getWorktreeState } from '../utils/git.js';
 import type { TemplateVars } from '../template/types.js';
 import type { Guardrail } from '../config/types.js';
 import type { Issue } from '../github/types.js';
@@ -31,6 +32,7 @@ export async function plan(
   }
 
   if (opts.verbose) console.log(`→ Target repo: ${repoPath}`);
+  warnIfTargetRepoWorktreeStateNeedsReview(repoPath);
 
   // 1. Fetch issue
   if (opts.verbose) console.log('→ Fetching issue...');
@@ -129,6 +131,18 @@ export async function plan(
   const outDir = path.join(config.specAgentDir, 'out');
   const outPath = await writePackage(rendered, outDir, issue.number);
   console.log(`✓ Task package written: ${path.relative(repoPath, outPath)}`);
+}
+
+function warnIfTargetRepoWorktreeStateNeedsReview(repoPath: string): void {
+  const state = getWorktreeState(repoPath);
+  if (state.kind === 'clean' || state.kind === 'not-git') return;
+
+  if (state.kind === 'dirty') {
+    console.warn('⚠ Target repo dirty: target repo has uncommitted or untracked changes; generated references may reflect the current worktree. Review repo state with a human before implementation. spec-injector will continue without modifying files.');
+    return;
+  }
+
+  console.warn('⚠ Unable to determine target repo worktree state; generated references may reflect the current worktree. Review repo state with a human before implementation. spec-injector will continue without modifying files.');
 }
 
 function renderDocList(docs: DocSection[]): string {
