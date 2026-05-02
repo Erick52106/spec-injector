@@ -1,10 +1,12 @@
 import path from 'path';
 import fs from 'fs';
+import { ensureRepoPath } from '../utils/fs.js';
 
 const TASK_PACKAGE_PATTERN = /^issue-\d+-task-package\.md$/;
 
 export async function clean(opts: { repo?: string; issue?: string }): Promise<void> {
   const repoPath = path.resolve(opts.repo ?? process.cwd());
+  ensureRepoPath(repoPath);
   const outDir = path.join(repoPath, '.spec-injector', 'out');
 
   if (opts.issue !== undefined) {
