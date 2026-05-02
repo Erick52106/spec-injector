@@ -40,6 +40,17 @@ program
     await validate(opts);
   });
 
+// clean subcommand
+program
+  .command('clean')
+  .description('Remove generated task package files from .spec-injector/out')
+  .option('--repo <path>', 'Path to target repo (default: CWD)')
+  .option('--issue <number>', 'Only remove the generated task package for one issue')
+  .action(async (opts: { repo?: string; issue?: string }) => {
+    const { clean } = await import('./clean.js');
+    await clean(opts);
+  });
+
 program.parseAsync(process.argv).catch((err: unknown) => {
   console.error(`✗ ${(err as Error).message}`);
   process.exit(1);
