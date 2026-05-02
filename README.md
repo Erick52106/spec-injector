@@ -1,18 +1,81 @@
 # spec-injector
 
-A deterministic CLI that turns a GitHub issue into a ready-to-use task package before any coding starts. It reads the issue via `gh`, classifies it into domains via keyword matching, matches it against guardrails you define in your repo, auto-discovers relevant docs and source files, and writes a structured markdown file — no AI, no network calls beyond `gh`.
+`spec-injector` 是一個 deterministic issue-to-context compiler。
 
-## 中文說明（繁體）
+它把 GitHub issue、target repo 的 `.spec-injector/config.json`、repo docs、source references 與 guardrails 編譯成 AI coding agent 開工前可直接使用的 task package / prompt。它的目標不是代替人或 AI 寫程式，而是讓 Codex、Claude Code 或其他 implementer 在修改任何檔案前，先取得可檢查、可重複、受 repo 設定約束的工作脈絡。
 
-一個確定性的 CLI 工具，在開始寫程式前，將 GitHub Issue 轉換成可立即使用的任務包。它透過 `gh` 讀取 Issue，透過關鍵字比對進行領域分類，對應你在 repo 裡定義的風險護欄 (Guardrails)，自動探索相關文件與原始碼，並輸出一份結構化的 Markdown 檔案 — 無須 AI，除 `gh` 外無其他網路請求。
+核心定位：
 
----
+- issue-scoped：以單一 GitHub issue 作為 scope source of truth
+- repo-safe：讀取 target repo context，但不自動修改 target repo code
+- deterministic：相同 issue、repo files 與 config 應產生穩定 output
+- config-driven：使用 repo-local config、always-read references、discovery 與 guardrails
+- guardrails-aware：把 detected domains 對應到 repo-defined constraints / reminders
+- no hidden LLM：不呼叫 hidden LLM、external AI API 或 local model
 
-## Install
+## Why this exists
 
-For the current local development install and release strategy, see [docs/release.md](docs/release.md).
+AI coding agent 常見的失誤不是「不會寫程式」，而是開工前沒有足夠清楚的邊界：
+
+- issue body、repo instructions、architecture docs 與 validation rules 分散在不同地方
+- AI 可能先動手再補脈絡，導致 scope creep
+- reviewer 難以追蹤某次實作是否真的遵守 source issue
+- repo-specific guardrails 容易被忘記，例如 database、auth、CI、docs-only work
+
+`spec-injector` 把這些開工前需要看的資訊整理成一份 structured Markdown output。它讓 implementer 先讀 task package，再產生 implementation plan，經 human approval 後才開始修改檔案。
+
+## Core guarantees
+
+`spec-injector` 的 Layer 1 CLI 保證下列邊界：
+
+- 透過 `gh` 讀取 GitHub issue；除了 `gh` 本身，不做其他 hidden network calls
+- classifier 使用 deterministic keyword scoring，不是 LLM classifier
+- references selection 是 deterministic repo scan / scoring，不是 semantic RAG
+- guardrails 來自 target repo config，是 constraints / reminders，不是 approval
+- `spec plan --dry-run` 只輸出到 stdout，不寫入 task package
+- `spec plan` 的 non-dry-run output 只寫入 `.spec-injector/out/issue-<number>-task-package.md`
+- mutating commands 必須是明確 command 行為，例如 `spec init`、`spec config add/remove always-read`、`spec clean`
+- CLI core 不會自動建立 branch、commit、PR、issue comment 或修改 target repo source code
+
+更多架構邊界請見 [docs/architecture.md](docs/architecture.md)。
+
+## How it works
+
+`spec plan <issue>` 會執行下列 pipeline：
+
+1. **Issue Loader**：透過 authenticated `gh` CLI 讀取 issue title、labels 與 body。
+2. **Issue Parser**：抽出 issue text、明確提到的 repo-relative paths 與 checklist items。
+3. **Domain Classifier**：用 deterministic keyword scoring 偵測 relevant domains。
+4. **Guardrail Matcher**：用 detected domains 比對 `.spec-injector/config.json` 中的 guardrails。
+5. **Reference Collector**：收集 built-in preset、repo `always_read`、configured docs、issue-mentioned files、auto-discovered docs / source references。
+6. **Task Package Renderer**：輸出 full task package 或 `--format prompt` 的 compact AI planning prompt。
+
+## Pipeline diagram
+
+```text
+GitHub Issue
+  -> Issue Loader via gh
+  -> Issue Parser
+  -> Domain Classifier
+  -> Guardrail Matcher
+  -> Reference Collector
+  -> Task Package Renderer
+  -> Markdown task package / prompt for Codex or Claude Code
+```
+
+## Quickstart
+
+Requirements:
+
+- Node.js 24 LTS
+- pnpm via Corepack
+- authenticated [`gh`](https://cli.github.com/)
+
+Local development install:
 
 ```bash
+git clone https://github.com/Erick52106/spec-injector.git
+cd spec-injector
 corepack enable
 pnpm install
 pnpm build
@@ -21,106 +84,90 @@ pnpm link --global
 spec --help
 ```
 
-Requires: Node.js 24 LTS, pnpm via Corepack, [`gh`](https://cli.github.com/) authenticated.
-
----
-
-## Design Docs
-
-- Layer model: [docs/design/layers.md](docs/design/layers.md)
-- Custom domains and AI-assisted suggestions: [docs/design/custom-domains.md](docs/design/custom-domains.md)
-- Optional user repo CI scaffold: [docs/design/user-repo-ci-scaffold.md](docs/design/user-repo-ci-scaffold.md)
-- CLI help and UX audit: [docs/cli-help-ux-audit.md](docs/cli-help-ux-audit.md)
-- Conventions: [docs/conventions.md](docs/conventions.md)
-- Release strategy: [docs/release.md](docs/release.md)
-- `always_read` suggestions: [docs/always-read-suggestions.md](docs/always-read-suggestions.md)
-- AI workflow guides: [docs/workflows/README.md](docs/workflows/README.md)
-
----
-
-## Usage
-
-### AI Workflow Usage
-
-人類可在 Claude Code 中輸入 `/spec-plan <issue>`，讓 AI 先執行：
+Use `spec-injector` in a target repo:
 
 ```bash
-spec plan <issue> --repo . --dry-run --format prompt --verbose
-```
-
-AI 會先產生 implementation plan，並在人類批准後才進入實作。這是 repo-level instruction，不是 spec-injector runtime CLI command；真正的 CLI command 仍是 `spec plan`。
-
-### 1. Initialize a repo
-
-```bash
-spec init
-spec init --repo /path/to/repo
-```
-
-Creates `.spec-injector/config.json` and `.spec-injector/.gitignore` (ignores `out/`) in the target repo.
-
-### 2. Generate a task package
-
-```bash
-spec plan <issue-url>
-spec plan <issue-number> --repo /path/to/repo
-spec plan <issue-url> --dry-run    # print to stdout, don't write file
-spec plan <issue-url> --verbose    # show detailed pipeline steps
-spec plan <issue-url> --format prompt  # short AI planning prompt
-```
-
-The pipeline:
-1. **Fetch**: Retrieves issue title, labels, and body via `gh` CLI.
-2. **Classify & Match**: Keyword-based domain detection; matched domains trigger `guardrails`.
-3. **Load Docs & Source**: Loads `always_read` and `discovery.docs`; auto-discovers docs and source files; reports missing files.
-4. **Render**: Writes task package to `.spec-injector/out/issue-<number>-task-package.md` (or prints with `--dry-run`).
-
-By default, `spec plan` renders the full task package with inline context. Use `--format prompt` when a Layer 2 workflow or another AI should draft an implementation plan first: prompt output lists relevant references only, without inlining always-read docs, README content, discovered docs, or source snippets.
-
-### 3. Validate config
-
-```bash
-spec validate
-spec validate --repo /path/to/repo
-```
-
-Validates `.spec-injector/config.json` against the v2 schema and prints project metadata, always-read counts, discovery stats, and configured guardrails.
-
-### 4. Manage always_read files
-
-```bash
-spec config list --repo .
+cd /path/to/target-repo
+spec init --repo .
+spec validate --repo .
 spec config suggest always-read --repo .
-spec config add always-read docs/security.md --repo .
-spec config remove always-read AGENTS.md --repo .
+spec plan <issue-number-or-url> --repo . --dry-run --format prompt --verbose
 ```
 
-The `suggest always-read` helper scans repo-level and common docs locations, then uses deterministic scoring to print candidate files with reasons. It does not modify `.spec-injector/config.json`; to add a suggestion, run `spec config add always-read <path> --repo .`. See [docs/always-read-suggestions.md](docs/always-read-suggestions.md) for the scan scope, exclusions, and confidence guidance.
+Notes:
 
-The `spec config` command currently manages the `always_read` list in `.spec-injector/config.json` and can suggest likely `always_read` candidates.
+- `spec init --repo .` creates `.spec-injector/config.json` and `.spec-injector/.gitignore`.
+- `spec validate --repo .` validates config schema v2 and reports configured discovery / guardrails.
+- `spec config suggest always-read --repo .` prints deterministic suggestions only; it does not modify config.
+- `spec plan ... --dry-run --format prompt --verbose` is the recommended pre-implementation command for AI planning.
+- For a full generated task package file, omit `--dry-run`; output is written under `.spec-injector/out/`.
 
-### 5. Clean generated task packages
+Current local install and release details are documented in [docs/release.md](docs/release.md).
+
+## Example workflow with Codex / Claude Code
+
+`spec-injector` fits before implementation, not after code changes have already started:
+
+```text
+GitHub issue
+  -> spec plan / task package
+  -> AI implementation plan
+  -> human approval
+  -> AI implementation
+  -> validation
+  -> PR
+  -> source issue implementation evidence
+  -> PR body backfill
+  -> human review / merge decision
+```
+
+For a Codex or Claude Code workflow, an AI implementer can run:
 
 ```bash
-spec clean --repo /path/to/repo
-spec clean --repo /path/to/repo --issue 21
+spec plan <issue-number-or-url> --repo . --dry-run --format prompt --verbose
 ```
 
-Removes only generated task package files matching `.spec-injector/out/issue-<number>-task-package.md`. Other files in `out/`, `.spec-injector/config.json`, `.spec-injector/.gitignore`, and repo docs are left untouched.
+The AI should then use that prompt output to draft an implementation plan. Human approval remains the gate before any repo files are modified.
 
-### 使用方式（中文）
+Some teams may expose a repo-level `/spec-plan <issue>` shorthand in Claude Code or another AI tool. That shorthand is workflow glue, not a `spec-injector` runtime command. The actual CLI command remains `spec plan`.
 
-1. **初始化**：在目標 repo 執行 `spec init`，建立 `.spec-injector/config.json` 設定檔與 `.gitignore`（自動忽略 `out/` 目錄）。
-2. **產生任務包**：執行 `spec plan <issue-url>`。工具會依序執行：抓取 Issue、關鍵字領域分類、比對風險護欄、載入文件（固定載入與自動探索）、探索相關原始碼，最後將結果寫入 `.spec-injector/out/issue-<number>-task-package.md`。
-3. **驗證設定**：執行 `spec validate` 確認 `config.json` 格式正確，並查看專案資訊、探索設定與護欄清單。
-4. **管理 always_read**：執行 `spec config list --repo .` 查看必讀文件，或用 `spec config suggest always-read --repo .` 以 deterministic scoring 掃描候選文件與 reasons；suggest 不會修改 config，若要加入請再執行 `spec config add always-read <path> --repo .`。也可用 `spec config add always-read docs/security.md --repo .` 與 `spec config remove always-read AGENTS.md --repo .` 更新清單。目前只支援管理與建議 `always_read`；掃描範圍與 confidence 說明請見 `docs/always-read-suggestions.md`。
-5. **清理任務包**：執行 `spec clean --repo .` 清理 `.spec-injector/out/` 中符合 `issue-<number>-task-package.md` 命名的 generated task packages；也可用 `--issue <number>` 只清理單一 issue。
+See [docs/workflow.md](docs/workflow.md), [docs/workflows/README.md](docs/workflows/README.md), [docs/workflows/codex.md](docs/workflows/codex.md), and [docs/workflows/claude-code.md](docs/workflows/claude-code.md).
 
----
+## Example output / task package overview
+
+Full task package output is Markdown intended for human and AI review. It can include:
+
+- issue metadata and issue body
+- detected domains
+- always-read references
+- auto-discovered documentation
+- auto-discovered source files
+- matched guardrails
+- rule-matched documentation
+- missing files
+- suggested verification checklist
+
+Prompt output with `--format prompt` is shorter and designed for AI planning. It lists relevant references without inlining the full always-read docs, README content, discovered docs, or source snippets.
+
+Task package details are documented in [docs/task-package.md](docs/task-package.md).
+
+## Concepts
+
+Key terms used across this project:
+
+- **Issue-scoped context**：為單一 issue 收集的最小必要背景，不替 issue 以外的工作創造理由。
+- **Deterministic compiler**：把 issue 與 repo-defined context 編譯成 repeatable Markdown output。
+- **Domain classifier**：用 title、labels、body 中的 deterministic signals 選出 relevant domains。
+- **Guardrail**：repo-defined constraint / reminder；提醒風險，但不授權擴 scope。
+- **Reference**：task package 中列出的 docs、source files、built-in preset 或 issue-mentioned files。
+- **Task package**：AI 開工前使用的 structured context，不是 autonomous execution plan。
+- **Implementation evidence**：PR 建立後寫回 source issue 的 structured comment。
+
+完整詞彙請見 [docs/concepts.md](docs/concepts.md)。Classifier、references 與 guardrails 的細節分別見 [docs/classifier.md](docs/classifier.md)、[docs/references.md](docs/references.md)、[docs/guardrails.md](docs/guardrails.md)。
 
 ## Configuration
 
-Edit `.spec-injector/config.json` in your target repo:
+Target repo 的 `.spec-injector/config.json` 定義 project metadata、always-read references、discovery settings 與 guardrails：
 
 ```json
 {
@@ -132,14 +179,8 @@ Edit `.spec-injector/config.json` in your target repo:
   "always_read": [],
   "discovery": {
     "docs": [],
-    "source": [
-      "src"
-    ],
-    "exclude": [
-      "node_modules",
-      "dist",
-      "docs/superpowers"
-    ],
+    "source": ["src"],
+    "exclude": ["node_modules", "dist", "docs/superpowers"],
     "max_docs": 5,
     "max_source_files": 5
   },
@@ -153,44 +194,64 @@ Edit `.spec-injector/config.json` in your target repo:
 }
 ```
 
-### Field Descriptions
+Important fields:
 
-- **version**: Must be `2`.
-- **project.name / project.type**: Metadata for display in validation and reports.
-- **always_read**: Team-defined files that should always be checked for every task package. The default is empty; teams can add their own workflow, security, or architecture docs.
-  - Examples include `CLAUDE.md`, `AGENTS.md`, `GEMINI.md`, `CURSOR.md`, `WINDSURF.md`, `docs/ai-guidelines.md`, `docs/security.md`, or `docs/architecture.md`.
-  - Missing `always_read` files are reported under **Missing Files** by `spec plan`; this warning means the config should be checked and is not necessarily a tool failure. Missing `always_read` files are not treated as fatal plan errors.
-  - In prompt mode, found `always_read` files are listed as references; their full contents are not inlined.
-- **discovery.docs**: Explicit paths to documentation files to always include.
-- **discovery.source**: Directories to scan for auto-discovered source files.
-- **discovery.exclude**: Paths or directories to skip during auto-discovery. Use it to keep generated planning docs, AI scratch docs, and temporary agent notes out of task packages; for example, add a repo-local scratch directory such as `docs/superpowers` when you use one.
-- **discovery.max_docs**: Maximum number of auto-discovered docs (default: 5).
-- **discovery.max_source_files**: Maximum number of auto-discovered source files (default: 5).
-- **guardrails**:
-  - `id`: Unique identifier for the guardrail.
-  - `when_detected`: List of domains that trigger this guardrail.
-  - `risk`: Warning message included in the task package when triggered.
+- `always_read`：每次 task package 都應讀取的 repo instructions / architecture / security / workflow docs。
+- `discovery.docs`：明確納入的 documentation paths。
+- `discovery.source`：auto-discovery 掃描的 source directories。
+- `discovery.exclude`：auto-discovery 排除的 paths / directories。
+- `guardrails`：當 detected domains 命中 `when_detected` 時，將 `risk` message 加入 task package。
 
----
+## Non-goals
 
-## Conventions
+`spec-injector` 明確不是：
 
-For issue labels and issue/PR title conventions, see [docs/conventions.md](docs/conventions.md).
+- autonomous agent
+- daemon
+- hidden LLM wrapper
+- GitHub automation bot
+- custom domain runtime
+- general-purpose RAG system
+- target repo auto-editing system
+- multi-agent runtime
+- PR / merge automation service
+- stable npm release promise
 
----
+目前也不宣稱已完成：
 
-## Domain Classification
+- detailed classifier evidence visibility in task package
+- repo-local custom domains runtime
+- semantic embedding retrieval
+- JSON / agent-oriented output
+- user repo CI scaffold automation
+- target repo branch protection setup
 
-Domain classification is entirely deterministic and keyword-based. No LLMs or external APIs are used. Keywords found in the issue title (weight 3), labels (weight 2), and body (weight 1) are scored, and the top 5 domains are returned.
+這些方向若要實作，應另開 issue、加入 tests，並更新對應 docs。
 
-Supported domains: `frontend`, `backend`, `api`, `auth`, `database`, `infra`, `cloud-storage`, `blockchain`, `smart-contract`, `wallet`, `i18n`, `testing`, `docs`, `ci`, `tooling`.
+## Documentation links
 
----
+- Architecture: [docs/architecture.md](docs/architecture.md)
+- Core concepts: [docs/concepts.md](docs/concepts.md)
+- Classifier: [docs/classifier.md](docs/classifier.md)
+- References: [docs/references.md](docs/references.md)
+- Guardrails: [docs/guardrails.md](docs/guardrails.md)
+- Task package: [docs/task-package.md](docs/task-package.md)
+- Workflow: [docs/workflow.md](docs/workflow.md)
+- Dogfood: [docs/dogfood.md](docs/dogfood.md)
+- Install / release strategy: [docs/release.md](docs/release.md)
+- AI workflow guides: [docs/workflows/README.md](docs/workflows/README.md)
+- Issue / PR conventions: [docs/conventions.md](docs/conventions.md)
+- Layer model and future boundaries: [docs/design/layers.md](docs/design/layers.md)
 
-## What this is not
+## Roadmap / next layers
 
-spec-injector is a **deterministic workflow tool**, not an autonomous agent. It makes no AI or API calls. Given the same issue and the same `config.json`, it always produces the same output.
+Current implemented layer:
 
-### 設計理念（中文）
+- **Layer 1 deterministic CLI**：issue loading via `gh`, deterministic classifier, guardrail matching, reference collection, task package / prompt rendering, config helpers, clean command.
 
-spec-injector **不是** AI agent，也不會自動決策或呼叫任何模型。它是一個確定性工具：給定相同的 Issue 與 `config.json`，永遠產生相同的輸出。設計目標是藉由領域識別、風險護欄提醒、以及文件與程式碼的自動匯整，讓開發者在動手寫程式前，先有一份高品質且脈絡完整的任務說明，而不是讓工具代替開發者思考。
+Documented future-facing layers:
+
+- **Layer 2 AI workflow**：AI tool uses task package to draft an implementation plan, then waits for human approval before implementation.
+- **Layer 3 future agent interface**：possible structured outputs or richer agent-facing integrations, while preserving deterministic and reviewable boundaries.
+
+Future docs and design candidates include custom domains, richer classifier evidence visibility, JSON output, and optional user repo CI scaffolding. They are not part of the current runtime unless a later issue implements them explicitly.
