@@ -1,3 +1,5 @@
+Language: 繁體中文 | [English](README.en.md)
+
 # spec-injector
 
 `spec-injector` 是一個 deterministic issue-to-context compiler。
