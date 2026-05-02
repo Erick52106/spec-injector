@@ -28,6 +28,7 @@ Requires: Node.js 20+, [`gh`](https://cli.github.com/) authenticated.
 
 - Layer model: [docs/design/layers.md](docs/design/layers.md)
 - Custom domains and AI-assisted suggestions: [docs/design/custom-domains.md](docs/design/custom-domains.md)
+- Optional user repo CI scaffold: [docs/design/user-repo-ci-scaffold.md](docs/design/user-repo-ci-scaffold.md)
 - Conventions: [docs/conventions.md](docs/conventions.md)
 - Release strategy: [docs/release.md](docs/release.md)
 - `always_read` suggestions: [docs/always-read-suggestions.md](docs/always-read-suggestions.md)
