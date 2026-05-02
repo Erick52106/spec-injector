@@ -401,16 +401,21 @@ test('spec plan dry-run full output uses mocked gh data and keeps task package o
   assert.match(result.stdout, /Detected domains: .*database/);
   assert.match(result.stdout, /Guardrails matched: auth-review, db-migration/);
   assert.match(result.stdout, /# Task Package: Add backend auth database fixture plan coverage/);
-  assert.match(result.stdout, /## 3\. Always-Read Files/);
+  assertOrderedSubstrings(result.stdout, [
+    '# Task Package:',
+    '## 1. Issue',
+    '## 2. Classification',
+    '## 3. Always-Read Files',
+    '## 4. Auto-Discovered Documentation',
+    '## 5. Auto-Discovered Source Files',
+    '## 6. Matched Guardrails',
+    '## 7. Missing Files',
+  ]);
   assert.match(result.stdout, /### docs\/always-read\.md/);
   assert.match(result.stdout, /### presets\/core\/ai-collaboration\.md/);
-  assert.match(result.stdout, /## 4\. Auto-Discovered Documentation/);
   assert.match(result.stdout, /### docs\/auth-runbook\.md/);
-  assert.match(result.stdout, /## 5\. Auto-Discovered Source Files/);
   assert.match(result.stdout, /### src\/auth-handler\.ts/);
-  assert.match(result.stdout, /## 6\. Matched Guardrails/);
   assert.match(result.stdout, /\*\*auth-review\*\*: Require auth reviewer before changing login or permission flows\./);
-  assert.match(result.stdout, /## 7\. Missing Files/);
   assert.match(result.stdout, /- `docs\/missing-handbook\.md` — not found/);
   assert.doesNotMatch(result.stdout, /issue-57-task-package\.md/);
   await assertFileMissing(fixture.taskPackagePath);
@@ -423,28 +428,37 @@ test('spec plan dry-run prompt output stays compact and omits long inline docs',
   const fixture = await createSpecPlanFixture(t);
 
   const result = await runSpec(
-    ['plan', fixture.issueUrl, '--repo', fixture.repoDir, '--dry-run', '--format', 'prompt'],
+    ['plan', fixture.issueUrl, '--repo', fixture.repoDir, '--dry-run', '--format', 'prompt', '--verbose'],
     { env: fixture.env }
   );
 
   assert.equal(result.code, 0, result.stderr);
   assert.match(result.stdout, /# Implementation Plan Prompt: Add backend auth database fixture plan coverage/);
-  assert.match(result.stdout, /## 4\. Relevant File References/);
-  assert.match(result.stdout, /### Always-Read Files/);
+  assertOrderedSubstrings(result.stdout, [
+    '# Implementation Plan Prompt:',
+    '## 1. Issue Summary',
+    '## 2. Detected Domains',
+    '## 3. Guardrails',
+    '## 4. Relevant File References',
+    '### Always-Read Files',
+    '### Discovered Docs',
+    '### Rule-Matched Docs',
+    '### Discovered Source Files',
+    '## 5. Missing Files',
+    '## 6. Instructions',
+  ]);
   assert.match(result.stdout, /- `docs\/always-read\.md`/);
   assert.match(result.stdout, /- `presets\/core\/ai-collaboration\.md`/);
-  assert.match(result.stdout, /### Discovered Docs/);
   assert.match(result.stdout, /- `docs\/auth-runbook\.md`/);
-  assert.match(result.stdout, /### Rule-Matched Docs/);
   assert.match(result.stdout, /- `docs\/database-guardrail\.md`/);
-  assert.match(result.stdout, /### Discovered Source Files/);
   assert.match(result.stdout, /- `src\/auth-handler\.ts`/);
-  assert.match(result.stdout, /## 5\. Missing Files/);
   assert.match(result.stdout, /- `docs\/missing-handbook\.md` — not found/);
   assert.doesNotMatch(result.stdout, /# Task Package:/);
+  assert.doesNotMatch(result.stdout, /## 3\. Always-Read Files/);
   assert.doesNotMatch(result.stdout, /### docs\/always-read\.md/);
-  assert.doesNotMatch(result.stdout, /Always read instructions for deterministic planning\./);
-  assert.doesNotMatch(result.stdout, /Auth handler for login, permission, session, and token checks\./);
+  assert.doesNotMatch(result.stdout, /ALWAYS_READ_LONG_BODY_SENTINEL/);
+  assert.doesNotMatch(result.stdout, /DISCOVERED_DOC_LONG_BODY_SENTINEL/);
+  assert.doesNotMatch(result.stdout, /SOURCE_SNIPPET_BODY_SENTINEL/);
   await assertFileMissing(fixture.taskPackagePath);
 });
 
@@ -462,12 +476,24 @@ test('spec plan non-dry-run writes task package file with mocked gh data', async
 
   const written = await readFile(fixture.taskPackagePath);
   assert.match(written, /# Task Package: Add backend auth database fixture plan coverage/);
-  assert.match(written, /## 6\. Matched Guardrails/);
-  assert.match(written, /## 4\. Auto-Discovered Documentation/);
+  assertOrderedSubstrings(written, [
+    '# Task Package:',
+    '## 1. Issue',
+    '## 2. Classification',
+    '## 3. Always-Read Files',
+    '## 4. Auto-Discovered Documentation',
+    '## 5. Auto-Discovered Source Files',
+    '## 6. Matched Guardrails',
+    '## 7. Missing Files',
+  ]);
   assert.match(written, /### docs\/database-guardrail\.md/);
   assert.match(written, /## 5\. Auto-Discovered Source Files/);
   assert.match(written, /### src\/database-auth-service\.ts/);
-  assert.match(written, /## 7\. Missing Files/);
+  assert.match(written, /ALWAYS_READ_LONG_BODY_SENTINEL/);
+  assert.match(written, /DISCOVERED_DOC_LONG_BODY_SENTINEL/);
+  assert.match(written, /SOURCE_SNIPPET_BODY_SENTINEL/);
+  assert.match(written, /Review schema and migration blast radius before changing auth data persistence\./);
+  assert.match(written, /- `docs\/missing-handbook\.md` — not found/);
 });
 
 test('spec plan keeps missing always_read files non-fatal and reports found vs missing references', async (t) => {
@@ -528,8 +554,8 @@ test('spec plan fixture output stays deterministic across repeated runs', async 
   assert.equal(promptSecond.code, 0, promptSecond.stderr);
   assert.equal(fullFirst.code, 0, fullFirst.stderr);
   assert.equal(fullSecond.code, 0, fullSecond.stderr);
-  assert.equal(promptSecond.stdout, promptFirst.stdout);
-  assert.equal(normalizeFullPlanOutput(fullSecond.stdout), normalizeFullPlanOutput(fullFirst.stdout));
+  assert.equal(normalizePlanOutput(promptSecond.stdout), normalizePlanOutput(promptFirst.stdout));
+  assert.equal(normalizePlanOutput(fullSecond.stdout), normalizePlanOutput(fullFirst.stdout));
 });
 
 async function createTempRepo(t, prefix = 'spec-injector-test-') {
@@ -546,6 +572,19 @@ function createMissingPath() {
 
 async function createSpecPlanFixture(t) {
   const repoDir = await createTempRepo(t);
+  const alwaysReadLongBody = [
+    'ALWAYS_READ_LONG_BODY_SENTINEL',
+    'Always read instructions for deterministic planning.',
+    'Keep references compact in prompt mode.',
+    'Inline full content only in full task package mode.',
+  ].join('\n\n');
+  const discoveredDocLongBody = [
+    'DISCOVERED_DOC_LONG_BODY_SENTINEL',
+    'Authentication checklist for backend login and session review.',
+    'This content should be referenced in prompt mode rather than inlined.',
+  ].join('\n\n');
+  const sourceSnippetBody = 'SOURCE_SNIPPET_BODY_SENTINEL: Auth handler for login, permission, session, and token checks.';
+
   await writeRepoFiles(repoDir, {
     '.spec-injector/config.json': JSON.stringify({
       version: 2,
@@ -569,11 +608,11 @@ async function createSpecPlanFixture(t) {
         },
       ],
     }, null, 2) + '\n',
-    'docs/always-read.md': '# Always Read\n\nAlways read instructions for deterministic planning.\n',
-    'docs/auth-runbook.md': '# Auth Runbook\n\nAuthentication checklist for backend login and session review.\n',
+    'docs/always-read.md': `# Always Read\n\n${alwaysReadLongBody}\n`,
+    'docs/auth-runbook.md': `# Auth Runbook\n\n${discoveredDocLongBody}\n`,
     'docs/database-guardrail.md': '# Database Guardrail\n\nDatabase migration review steps for auth schema updates.\n',
     'docs/testing-fixtures.md': '# Testing Fixtures\n\nFixture notes for spec plan tests.\n',
-    'src/auth-handler.ts': 'export function authHandler() { return "Auth handler for login, permission, session, and token checks."; }\n',
+    'src/auth-handler.ts': `export function authHandler() { return "${sourceSnippetBody}"; }\n`,
     'src/database-auth-service.ts': 'export function databaseAuthService() { return "Database service for schema migration and auth persistence."; }\n',
     'README.md': '# Spec Injector Fixture\n\nBackend auth database planning notes.\n',
   });
@@ -745,11 +784,24 @@ function countOccurrences(value, needle) {
   return value.split(needle).length - 1;
 }
 
-function normalizeFullPlanOutput(value) {
+function normalizePlanOutput(value) {
   return value
     .replace(/\*\*Generated:\*\* .+/g, '**Generated:** <normalized>')
     .replace(/spec-injector-test-[^/]+/g, 'spec-injector-test-normalized')
     .replace(/spec-injector-gh-[^/]+/g, 'spec-injector-gh-normalized');
+}
+
+function assertOrderedSubstrings(value, substrings) {
+  let previousIndex = -1;
+  for (const substring of substrings) {
+    const currentIndex = value.indexOf(substring);
+    assert.notEqual(currentIndex, -1, `Missing substring: ${substring}`);
+    assert.ok(
+      currentIndex > previousIndex,
+      `Expected "${substring}" to appear after "${substrings[substrings.indexOf(substring) - 1] ?? '<start>'}"`
+    );
+    previousIndex = currentIndex;
+  }
 }
 
 function sectionBetween(value, startMarker, endMarker) {
