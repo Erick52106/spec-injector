@@ -25,6 +25,7 @@ export async function config(
   const normalizedAction = parseAction(action);
 
   if (normalizedAction === 'list') {
+    validateListArgs(section, filePath);
     listAlwaysRead(configPath);
     return;
   }
@@ -53,6 +54,18 @@ function parseAction(action: string): ConfigAction {
   }
   console.error('✗ Unsupported config action. Use list, add, or remove.');
   process.exit(1);
+}
+
+function validateListArgs(section: string | undefined, filePath: string | undefined): void {
+  if (section !== undefined && section !== 'always-read') {
+    console.error('✗ Unsupported config section. This command currently only supports always-read.');
+    process.exit(1);
+  }
+
+  if (filePath !== undefined) {
+    console.error('✗ The list action does not accept a path. Usage: spec config list [always-read] --repo <repo>');
+    process.exit(1);
+  }
 }
 
 function readConfig(configPath: string): Record<string, unknown> {
