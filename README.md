@@ -10,10 +10,14 @@ A deterministic CLI that turns a GitHub issue into a ready-to-use task package b
 
 ## Install
 
+For the current local development install and release strategy, see [docs/release.md](docs/release.md).
+
 ```bash
-npm install -g spec-injector
-# or link locally during development
+npm install
+npm run build
+npm test
 npm link
+spec --help
 ```
 
 Requires: Node.js 20+, [`gh`](https://cli.github.com/) authenticated.
