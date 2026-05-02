@@ -40,6 +40,21 @@ program
     await validate(opts);
   });
 
+// config subcommand
+program
+  .command('config <action> [section] [path]')
+  .description('Manage .spec-injector/config.json settings')
+  .option('--repo <path>', 'Path to target repo (default: CWD)')
+  .action(async (
+    action: string,
+    section: string | undefined,
+    filePath: string | undefined,
+    opts: { repo?: string }
+  ) => {
+    const { config } = await import('./config.js');
+    await config(action, section, filePath, opts);
+  });
+
 // clean subcommand
 program
   .command('clean')
