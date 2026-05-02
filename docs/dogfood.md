@@ -35,6 +35,130 @@ Dogfood report 應觀察：
 8. 分析 observations、false positives、false negatives、follow-up issues。
 9. 不直接修改 target repo code，除非另有 approved implementation plan。
 
+## Reviewed External Config Snapshot Workflow
+
+### Purpose
+
+Reviewed external config snapshot workflow 的用途，是讓 dogfood 可以在 clean target worktree 上執行，同時不要求 target repo 已經 commit `.spec-injector/config.json`。
+
+這個 workflow 讓 `spec plan` 透過 `--config <external-config-path>` 讀取 target repo 外部的 current v2 config snapshot。它不修改 target repo，不建立 target repo config，也不把 `.spec-injector/` 複製到 target repo。
+
+### When To Use
+
+適用情境：
+
+- target repo 尚未 committed `.spec-injector/config.json`
+- target repo 只有 legacy `rules.json`、local config 或未 review 的設定，但 dogfood 不能污染 clean target worktree
+- 需要 repeatable read-only dogfood，而不是一次性口頭流程
+- target repo dirty，必須改用 clean dogfood worktree 搭配 external config snapshot
+
+若 target repo 已有 committed 且可使用的 `.spec-injector/config.json`，可以維持預設 config 讀取行為，不一定需要 external config snapshot。
+
+### Required Safety Rules
+
+Reviewed external config snapshot dogfood 必須遵守：
+
+- 不要修改 target repo
+- 不要複製 `.spec-injector/` 到 target repo
+- 不要在 target repo 建立 config
+- 不要 stash / clean / reset / checkout target repo
+- 不要在 target repo 建 branch / commit / PR
+- 如果 dogfood 需要修改 target repo 才能跑，必須停下回報
+
+這些規則同時適用 original target repo 與 clean dogfood worktree。Clean dogfood worktree 是 read-only input，不是用來承載臨時 config 的位置。
+
+### Snapshot Location
+
+External config snapshot 應放在 target repo 之外。路徑可以是 temporary location，也可以是明確的 external config snapshots 目錄，例如：
+
+```text
+/tmp/spec-injector-dogfood/<project>-<issue>.config.json
+```
+
+或：
+
+```text
+<outside-target-repos>/spec-injector-config-snapshots/<project>/<issue>.config.json
+```
+
+Temporary snapshot 可用於一次性 dogfood，重點是清楚記錄檔案位置與來源，並確認路徑不在 target repo 內。
+
+Reviewed snapshot 則應額外記錄來源、用途、config schema version、derive 依據與 review 說明。Reviewed snapshot 適合需要重跑、交接或後續比較的 dogfood。無論 temporary 或 reviewed，都不要把 snapshot 存進 target repo。
+
+### Snapshot Derivation
+
+Derive external v2 config 時，應只讀 inspect 現有資料：
+
+- 只讀 inspect target repo legacy rules、repo docs 或 local config
+- 只讀 inspect `spec-injector` config schema、examples 或已 review 的 v2 config pattern
+- 將必要設定轉成 current v2 config snapshot
+- 不得把 legacy config 原地修改
+- 不得自動轉換後寫回 target repo
+- 如果無法安全轉換，停下回報，不要猜測或寫入 target repo
+
+Derivation 的輸出應是 target repo 外部的 snapshot file。Derivation 過程不代表 target repo 已接受該 config，也不代表應把該 config commit 回 target repo。
+
+### Required Command Shape
+
+Read-only dogfood 應保留 `--dry-run`，並明確指定 clean target worktree 與 external config path：
+
+```bash
+spec plan <issue-number-or-url> \
+  --repo <clean-target-worktree> \
+  --config <external-config-path> \
+  --dry-run \
+  --verbose
+```
+
+若要產生 prompt-oriented output，可加上：
+
+```bash
+--format prompt
+```
+
+範例使用 placeholder，實際執行時不要假設某個 local target repo path 固定存在。`--config` 的值必須指向 target repo 外部檔案。
+
+### What To Record In Dogfood Report
+
+Dogfood report 應記錄：
+
+- external config path
+- snapshot 如何 derived
+- confirmation path is outside target repo
+- target repo preflight
+- dogfood worktree preflight
+- confirmation no target repo modifications
+- snapshot 是 temporary 或 reviewed
+- follow-up recommendations
+
+若使用 reviewed snapshot，也應記錄 review 依據、適用 issue / project、版本或 schema version，以及任何不確定或需要 human review 的 mapping。
+
+### Relationship To #78
+
+[#78 tachigo #467 dogfood report](https://github.com/Erick52106/spec-injector/issues/78#issuecomment-4364891628) 是 first successful proof：external config snapshot 可以 unblock clean target dogfood，並讓 target repo 維持 unmodified。
+
+#78 驗證了這個 practice 對該次 dogfood 有效。本文件將該 practice formalize 成可重複的 workflow guardrail，但不宣稱 #78 的 findings 永遠適用所有 repos。
+
+### Non-goals
+
+本 workflow 不代表：
+
+- config schema change
+- committing config into target repo
+- automatic config migration
+- daemon / runtime
+- hidden LLM / API / local model calls
+- target repo automation
+
+### Future Follow-ups
+
+未來可能另行設計：
+
+- reviewed config snapshot registry
+- v1 `rules.json` migration design
+- external config validation helper
+- config snapshot provenance metadata
+
 ## Dirty Worktree Rule
 
 若 target repo worktree 不是 clean：
