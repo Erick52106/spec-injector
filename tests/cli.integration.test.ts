@@ -4,7 +4,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import { spawn } from 'node:child_process';
-import { classifyDomains } from '../dist/classifier/domain.js';
+import { classifyDomains, classifyDomainsWithEvidence } from '../dist/classifier/domain.js';
 
 const repoRoot = process.cwd();
 const cliPath = path.join(repoRoot, 'bin', 'spec.js');
@@ -61,6 +61,107 @@ test('classifier does not overfit product transaction records to wallet', () => 
   assert.ok(domains.includes('api'), `Expected api in ${domains.join(', ')}`);
   assert.ok(domains.includes('backend'), `Expected backend in ${domains.join(', ')}`);
   assert.ok(!domains.includes('wallet'), `Expected wallet to be absent from ${domains.join(', ')}`);
+});
+
+test('classifier reports deterministic evidence for detected domains', () => {
+  const result = classifyDomainsWithEvidence({
+    number: 91,
+    title: 'Dashboard endpoint route refine',
+    body: [
+      'Update the backend handler for route consistency.',
+      'Keep the frontend dashboard page in sync.',
+    ].join('\n'),
+    labels: ['api'],
+    url: 'https://github.com/Erick52106/spec-injector/issues/91',
+    state: 'open',
+  });
+
+  assert.ok(result.domains.includes('api'), `Expected api in ${result.domains.join(', ')}`);
+  assert.ok(result.domains.includes('frontend'), `Expected frontend in ${result.domains.join(', ')}`);
+  assert.ok(result.domains.includes('backend'), `Expected backend in ${result.domains.join(', ')}`);
+  assert.deepEqual(result.evidence.filter((e) => e.domain === 'api')[0], {
+    domain: 'api',
+    term: 'endpoint',
+    source: 'title',
+  });
+  assert.ok(result.evidence.some((e) =>
+    e.domain === 'frontend' && e.term === 'page' && e.source === 'body'
+  ));
+  assert.ok(result.evidence.some((e) =>
+    e.domain === 'backend' && e.term === 'handler' && e.source === 'body'
+  ));
+});
+
+test('classifier reports wallet evidence for explicit on-chain signals', () => {
+  const result = classifyDomainsWithEvidence({
+    number: 91,
+    title: 'Connect wallet token transfer transaction hash tracking',
+    body: [
+      'Record the connected wallet address after users connect wallet.',
+      'Show token transfer status, tx hash, transaction hash, and on-chain confirmation.',
+    ].join('\n'),
+    labels: ['wallet'],
+    url: 'https://github.com/Erick52106/spec-injector/issues/91',
+    state: 'open',
+  });
+
+  assert.ok(result.domains.includes('wallet'), `Expected wallet in ${result.domains.join(', ')}`);
+  assert.ok(result.evidence.some((e) =>
+    e.domain === 'wallet' && e.term === 'wallet address' && e.source === 'body'
+  ));
+  assert.ok(result.evidence.some((e) =>
+    e.domain === 'wallet' && e.term === 'tx hash' && e.source === 'body'
+  ));
+  assert.ok(result.evidence.some((e) =>
+    e.domain === 'wallet' && e.term === 'transaction hash' && e.source === 'title'
+  ));
+  assert.ok(result.evidence.some((e) =>
+    e.domain === 'wallet' && e.term === 'token transfer' && e.source === 'title'
+  ));
+  assert.ok(result.evidence.some((e) =>
+    e.domain === 'wallet' && e.term === 'on-chain' && e.source === 'body'
+  ));
+  assert.ok(!result.rejected.some((r) => r.domain === 'wallet'));
+});
+
+test('classifier reports wallet rejected reason for generic product transaction wording only', () => {
+  const result = classifyDomainsWithEvidence({
+    number: 91,
+    title: 'Admin dashboard billing transactions endpoint',
+    body: [
+      'Expose product transaction records API for support workflows.',
+      'The backend handler should read app records from database rows.',
+    ].join('\n'),
+    labels: ['api', 'backend'],
+    url: 'https://github.com/Erick52106/spec-injector/issues/91',
+    state: 'open',
+  });
+
+  assert.ok(result.domains.includes('api'), `Expected api in ${result.domains.join(', ')}`);
+  assert.ok(result.domains.includes('backend'), `Expected backend in ${result.domains.join(', ')}`);
+  assert.ok(!result.domains.includes('wallet'), `Expected wallet to be absent from ${result.domains.join(', ')}`);
+  assert.deepEqual(result.rejected, [{
+    domain: 'wallet',
+    signal: 'transactions',
+    source: 'title',
+    reason: 'generic product transaction wording',
+  }]);
+});
+
+test('classifier evidence result is deterministic across repeated calls', () => {
+  const issue = {
+    number: 91,
+    title: 'Dashboard endpoint route transaction review',
+    body: [
+      'Update backend handler behavior for product transaction records.',
+      'Keep frontend dashboard response rendering stable.',
+    ].join('\n'),
+    labels: ['api', 'backend'],
+    url: 'https://github.com/Erick52106/spec-injector/issues/91',
+    state: 'open' as const,
+  };
+
+  assert.deepEqual(classifyDomainsWithEvidence(issue), classifyDomainsWithEvidence(issue));
 });
 
 test('spec --help lists deterministic CLI purpose and available commands', async () => {
@@ -576,6 +677,44 @@ test('spec plan dry-run prompt output stays compact and omits long inline docs',
   assert.doesNotMatch(result.stdout, /DISCOVERED_DOC_LONG_BODY_SENTINEL/);
   assert.doesNotMatch(result.stdout, /SOURCE_SNIPPET_BODY_SENTINEL/);
   await assertFileMissing(fixture.taskPackagePath);
+});
+
+test('spec plan verbose output shows classifier diagnostics without changing rendered prompt', async (t) => {
+  const fixture = await createExplicitPathPlanFixture(t, {
+    issueNumber: 91,
+    title: 'Admin dashboard billing transactions endpoint',
+    bodyLines: [
+      'Expose product transaction records API for support workflows.',
+      'The backend handler should read app records from database rows.',
+    ],
+    labels: [{ name: 'api' }, { name: 'backend' }],
+  });
+
+  const result = await runSpec(
+    ['plan', fixture.issueUrl, '--repo', fixture.repoDir, '--dry-run', '--format', 'prompt', '--verbose'],
+    { env: fixture.env }
+  );
+
+  assert.equal(result.code, 0, result.stderr);
+  assert.match(result.stdout, /→ Detected domain evidence:/);
+  assert.match(result.stdout, /- api: title matched "endpoint"/);
+  assert.match(result.stdout, /→ Rejected domain signals:/);
+  assert.match(result.stdout, /- wallet: title signal "transactions" suppressed as generic product transaction wording/);
+
+  const renderedPrompt = result.stdout.slice(result.stdout.indexOf('# Implementation Plan Prompt:'));
+  assert.match(renderedPrompt, /## 2\. Detected Domains/);
+  assert.doesNotMatch(renderedPrompt, /Domain Evidence/);
+  assert.doesNotMatch(renderedPrompt, /Detected domain evidence/);
+  assert.doesNotMatch(renderedPrompt, /Rejected domain signals/);
+
+  const nonVerbose = await runSpec(
+    ['plan', fixture.issueUrl, '--repo', fixture.repoDir, '--dry-run', '--format', 'prompt'],
+    { env: fixture.env }
+  );
+
+  assert.equal(nonVerbose.code, 0, nonVerbose.stderr);
+  assert.doesNotMatch(nonVerbose.stdout, /Detected domain evidence/);
+  assert.doesNotMatch(nonVerbose.stdout, /Rejected domain signals/);
 });
 
 test('spec plan non-dry-run writes task package file with mocked gh data', async (t) => {

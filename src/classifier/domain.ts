@@ -1,5 +1,26 @@
 import type { Issue } from '../github/types.js';
 
+export type DomainEvidenceSource = 'title' | 'labels' | 'body';
+
+export interface DomainEvidence {
+  domain: string;
+  term: string;
+  source: DomainEvidenceSource;
+}
+
+export interface RejectedDomainReason {
+  domain: string;
+  signal: string;
+  source: DomainEvidenceSource;
+  reason: string;
+}
+
+export interface DomainClassificationResult {
+  domains: string[];
+  evidence: DomainEvidence[];
+  rejected: RejectedDomainReason[];
+}
+
 const DOMAIN_KEYWORDS: Record<string, string[]> = {
   frontend: ['ui', 'component', 'render', 'css', 'style', 'react', 'vue', 'angular', 'svelte', 'button', 'form', 'page', 'layout', 'responsive', 'animation', 'dom', 'html', 'tailwind', 'visual', 'design'],
   backend: ['server', 'service', 'handler', 'controller', 'middleware', 'worker', 'daemon', 'queue', 'job', 'cron', 'scheduler', 'grpc', 'rpc'],
@@ -19,13 +40,25 @@ const DOMAIN_KEYWORDS: Record<string, string[]> = {
 };
 
 const MAX_DOMAINS = 5;
+const GENERIC_WALLET_SIGNALS = ['transactions', 'transaction'];
+const GENERIC_WALLET_REASON = 'generic product transaction wording';
 
 export function classifyDomains(issue: Issue): string[] {
+  return classifyDomainsWithEvidence(issue).domains;
+}
+
+export function classifyDomainsWithEvidence(issue: Issue): DomainClassificationResult {
   const title = issue.title.toLowerCase();
   const body = issue.body.toLowerCase();
   const labels = issue.labels.join(' ').toLowerCase();
+  const fields: Array<{ source: DomainEvidenceSource; value: string }> = [
+    { source: 'title', value: title },
+    { source: 'labels', value: labels },
+    { source: 'body', value: body },
+  ];
 
   const scores: Record<string, number> = {};
+  const evidenceByDomain = new Map<string, DomainEvidence[]>();
 
   for (const [domain, keywords] of Object.entries(DOMAIN_KEYWORDS)) {
     let score = 0;
@@ -34,11 +67,58 @@ export function classifyDomains(issue: Issue): string[] {
       if (labels.includes(kw)) score += 2;
       if (body.includes(kw)) score += 1;
     }
-    if (score > 0) scores[domain] = score;
+    if (score > 0) {
+      scores[domain] = score;
+      evidenceByDomain.set(domain, collectEvidence(domain, keywords, fields));
+    }
   }
 
-  return Object.entries(scores)
+  const domains = Object.entries(scores)
     .sort((a, b) => b[1] - a[1])
     .slice(0, MAX_DOMAINS)
     .map(([domain]) => domain);
+
+  const detected = new Set(domains);
+  const evidence = domains.flatMap((domain) => evidenceByDomain.get(domain) ?? []);
+  const rejected = buildRejectedDomainReasons(fields, detected);
+
+  return { domains, evidence, rejected };
+}
+
+function collectEvidence(
+  domain: string,
+  keywords: string[],
+  fields: Array<{ source: DomainEvidenceSource; value: string }>
+): DomainEvidence[] {
+  const evidence: DomainEvidence[] = [];
+
+  for (const { source, value } of fields) {
+    for (const term of keywords) {
+      if (value.includes(term)) evidence.push({ domain, term, source });
+    }
+  }
+
+  return evidence;
+}
+
+function buildRejectedDomainReasons(
+  fields: Array<{ source: DomainEvidenceSource; value: string }>,
+  detected: Set<string>
+): RejectedDomainReason[] {
+  if (detected.has('wallet')) return [];
+
+  for (const { source, value } of fields) {
+    for (const signal of GENERIC_WALLET_SIGNALS) {
+      if (value.includes(signal)) {
+        return [{
+          domain: 'wallet',
+          signal,
+          source,
+          reason: GENERIC_WALLET_REASON,
+        }];
+      }
+    }
+  }
+
+  return [];
 }

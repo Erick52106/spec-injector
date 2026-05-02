@@ -13,11 +13,12 @@ import { renderTemplate } from '../template/renderer.js';
 import { DEFAULT_TEMPLATE } from '../template/default-template.js';
 import { PROMPT_TEMPLATE } from '../template/prompt-template.js';
 import { writePackage } from '../output/writer.js';
-import { classifyDomains } from '../classifier/domain.js';
+import { classifyDomainsWithEvidence } from '../classifier/domain.js';
 import type { TemplateVars } from '../template/types.js';
 import type { Guardrail } from '../config/types.js';
 import type { Issue } from '../github/types.js';
 import type { DocSection } from '../docs/types.js';
+import type { DomainClassificationResult } from '../classifier/domain.js';
 
 export async function plan(
   issueRef: string,
@@ -35,8 +36,10 @@ export async function plan(
   if (opts.verbose) console.log('→ Fetching issue...');
   const issue = await fetchIssue(issueRef, repoPath);
   console.log(`✓ Issue #${issue.number} fetched: ${issue.title}${issue.state === 'closed' ? ' [CLOSED]' : ''}`);
-  const domains = classifyDomains(issue);
+  const classification = classifyDomainsWithEvidence(issue);
+  const domains = classification.domains;
   console.log(`✓ Detected domains: ${domains.join(', ') || '(none)'}`);
+  if (opts.verbose) renderClassificationDiagnostics(classification);
 
   // 2. Load config
   if (opts.verbose) console.log('→ Loading config...');
@@ -143,6 +146,27 @@ function renderImplementationConstraints(matchedGuardrails: Guardrail[]): string
   const constraints = matchedGuardrails.map((g) => `- ${g.id}: ${g.risk}`);
   constraints.push('- Stay within the source issue scope and referenced files.');
   return constraints.join('\n');
+}
+
+function renderClassificationDiagnostics(classification: DomainClassificationResult): void {
+  console.log('→ Detected domain evidence:');
+  if (classification.evidence.length === 0) {
+    console.log('  - (none)');
+  } else {
+    for (const evidence of classification.evidence) {
+      console.log(`  - ${evidence.domain}: ${evidence.source} matched "${evidence.term}"`);
+    }
+  }
+
+  console.log('→ Rejected domain signals:');
+  if (classification.rejected.length === 0) {
+    console.log('  - (none)');
+    return;
+  }
+
+  for (const rejected of classification.rejected) {
+    console.log(`  - ${rejected.domain}: ${rejected.source} signal "${rejected.signal}" suppressed as ${rejected.reason}`);
+  }
 }
 
 function buildTemplateVars(
