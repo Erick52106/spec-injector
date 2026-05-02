@@ -13,6 +13,8 @@
 - 若 PR 跨多個 change type，必須執行所有相關類型的 required validation；若 requirements 衝突、重疊或不確定，採較嚴格的 validation set，並在 PR body 說明實際採用的 validation 與原因。若無法執行任一 required validation，必須 stop-and-report 或清楚寫明 skipped reason。
 - 若 PR 跨多個 roadmap layers 或多個 source issues，必須在 PR body 說明採用的主要 roadmap milestone / primary layer label 與原因。
 - PR review 前應確認 linked issue 與 PR 的 roadmap milestone / primary layer label 是否存在且合理；無法高信心分類時，必須 stop-and-report 或列為 needs human review。
+- PR review 前應確認 PR metadata 與 linked issue 一致，包含 milestone、primary layer label、合理 area / type labels。
+- PR body、issue evidence comment 與 final report 預設使用繁體中文；commands、raw output、file paths、technical terms 與精準英文片段可保留英文。
 - Feature tests 與 implementation 不應依賴真實 GitHub API 或 network。若測試需要 GitHub output，應使用 fixture、fake `gh`、mocked process 或等價 isolation。
 - Package installation 與 normal `gh` workflow 是允許的 workflow I/O，例如 `pnpm install --frozen-lockfile`、`gh pr view`、`gh pr checks`、`gh issue comment`、push branch、create PR。這些不是 feature test dependency。
 - `gh pr view`、`gh pr checks`、`gh issue comment`、push branch、create PR 是 issue / PR workflow 操作，不代表 runtime 或 tests 可以打真 GitHub API。
@@ -190,6 +192,8 @@ Required review checks:
 - Status labels do not conflict, for example `status:ready` and `status:implemented` on the same open implementation issue.
 - Roadmap milestone and primary layer label are present and reasonable when high-confidence classification is possible.
 - Missing milestone / layer label is explicitly reported as follow-up when the current PR scope does not include metadata changes.
+- PR metadata inherits linked issue milestone, primary layer label, and reasonable area / type labels when applicable.
+- GitHub body / evidence language changes stay scoped to requested language requirement updates.
 
 ### 10. Dogfood / target repo evaluation
 
@@ -249,6 +253,7 @@ PR body must include:
 - CI checks status or an explicit note that CI was not available / not applicable.
 - Explicit skipped reason for any required validation that could not run.
 - Primary roadmap milestone / layer label rationale when the PR crosses multiple change types, layers, or source issues.
+- 以繁體中文為主要語言；technical terms、commands、file paths、raw output、commit hashes 與精準英文片段可保留英文。
 
 After backfill, use `gh pr view` or equivalent to confirm the PR body is non-empty and contains the evidence URL and commit hash.
 
@@ -266,6 +271,8 @@ The source issue implementation evidence comment must include:
 
 Issue evidence should be posted after the PR exists, then its permanent comment URL should be backfilled into the PR body.
 
+Issue evidence 應以繁體中文為主要語言；commands、file paths、validation output、commit hashes 與 technical terms 可保留英文。
+
 ## Merge-readiness Quality Gates
 
 A PR is ready for human review only when:
@@ -275,10 +282,13 @@ A PR is ready for human review only when:
 - PR body includes Summary.
 - PR body includes Tests / validation with exact commands.
 - PR body includes Implementation Evidence.
+- PR body 以繁體中文為主要語言。若出現英文，確認其屬於 technical terms、commands、file paths、raw output 或精準英文片段，而不是整份 PR body 默認英文。
+- Source issue implementation evidence comment 在同樣例外下以繁體中文為主要語言。
 - Source issue has implementation evidence comment.
 - PR body is backfilled with issue evidence URL.
 - PR body includes commit hash.
-- Linked issue and PR have a roadmap milestone and one primary layer label when high-confidence classification is possible.
+- PR has a roadmap milestone, one primary layer label, and reasonable area / type labels when high-confidence classification is possible.
+- PR metadata is consistent with the linked issue. If linked issue metadata is missing, the PR body, final report, or review notes mark a follow-up unless current scope authorizes fixing it.
 - If milestone / layer label is missing and the current PR does not scope metadata updates, PR body, final report, or review notes mark a follow-up.
 - `gh pr view` confirms PR body is non-empty and contains evidence URL and commit hash.
 - CI checks are reported.
@@ -303,5 +313,7 @@ Stop and report instead of continuing when:
 - Target repo is dirty during dogfood.
 - Worktree path or branch does not match the source issue plan.
 - GitHub permission is insufficient to create the required issue, PR, labels, evidence comment, or PR body backfill.
+- PR metadata cannot be classified with high confidence and current scope does not authorize guessing.
+- GitHub language requirement cannot be satisfied without rewriting unrelated issue / PR content.
 
 Stop-and-report should include current branch, worktree path, failed command or blocker, and the smallest clear decision needed from the human.

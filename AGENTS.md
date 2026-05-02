@@ -9,6 +9,14 @@
 - 技術術語、檔名、函式名稱、CLI flags 與程式語言關鍵字保留英文。
 - 禁止使用簡體中文。
 
+## GitHub language and metadata
+
+- GitHub issue body、PR body、implementation evidence comment 與 final report 預設使用繁體中文。
+- 技術名詞、檔名、CLI command、錯誤輸出與外部 API 名稱可保留英文。
+- PR 應繼承 linked issue 的 roadmap milestone、primary layer label，以及合理 area / type labels。
+- 若 PR metadata 無法高信心判斷，停下回報或列入 needs human review。
+- 未經明確 approval，不建立新的 labels 或 milestones。
+
 ## Project positioning
 
 - `spec-injector` 是 deterministic issue-to-context compiler。
@@ -79,7 +87,7 @@ Source issue 必須有 implementation evidence comment。PR body 回填後必須
 - Issue 應有合理的 area / type / status labels。
 - Future issues 在 high-confidence classification 可行時，應有 roadmap milestone。
 - Future issues 在 high-confidence classification 可行時，應有一個 primary layer label。
-- PR 原則上沿用 linked issue 的 roadmap milestone 與 primary layer label。
+- PR 原則上沿用 linked issue 的 roadmap milestone、primary layer label 與合理 area / type labels。
 - 若 milestone / layer 無法高信心判斷，停下回報或列入 needs human review。
 - 未經明確 approval，不建立新的 roadmap / layer labels 或 milestones。
 - PR review 階段可用 `status:in-review`。
