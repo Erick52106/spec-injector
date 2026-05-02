@@ -24,6 +24,15 @@ Requires: Node.js 20+, [`gh`](https://cli.github.com/) authenticated.
 
 ---
 
+## Design Docs
+
+- Layer model: [docs/design/layers.md](docs/design/layers.md)
+- Conventions: [docs/conventions.md](docs/conventions.md)
+- Release strategy: [docs/release.md](docs/release.md)
+- `always_read` suggestions: [docs/always-read-suggestions.md](docs/always-read-suggestions.md)
+
+---
+
 ## Usage
 
 ### AI Workflow Usage
