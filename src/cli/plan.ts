@@ -1,7 +1,13 @@
 import path from 'path';
 import { fetchIssue } from '../github/issue.js';
 import { loadConfig } from '../config/loader.js';
-import { loadExplicitDocs, discoverRelevantDocs, loadCorePreset, discoverSourceFiles } from '../docs/finder.js';
+import {
+  loadExplicitDocs,
+  discoverRelevantDocs,
+  loadCorePreset,
+  discoverSourceFiles,
+  extractExplicitIssueFileReferences,
+} from '../docs/finder.js';
 import { renderTemplate } from '../template/renderer.js';
 import { DEFAULT_TEMPLATE } from '../template/default-template.js';
 import { PROMPT_TEMPLATE } from '../template/prompt-template.js';
@@ -69,16 +75,40 @@ export async function plan(
   const sourcePaths = config.specConfig.discovery?.source ?? [];
   const maxSourceFiles = config.specConfig.discovery?.max_source_files ?? 5;
   const discoveredSources = await discoverSourceFiles(issue, repoPath, sourcePaths, maxSourceFiles);
+  const explicitReferences = await extractExplicitIssueFileReferences(issue, repoPath);
+  const explicitDocs = mergeReasonSignals(explicitReferences.docs, [...alwaysDocs, ...discoveryDocs, ...discoveredDocs]);
+  const explicitSources = mergeReasonSignals(explicitReferences.sources, discoveredSources);
+  const explicitDocPaths = new Set(explicitDocs.map((d) => d.filePath));
+  const explicitSourcePaths = new Set(explicitSources.map((d) => d.filePath));
+  const filteredAlwaysDocs = alwaysDocs.filter((d) => !explicitDocPaths.has(d.filePath));
+  const filteredDiscoveryDocs = discoveryDocs.filter((d) => !explicitDocPaths.has(d.filePath));
+  const filteredDiscoveredDocs = discoveredDocs.filter((d) => !explicitDocPaths.has(d.filePath));
+  const filteredDiscoveredSources = discoveredSources.filter((d) => !explicitSourcePaths.has(d.filePath));
+  const missingDocs = mergeMissingSections(
+    [...filteredAlwaysDocs, ...filteredDiscoveryDocs].filter((d) => !d.found),
+    explicitReferences.missing
+  );
+  const combinedDocReferences = [...explicitDocs, ...filteredDiscoveredDocs];
+  const combinedSourceReferences = [...explicitSources, ...filteredDiscoveredSources];
 
   // 7. Summarise
-  const missingDocs = [...alwaysDocs, ...discoveryDocs].filter((d) => !d.found);
-  console.log(`✓ Docs — always: ${alwaysDocs.filter(d => d.found).length}, discovered: ${discoveredDocs.length}, explicit: ${discoveryDocs.filter(d => d.found).length}, missing: ${missingDocs.length}, sources: ${discoveredSources.length}`);
+  console.log(`✓ Docs — always: ${filteredAlwaysDocs.filter(d => d.found).length}, discovered: ${filteredDiscoveredDocs.length}, explicit: ${explicitDocs.length + filteredDiscoveryDocs.filter(d => d.found).length}, missing: ${missingDocs.length}, sources: ${combinedSourceReferences.length}`);
   if (missingDocs.length > 0) {
     for (const d of missingDocs) console.warn(`  ⚠  Not found: ${d.filePath}`);
   }
 
   // 8. Build vars and render
-  const vars = buildTemplateVars(issue, domains, matchedGuardrails, alwaysDocs, discoveredDocs, discoveryDocs, missingDocs, repoPath, discoveredSources);
+  const vars = buildTemplateVars(
+    issue,
+    domains,
+    matchedGuardrails,
+    filteredAlwaysDocs,
+    combinedDocReferences,
+    filteredDiscoveryDocs,
+    missingDocs,
+    repoPath,
+    combinedSourceReferences
+  );
   const template = format === 'prompt' ? PROMPT_TEMPLATE : DEFAULT_TEMPLATE;
   const rendered = renderTemplate(template, vars);
 
@@ -96,13 +126,16 @@ export async function plan(
 function renderDocList(docs: DocSection[]): string {
   if (docs.length === 0) return '(none)';
   return docs
-    .map((d) => `### ${d.filePath}\n\n${d.content.trim()}`)
+    .map((d) => {
+      const reasonLine = renderReasonLine(d);
+      return `### ${d.filePath}\n\n${reasonLine}${d.content.trim()}`;
+    })
     .join('\n\n---\n\n');
 }
 
 function renderPathList(docs: DocSection[]): string {
   if (docs.length === 0) return '(none)';
-  return docs.map((d) => `- \`${d.filePath}\``).join('\n');
+  return docs.map((d) => `- \`${d.filePath}\`${renderReasonSuffix(d)}`).join('\n');
 }
 
 function renderImplementationConstraints(matchedGuardrails: Guardrail[]): string {
@@ -128,7 +161,7 @@ function buildTemplateVars(
     .join('\n') || '(none found)';
 
   const missingList = missingDocs.length > 0
-    ? missingDocs.map((d) => `- \`${d.filePath}\` — not found`).join('\n')
+    ? missingDocs.map((d) => `- \`${d.filePath}\` — not found${renderReasonSuffix(d, true)}`).join('\n')
     : '(none)';
 
   return {
@@ -160,4 +193,65 @@ function buildTemplateVars(
     repo_path: repoPath,
     generated_at: new Date().toISOString(),
   };
+}
+
+function mergeReasonSignals(primary: DocSection[], secondary: DocSection[]): DocSection[] {
+  const secondaryByPath = new Map(secondary.map((doc) => [doc.filePath, doc]));
+  return primary.map((doc) => {
+    const match = secondaryByPath.get(doc.filePath);
+    if (!match) return doc;
+
+    const reasons = new Set<string>(doc.reasons ?? []);
+    const mappedReason = reasonForKind(match.kind);
+    if (mappedReason) reasons.add(mappedReason);
+
+    return { ...doc, reasons: [...reasons] };
+  });
+}
+
+function mergeMissingSections(primary: DocSection[], secondary: DocSection[]): DocSection[] {
+  const merged = new Map<string, DocSection>();
+
+  for (const doc of [...primary, ...secondary]) {
+    const existing = merged.get(doc.filePath);
+    if (!existing) {
+      merged.set(doc.filePath, doc);
+      continue;
+    }
+
+    const reasons = new Set<string>([...(existing.reasons ?? []), ...(doc.reasons ?? [])]);
+    const mappedExisting = reasonForKind(existing.kind);
+    const mappedCurrent = reasonForKind(doc.kind);
+    if (mappedExisting) reasons.add(mappedExisting);
+    if (mappedCurrent) reasons.add(mappedCurrent);
+    merged.set(doc.filePath, { ...existing, reasons: [...reasons] });
+  }
+
+  return [...merged.values()];
+}
+
+function reasonForKind(kind: DocSection['kind']): string | null {
+  switch (kind) {
+    case 'always':
+      return 'always_read';
+    case 'rule':
+      return 'rule-matched';
+    case 'discovered':
+      return 'auto-discovered';
+    case 'source':
+      return 'auto-discovered';
+    default:
+      return null;
+  }
+}
+
+function renderReasonLine(doc: DocSection): string {
+  if (!doc.reasons || doc.reasons.length === 0) return '';
+  return `_${doc.reasons.join('; ')}_\n\n`;
+}
+
+function renderReasonSuffix(doc: DocSection, parenthetical: boolean = false): string {
+  if (!doc.reasons || doc.reasons.length === 0) return '';
+  const rendered = doc.reasons.join('; ');
+  return parenthetical ? ` (${rendered})` : ` — ${rendered}`;
 }
