@@ -1,6 +1,6 @@
 export const PROMPT_TEMPLATE = `# Implementation Plan Prompt: {{issue_title}}
 
-## 1. Source Issue
+## 1. Issue Summary
 
 - Issue: #{{issue_number}}
 - Title: {{issue_title}}
@@ -11,7 +11,7 @@ export const PROMPT_TEMPLATE = `# Implementation Plan Prompt: {{issue_title}}
 
 {{detected_domains}}
 
-## 3. Matched Guardrails
+## 3. Guardrails
 
 {{matched_guardrails}}
 
@@ -37,15 +37,13 @@ export const PROMPT_TEMPLATE = `# Implementation Plan Prompt: {{issue_title}}
 
 {{missing_docs}}
 
-## 6. Implementation Constraints
+## 6. Instructions
 
 {{prompt_implementation_constraints}}
 
-## 7. Suggested Verification Checklist
+Suggested verification checklist:
 
 {{issue_checklist}}
-
-## 8. Final Implementation Prompt
 
 Read the referenced files as needed, then propose an implementation plan for this issue. List the files you intend to modify, wait for human approval before editing, and do not modify out-of-scope files.
 `;

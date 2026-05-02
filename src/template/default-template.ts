@@ -6,7 +6,7 @@ export const DEFAULT_TEMPLATE = `# Task Package: {{issue_title}}
 
 ---
 
-## 1. Source Issue
+## 1. Issue
 
 **Labels:** {{issue_labels}}
 
@@ -14,7 +14,7 @@ export const DEFAULT_TEMPLATE = `# Task Package: {{issue_title}}
 
 ---
 
-## 2. Detected Domains
+## 2. Classification
 
 {{detected_domains}}
 
