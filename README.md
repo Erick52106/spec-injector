@@ -30,6 +30,7 @@ Requires: Node.js 20+, [`gh`](https://cli.github.com/) authenticated.
 - Conventions: [docs/conventions.md](docs/conventions.md)
 - Release strategy: [docs/release.md](docs/release.md)
 - `always_read` suggestions: [docs/always-read-suggestions.md](docs/always-read-suggestions.md)
+- AI workflow guides: [docs/workflows/README.md](docs/workflows/README.md)
 
 ---
 
