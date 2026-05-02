@@ -29,6 +29,8 @@ Built-in preset references 來自 `spec-injector` package 本身。
 
 Built-in preset 不代表 target repo 可以被自動修改。它只是 task package 的固定 context。
 
+在 `spec plan` output 中，built-in preset references 會標示為 `built-in preset`，避免被誤讀成 target repo config 的 `always_read`。
+
 ## Repo Always-read References
 
 Repo `always_read` references 由 target repo 的 `.spec-injector/config.json` 明確設定。
@@ -44,6 +46,8 @@ Repo `always_read` references 由 target repo 的 `.spec-injector/config.json` �
 `spec config suggest always-read --repo .` 可以 deterministic 掃描候選文件，但只會建議，不會自動修改 config。
 
 Missing `always_read` files 會在 task package 的 Missing Files 中呈現。這是 config health signal，不一定是 fatal plan error。
+
+在 `spec plan` output 中，repo `always_read` references 會標示為 `repo always_read`，與 built-in preset references 分開。
 
 ## Issue-mentioned References
 
