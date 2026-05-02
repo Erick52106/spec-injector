@@ -1,5 +1,6 @@
 import path from 'path';
 import fs from 'fs';
+import { ensureRepoPath } from '../utils/fs.js';
 
 type ConfigAction = 'list' | 'add' | 'remove' | 'suggest';
 
@@ -14,6 +15,7 @@ export async function config(
   opts: ConfigCommandOptions
 ): Promise<void> {
   const repoPath = path.resolve(opts.repo ?? process.cwd());
+  ensureRepoPath(repoPath);
 
   const normalizedAction = parseAction(action);
 

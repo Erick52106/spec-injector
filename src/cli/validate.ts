@@ -1,10 +1,12 @@
 import path from 'path';
 import { loadConfig } from '../config/loader.js';
+import { ensureRepoPath } from '../utils/fs.js';
 
 export async function validate(opts: { repo?: string }): Promise<void> {
   const repoPath = path.resolve(opts.repo ?? process.cwd());
 
   try {
+    ensureRepoPath(repoPath);
     const config = await loadConfig(repoPath);
     const { specConfig } = config;
     console.log('✓ config.json is valid');

@@ -38,6 +38,97 @@ test('spec validate succeeds for initialized repo and reports config summary', a
   assert.match(result.stdout, /Discovery/);
 });
 
+test('spec validate fails clearly when config is missing and does not create files', async (t) => {
+  const repoDir = await createTempRepo(t);
+
+  const result = await runSpec(['validate', '--repo', repoDir]);
+
+  assert.notEqual(result.code, 0);
+  assert.match(result.stderr, /Run "spec init".*first|No \.spec-injector\/ directory found/i);
+  assertNoRawStackTrace(result);
+  await assertFileMissing(path.join(repoDir, '.spec-injector', 'config.json'));
+  await assertFileMissing(path.join(repoDir, '.spec-injector', '.gitignore'));
+});
+
+test('spec validate fails clearly for invalid JSON config without raw stack traces', async (t) => {
+  const repoDir = await createTempRepo(t);
+  await writeRepoFiles(repoDir, {
+    '.spec-injector/config.json': '{ invalid json\n',
+  });
+
+  const result = await runSpec(['validate', '--repo', repoDir]);
+
+  assert.notEqual(result.code, 0);
+  assert.match(result.stderr, /Invalid config\.json: .*JSON|Unexpected token/i);
+  assertNoRawStackTrace(result);
+});
+
+test('spec validate rejects unsupported config versions', async (t) => {
+  const repoDir = await createTempRepo(t);
+  await writeConfig(repoDir, { version: 999 });
+
+  const result = await runSpec(['validate', '--repo', repoDir]);
+
+  assert.notEqual(result.code, 0);
+  assert.match(result.stderr, /version.*2|Expected version: 2|unsupported/i);
+  assertNoRawStackTrace(result);
+});
+
+test('spec validate rejects malformed always_read values', async (t) => {
+  const repoDir = await createTempRepo(t);
+  await writeConfig(repoDir, {
+    version: 2,
+    always_read: 'docs/security.md',
+  });
+
+  const result = await runSpec(['validate', '--repo', repoDir]);
+
+  assert.notEqual(result.code, 0);
+  assert.match(result.stderr, /always_read must be an array/i);
+  assertNoRawStackTrace(result);
+});
+
+test('spec validate rejects malformed discovery.exclude values', async (t) => {
+  const repoDir = await createTempRepo(t);
+  await writeConfig(repoDir, {
+    version: 2,
+    discovery: {
+      exclude: 'docs/archive',
+    },
+  });
+
+  const result = await runSpec(['validate', '--repo', repoDir]);
+
+  assert.notEqual(result.code, 0);
+  assert.match(result.stderr, /discovery\.exclude must be an array/i);
+  assertNoRawStackTrace(result);
+});
+
+test('spec validate rejects malformed guardrails values and missing required fields', async (t) => {
+  const repoDir = await createTempRepo(t);
+  await writeConfig(repoDir, {
+    version: 2,
+    guardrails: [{ id: 'auth-review', when_detected: ['auth'] }],
+  });
+
+  const missingFieldResult = await runSpec(['validate', '--repo', repoDir]);
+
+  assert.notEqual(missingFieldResult.code, 0);
+  assert.match(missingFieldResult.stderr, /guardrails\[0\]\.risk must be a string/i);
+  assertNoRawStackTrace(missingFieldResult);
+
+  await writeConfig(repoDir, {
+    version: 2,
+    guardrails: 'auth-review',
+  });
+
+  const notArrayResult = await runSpec(['validate', '--repo', repoDir]);
+
+  assert.notEqual(notArrayResult.code, 0);
+  assert.match(notArrayResult.stderr, /guardrails must be an array/i);
+  assertNoRawStackTrace(notArrayResult);
+});
+
 test('spec config list/add/remove always-read manages config entries idempotently', async (t) => {
   const repoDir = await createTempRepo(t);
   await runSpec(['init', '--repo', repoDir]);
@@ -221,12 +312,79 @@ test('invalid config subcommands fail with non-zero exit codes', async (t) => {
 
   const invalidSuggest = await runSpec(['config', 'suggest', 'unknown', '--repo', repoDir]);
   assert.notEqual(invalidSuggest.code, 0);
+  assertNoRawStackTrace(invalidSuggest);
 
   const invalidListSection = await runSpec(['config', 'list', 'unknown', '--repo', repoDir]);
   assert.notEqual(invalidListSection.code, 0);
+  assertNoRawStackTrace(invalidListSection);
 
   const invalidListPath = await runSpec(['config', 'list', 'always-read', 'docs/security.md', '--repo', repoDir]);
   assert.notEqual(invalidListPath.code, 0);
+  assertNoRawStackTrace(invalidListPath);
+
+  const invalidAddSection = await runSpec(['config', 'add', 'unknown', 'docs/security.md', '--repo', repoDir]);
+  assert.notEqual(invalidAddSection.code, 0);
+  assertNoRawStackTrace(invalidAddSection);
+
+  const invalidRemoveSection = await runSpec(['config', 'remove', 'unknown', 'docs/security.md', '--repo', repoDir]);
+  assert.notEqual(invalidRemoveSection.code, 0);
+  assertNoRawStackTrace(invalidRemoveSection);
+});
+
+test('invalid CLI arguments fail with non-zero exit codes and stable messaging', async (t) => {
+  const repoDir = await createTempRepo(t);
+  await runSpec(['init', '--repo', repoDir]);
+
+  const addMissingPath = await runSpec(['config', 'add', 'always-read', '--repo', repoDir]);
+  assert.notEqual(addMissingPath.code, 0);
+  assert.match(addMissingPath.stderr, /Missing path|Usage: spec config add always-read <path>/i);
+  assertNoRawStackTrace(addMissingPath);
+
+  const removeMissingPath = await runSpec(['config', 'remove', 'always-read', '--repo', repoDir]);
+  assert.notEqual(removeMissingPath.code, 0);
+  assert.match(removeMissingPath.stderr, /Missing path|Usage: spec config remove always-read <path>/i);
+  assertNoRawStackTrace(removeMissingPath);
+
+  const cleanInvalidIssue = await runSpec(['clean', '--repo', repoDir, '--issue', 'not-a-number']);
+  assert.notEqual(cleanInvalidIssue.code, 0);
+  assert.match(cleanInvalidIssue.stderr, /issue number|--issue/i);
+  assertNoRawStackTrace(cleanInvalidIssue);
+});
+
+test('commands fail clearly when repo path does not exist', async () => {
+  const missingRepo = createMissingPath();
+
+  const validateResult = await runSpec(['validate', '--repo', missingRepo]);
+  assert.notEqual(validateResult.code, 0);
+  assert.match(validateResult.stderr, /repo path does not exist|No such file or directory|Run "spec init"/i);
+  assertNoRawStackTrace(validateResult);
+
+  const configListResult = await runSpec(['config', 'list', '--repo', missingRepo]);
+  assert.notEqual(configListResult.code, 0);
+  assert.match(configListResult.stderr, /repo path does not exist|No \.spec-injector\/config\.json/i);
+  assertNoRawStackTrace(configListResult);
+
+  const cleanResult = await runSpec(['clean', '--repo', missingRepo]);
+  assert.notEqual(cleanResult.code, 0);
+  assert.match(cleanResult.stderr, /repo path does not exist|No such file or directory/i);
+  assertNoRawStackTrace(cleanResult);
+});
+
+test('commands support repo paths containing spaces', async (t) => {
+  const repoDir = await createTempRepo(t, 'spec injector validation test ');
+
+  const initResult = await runSpec(['init', '--repo', repoDir]);
+  assert.equal(initResult.code, 0, initResult.stderr);
+
+  const validateResult = await runSpec(['validate', '--repo', repoDir]);
+  assert.equal(validateResult.code, 0, validateResult.stderr);
+
+  const addResult = await runSpec(['config', 'add', 'always-read', 'docs/security.md', '--repo', repoDir]);
+  assert.equal(addResult.code, 0, addResult.stderr);
+  assert.match(addResult.stdout, /Added always_read file: docs\/security\.md/);
+
+  const config = JSON.parse(await fs.readFile(path.join(repoDir, '.spec-injector', 'config.json'), 'utf8'));
+  assert.deepEqual(config.always_read, ['docs/security.md']);
 });
 
 test('spec plan dry-run full output uses mocked gh data and keeps task package on stdout only', async (t) => {
@@ -374,12 +532,16 @@ test('spec plan fixture output stays deterministic across repeated runs', async 
   assert.equal(normalizeFullPlanOutput(fullSecond.stdout), normalizeFullPlanOutput(fullFirst.stdout));
 });
 
-async function createTempRepo(t) {
-  const repoDir = await fs.mkdtemp(path.join(os.tmpdir(), 'spec-injector-test-'));
+async function createTempRepo(t, prefix = 'spec-injector-test-') {
+  const repoDir = await fs.mkdtemp(path.join(os.tmpdir(), prefix));
   t.after(async () => {
     await fs.rm(repoDir, { recursive: true, force: true });
   });
   return repoDir;
+}
+
+function createMissingPath() {
+  return path.join(os.tmpdir(), `spec-injector-missing-${process.pid}-${Date.now()}`);
 }
 
 async function createSpecPlanFixture(t) {
@@ -545,6 +707,12 @@ async function writeRepoFiles(repoDir, files) {
   }));
 }
 
+async function writeConfig(repoDir, config) {
+  await writeRepoFiles(repoDir, {
+    '.spec-injector/config.json': `${JSON.stringify(config, null, 2)}\n`,
+  });
+}
+
 async function readFile(filePath) {
   return fs.readFile(filePath, 'utf8');
 }
@@ -562,6 +730,11 @@ async function assertFileExists(filePath) {
 
 async function assertFileMissing(filePath) {
   await assert.rejects(fs.access(filePath));
+}
+
+function assertNoRawStackTrace(result) {
+  const combined = `${result.stdout}\n${result.stderr}`;
+  assert.doesNotMatch(combined, /\n\s*at .+\(.+:\d+:\d+\)|\n\s*at .+:\d+:\d+/);
 }
 
 function escapeRegExp(value) {
