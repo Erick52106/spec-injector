@@ -13,6 +13,8 @@
 - 若 PR 跨多個 change type，必須執行所有相關類型的 required validation；若 requirements 衝突、重疊或不確定，採較嚴格的 validation set，並在 PR body 說明實際採用的 validation 與原因。若無法執行任一 required validation，必須 stop-and-report 或清楚寫明 skipped reason。
 - 若 PR 跨多個 roadmap layers 或多個 source issues，必須在 PR body 說明採用的主要 roadmap milestone / primary layer label 與原因。
 - PR review 前應確認 linked issue 與 PR 的 roadmap milestone / primary layer label 是否存在且合理；無法高信心分類時，必須 stop-and-report 或列為 needs human review。
+- PR review 前應確認 PR 有合理 area / type labels，且 metadata 與 linked issue 一致；不一致時應 request changes 或標記 metadata follow-up。
+- PR body、issue evidence comment 與 final report 預設應以繁體中文為主。英文應限於 commands、file paths、raw output、raw errors、technical terms、external API names 或更精準的英文片段。
 - Feature tests 與 implementation 不應依賴真實 GitHub API 或 network。若測試需要 GitHub output，應使用 fixture、fake `gh`、mocked process 或等價 isolation。
 - Package installation 與 normal `gh` workflow 是允許的 workflow I/O，例如 `pnpm install --frozen-lockfile`、`gh pr view`、`gh pr checks`、`gh issue comment`、push branch、create PR。這些不是 feature test dependency。
 - `gh pr view`、`gh pr checks`、`gh issue comment`、push branch、create PR 是 issue / PR workflow 操作，不代表 runtime 或 tests 可以打真 GitHub API。
@@ -189,6 +191,8 @@ Required review checks:
 - No non-target issue close.
 - Status labels do not conflict, for example `status:ready` and `status:implemented` on the same open implementation issue.
 - Roadmap milestone and primary layer label are present and reasonable when high-confidence classification is possible.
+- PR 在 high-confidence classification 可行時，有合理 area / type labels。
+- PR metadata 與 linked issue 一致；若不一致，PR body 或 final report 應說明 scoped reason。
 - Missing milestone / layer label is explicitly reported as follow-up when the current PR scope does not include metadata changes.
 
 ### 10. Dogfood / target repo evaluation
@@ -250,6 +254,8 @@ PR body must include:
 - Explicit skipped reason for any required validation that could not run.
 - Primary roadmap milestone / layer label rationale when the PR crosses multiple change types, layers, or source issues.
 
+PR body 應以繁體中文為主。若 PR body 主要使用英文，reviewer 應確認該英文限於 commands、raw output、technical terms、file paths、external API names 或短而精準的英文片段，而不是整份 PR body 的預設語言。
+
 After backfill, use `gh pr view` or equivalent to confirm the PR body is non-empty and contains the evidence URL and commit hash.
 
 ## Issue Evidence Validation Reporting
@@ -264,6 +270,8 @@ The source issue implementation evidence comment must include:
 - Scope boundaries.
 - Confirmation of important non-goals, especially runtime code, tests, package files, CI, CLI behavior, and config schema when those are out of scope.
 
+Issue evidence 應以繁體中文為主；commands、file paths、raw output、raw errors、technical terms、commit hash 與 PR URL 可保留英文。
+
 Issue evidence should be posted after the PR exists, then its permanent comment URL should be backfilled into the PR body.
 
 ## Merge-readiness Quality Gates
@@ -272,13 +280,17 @@ A PR is ready for human review only when:
 
 - PR is ready for review, not draft, unless the issue explicitly says draft.
 - PR body includes `Closes #<issue-number>`.
+- PR body 以繁體中文為主，commands、raw output、technical terms、file paths、external API names 或短而精準的英文片段除外。
 - PR body includes Summary.
 - PR body includes Tests / validation with exact commands.
 - PR body includes Implementation Evidence.
 - Source issue has implementation evidence comment.
+- Source issue evidence comment 以繁體中文為主，技術內容可保留英文。
 - PR body is backfilled with issue evidence URL.
 - PR body includes commit hash.
 - Linked issue and PR have a roadmap milestone and one primary layer label when high-confidence classification is possible.
+- PR 在 high-confidence classification 可行時，有合理 area / type labels。
+- PR metadata 與 linked issue 一致；若不一致，PR body 或 final report 說明 scoped exception。
 - If milestone / layer label is missing and the current PR does not scope metadata updates, PR body, final report, or review notes mark a follow-up.
 - `gh pr view` confirms PR body is non-empty and contains evidence URL and commit hash.
 - CI checks are reported.
