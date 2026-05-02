@@ -621,6 +621,178 @@ test('spec plan fixture output stays deterministic across repeated runs', async 
   assert.equal(normalizePlanOutput(fullSecond.stdout), normalizePlanOutput(fullFirst.stdout));
 });
 
+test('spec plan includes issue-mentioned source file paths in prompt and full outputs', async (t) => {
+  const fixture = await createExplicitPathPlanFixture(t, {
+    issueNumber: 80,
+    title: 'Extract explicit repo source file paths from issue body',
+    bodyLines: [
+      'Relevant source files:',
+      '- `apps/dashboard/src/providers/dataProvider.ts`',
+      '- `apps/dashboard/src/providers/__tests__/dataProvider.test.ts`',
+      '- `services/api/internal/router/router.go`',
+    ],
+    repoFiles: {
+      'apps/dashboard/src/providers/dataProvider.ts': 'export const provider = "ISSUE_SOURCE_PROVIDER_SENTINEL";\n',
+      'apps/dashboard/src/providers/__tests__/dataProvider.test.ts': 'export const providerTest = "ISSUE_SOURCE_TEST_SENTINEL";\n',
+      'services/api/internal/router/router.go': 'package router\n\nconst RouterSentinel = "ISSUE_ROUTER_SOURCE_SENTINEL"\n',
+    },
+  });
+
+  const promptResult = await runSpec(['plan', fixture.issueUrl, '--repo', fixture.repoDir, '--dry-run', '--format', 'prompt'], { env: fixture.env });
+  const fullResult = await runSpec(['plan', fixture.issueUrl, '--repo', fixture.repoDir, '--dry-run'], { env: fixture.env });
+
+  assert.equal(promptResult.code, 0, promptResult.stderr);
+  assert.equal(fullResult.code, 0, fullResult.stderr);
+  assert.match(promptResult.stdout, /apps\/dashboard\/src\/providers\/dataProvider\.ts/);
+  assert.match(promptResult.stdout, /apps\/dashboard\/src\/providers\/__tests__\/dataProvider\.test\.ts/);
+  assert.match(promptResult.stdout, /services\/api\/internal\/router\/router\.go/);
+  assert.match(promptResult.stdout, /mentioned in issue/i);
+  assert.match(fullResult.stdout, /### apps\/dashboard\/src\/providers\/dataProvider\.ts/);
+  assert.match(fullResult.stdout, /ISSUE_SOURCE_PROVIDER_SENTINEL/);
+  assert.match(fullResult.stdout, /### apps\/dashboard\/src\/providers\/__tests__\/dataProvider\.test\.ts/);
+  assert.match(fullResult.stdout, /ISSUE_SOURCE_TEST_SENTINEL/);
+  assert.match(fullResult.stdout, /### services\/api\/internal\/router\/router\.go/);
+  assert.match(fullResult.stdout, /ISSUE_ROUTER_SOURCE_SENTINEL/);
+  assert.match(fullResult.stdout, /sources:\s*3/);
+});
+
+test('spec plan includes issue-mentioned docs and de-dupes with always_read', async (t) => {
+  const fixture = await createExplicitPathPlanFixture(t, {
+    issueNumber: 81,
+    title: 'Extract explicit documentation paths from issue body',
+    config: {
+      always_read: ['AGENTS.md'],
+    },
+    bodyLines: [
+      'Relevant docs:',
+      '- `docs/architecture.md`',
+      '- `AGENTS.md`',
+    ],
+    repoFiles: {
+      'docs/architecture.md': '# Architecture\n\nISSUE_DOC_ARCHITECTURE_SENTINEL\n',
+      'AGENTS.md': '# Agents\n\nISSUE_DOC_AGENTS_SENTINEL\n',
+    },
+  });
+
+  const promptResult = await runSpec(['plan', fixture.issueUrl, '--repo', fixture.repoDir, '--dry-run', '--format', 'prompt'], { env: fixture.env });
+  const fullResult = await runSpec(['plan', fixture.issueUrl, '--repo', fixture.repoDir, '--dry-run'], { env: fixture.env });
+
+  assert.equal(promptResult.code, 0, promptResult.stderr);
+  assert.equal(fullResult.code, 0, fullResult.stderr);
+  assert.match(promptResult.stdout, /docs\/architecture\.md/);
+  assert.match(promptResult.stdout, /AGENTS\.md/);
+  assert.match(promptResult.stdout, /mentioned in issue/i);
+  assert.equal(countOccurrences(promptResult.stdout, 'AGENTS.md'), 1);
+  assert.match(fullResult.stdout, /### docs\/architecture\.md/);
+  assert.match(fullResult.stdout, /ISSUE_DOC_ARCHITECTURE_SENTINEL/);
+  assert.match(fullResult.stdout, /### AGENTS\.md/);
+  assert.match(fullResult.stdout, /ISSUE_DOC_AGENTS_SENTINEL/);
+  assert.equal(countOccurrences(fullResult.stdout, '### AGENTS.md'), 1);
+});
+
+test('spec plan reports missing explicit issue-mentioned file paths without failing', async (t) => {
+  const fixture = await createExplicitPathPlanFixture(t, {
+    issueNumber: 82,
+    title: 'Report missing explicit file paths from issue body',
+    bodyLines: [
+      'Missing file to verify:',
+      '- `apps/dashboard/src/providers/missingProvider.ts`',
+    ],
+  });
+
+  const promptResult = await runSpec(['plan', fixture.issueUrl, '--repo', fixture.repoDir, '--dry-run', '--format', 'prompt'], { env: fixture.env });
+  const fullResult = await runSpec(['plan', fixture.issueUrl, '--repo', fixture.repoDir, '--dry-run'], { env: fixture.env });
+
+  assert.equal(promptResult.code, 0, promptResult.stderr);
+  assert.equal(fullResult.code, 0, fullResult.stderr);
+  assert.match(promptResult.stdout, /## 5\. Missing Files/);
+  assert.match(promptResult.stdout, /apps\/dashboard\/src\/providers\/missingProvider\.ts/);
+  assert.match(fullResult.stdout, /## 7\. Missing Files/);
+  assert.match(fullResult.stdout, /apps\/dashboard\/src\/providers\/missingProvider\.ts/);
+});
+
+test('spec plan ignores API and route paths when extracting file references', async (t) => {
+  const fixture = await createExplicitPathPlanFixture(t, {
+    issueNumber: 83,
+    title: 'Ignore API route paths in issue body extraction',
+    bodyLines: [
+      'Do not treat these routes as files:',
+      '- `/api/v1/users/me/points/history`',
+      '- `/api/v1/dashboard/settings`',
+      '- `/transactions`',
+      '- `/dashboard/settings`',
+    ],
+  });
+
+  const promptResult = await runSpec(['plan', fixture.issueUrl, '--repo', fixture.repoDir, '--dry-run', '--format', 'prompt'], { env: fixture.env });
+  const fullResult = await runSpec(['plan', fixture.issueUrl, '--repo', fixture.repoDir, '--dry-run'], { env: fixture.env });
+
+  assert.equal(promptResult.code, 0, promptResult.stderr);
+  assert.equal(fullResult.code, 0, fullResult.stderr);
+  assert.doesNotMatch(promptResult.stdout, /Relevant File References[\s\S]*\/api\/v1\/users\/me\/points\/history/);
+  assert.doesNotMatch(promptResult.stdout, /Missing Files[\s\S]*\/api\/v1\/dashboard\/settings/);
+  assert.doesNotMatch(fullResult.stdout, /Auto-Discovered Source Files[\s\S]*\/transactions/);
+  assert.doesNotMatch(fullResult.stdout, /Missing Files[\s\S]*\/dashboard\/settings/);
+});
+
+test('spec plan ignores URLs, traversal paths, and absolute paths', async (t) => {
+  const fixture = await createExplicitPathPlanFixture(t, {
+    issueNumber: 84,
+    title: 'Ignore unsafe or non-repo paths in issue body extraction',
+    bodyLines: [
+      'Unsafe references to ignore:',
+      '- `https://github.com/nurockplayer/tachigo/issues/467`',
+      '- `../secrets.env`',
+      '- `/absolute/path.ts`',
+    ],
+  });
+
+  const result = await runSpec(['plan', fixture.issueUrl, '--repo', fixture.repoDir, '--dry-run'], { env: fixture.env });
+
+  assert.equal(result.code, 0, result.stderr);
+  const refsSection = sectionBetween(result.stdout, '## 3. Always-Read Files', '## 8. Suggested Verification Checklist');
+  assert.doesNotMatch(refsSection, /https:\/\/github\.com\/nurockplayer\/tachigo\/issues\/467/);
+  assert.doesNotMatch(refsSection, /\.\.\/secrets\.env/);
+  assert.doesNotMatch(refsSection, /\/absolute\/path\.ts/);
+});
+
+test('spec plan tachigo-like fixture extracts explicit source files without misclassifying API paths', async (t) => {
+  const fixture = await createExplicitPathPlanFixture(t, {
+    issueNumber: 467,
+    title: 'Support dashboard points history contract updates',
+    bodyLines: [
+      'Relevant files from issue body:',
+      '- `apps/dashboard/src/providers/dataProvider.ts`',
+      '- `apps/dashboard/src/providers/__tests__/dataProvider.test.ts`',
+      '- `services/api/internal/router/router.go`',
+      '- `services/api/internal/handlers/points_handler.go`',
+      '- `services/api/internal/handlers/agency_handler.go`',
+      '',
+      'Related API routes that are not files:',
+      '- `/api/v1/users/me/points/history`',
+      '- `/api/v1/dashboard/settings`',
+    ],
+    repoFiles: {
+      'apps/dashboard/src/providers/dataProvider.ts': 'export const tachigoProvider = "TACHIGO_PROVIDER_SENTINEL";\n',
+      'apps/dashboard/src/providers/__tests__/dataProvider.test.ts': 'export const tachigoProviderTest = "TACHIGO_PROVIDER_TEST_SENTINEL";\n',
+      'services/api/internal/router/router.go': 'package router\n\nconst TachigoRouterSentinel = "TACHIGO_ROUTER_SENTINEL"\n',
+      'services/api/internal/handlers/points_handler.go': 'package handlers\n\nconst PointsHandlerSentinel = "TACHIGO_POINTS_HANDLER_SENTINEL"\n',
+      'services/api/internal/handlers/agency_handler.go': 'package handlers\n\nconst AgencyHandlerSentinel = "TACHIGO_AGENCY_HANDLER_SENTINEL"\n',
+    },
+  });
+
+  const promptResult = await runSpec(['plan', fixture.issueUrl, '--repo', fixture.repoDir, '--dry-run', '--format', 'prompt'], { env: fixture.env });
+
+  assert.equal(promptResult.code, 0, promptResult.stderr);
+  assert.match(promptResult.stdout, /apps\/dashboard\/src\/providers\/dataProvider\.ts/);
+  assert.match(promptResult.stdout, /services\/api\/internal\/handlers\/points_handler\.go/);
+  assert.match(promptResult.stdout, /services\/api\/internal\/handlers\/agency_handler\.go/);
+  assert.match(promptResult.stdout, /mentioned in issue/i);
+  assert.doesNotMatch(promptResult.stdout, /Missing Files[\s\S]*\/api\/v1\/users\/me\/points\/history/);
+  assert.doesNotMatch(promptResult.stdout, /Missing Files[\s\S]*\/api\/v1\/dashboard\/settings/);
+  assert.match(promptResult.stdout, /sources:\s*5/);
+});
+
 async function createTempRepo(t, prefix = 'spec-injector-test-') {
   const repoDir = await fs.mkdtemp(path.join(os.tmpdir(), prefix));
   t.after(async () => {
@@ -703,6 +875,47 @@ async function createSpecPlanFixture(t) {
     ghLogPath: fakeGh.logPath,
     issueUrl: issue.url,
     taskPackagePath: path.join(repoDir, '.spec-injector', 'out', 'issue-57-task-package.md'),
+  };
+}
+
+async function createExplicitPathPlanFixture(t, options) {
+  const repoDir = await createTempRepo(t);
+  const issueNumber = options.issueNumber ?? 80;
+  const issueUrl = `https://github.com/Erick52106/spec-injector/issues/${issueNumber}`;
+  const config = {
+    version: 2,
+    always_read: options.config?.always_read ?? [],
+    discovery: {
+      docs: options.config?.discovery?.docs ?? [],
+      source: options.config?.discovery?.source ?? ['src', 'apps', 'services', 'packages'],
+      max_docs: options.config?.discovery?.max_docs ?? 5,
+      max_source_files: options.config?.discovery?.max_source_files ?? 5,
+    },
+    guardrails: options.config?.guardrails ?? [],
+  };
+
+  await writeRepoFiles(repoDir, {
+    '.spec-injector/config.json': `${JSON.stringify(config, null, 2)}\n`,
+    ...(options.repoFiles ?? {}),
+  });
+
+  const issue = {
+    number: issueNumber,
+    title: options.title,
+    body: options.bodyLines.join('\n'),
+    labels: options.labels ?? [{ name: 'plan' }],
+    url: issueUrl,
+    state: 'OPEN',
+  };
+  const fakeGh = await createFakeGh(t, issue);
+  fakeGh.env.FAKE_GH_EXPECT_REF = String(issueNumber);
+
+  return {
+    repoDir,
+    env: fakeGh.env,
+    ghLogPath: fakeGh.logPath,
+    issueUrl,
+    taskPackagePath: path.join(repoDir, '.spec-injector', 'out', `issue-${issueNumber}-task-package.md`),
   };
 }
 

@@ -5,6 +5,13 @@ import { safeReadFile } from '../utils/fs.js';
 import type { DocSection, DocSourceKind } from './types.js';
 import type { Issue } from '../github/types.js';
 
+const EXPLICIT_FILE_EXTENSIONS = new Set([
+  '.ts', '.tsx', '.js', '.jsx', '.go', '.md', '.json', '.yml', '.yaml', '.sql', '.css', '.html', '.sh',
+]);
+const EXPLICIT_ROOT_FILES = new Set(['README.md', 'AGENTS.md', 'CLAUDE.md', 'GEMINI.md']);
+const DOC_EXTENSIONS = new Set(['.md']);
+const ISSUE_MENTIONED_REASON = 'mentioned in issue';
+
 // Load explicitly listed doc paths with a given kind label.
 // Missing files get kind 'missing' and found: false.
 export async function loadExplicitDocs(
@@ -73,6 +80,50 @@ export async function discoverRelevantDocs(
   }));
 }
 
+export async function extractExplicitIssueFileReferences(
+  issue: Issue,
+  repoPath: string
+): Promise<{ docs: DocSection[]; sources: DocSection[]; missing: DocSection[] }> {
+  const candidates = collectExplicitPathCandidates(issue.body);
+  const docs: DocSection[] = [];
+  const sources: DocSection[] = [];
+  const missing: DocSection[] = [];
+
+  for (const filePath of candidates) {
+    validateDocPath(filePath, repoPath);
+    const absolute = path.resolve(repoPath, filePath);
+    const content = await safeReadFile(absolute);
+    const isDoc = isDocReferencePath(filePath);
+
+    if (content === null) {
+      missing.push({
+        filePath,
+        content: '',
+        found: false,
+        kind: 'missing',
+        reasons: [ISSUE_MENTIONED_REASON],
+      });
+      continue;
+    }
+
+    const section: DocSection = {
+      filePath,
+      content,
+      found: true,
+      kind: isDoc ? 'issue-doc' : 'issue-source',
+      reasons: [ISSUE_MENTIONED_REASON],
+    };
+
+    if (isDoc) {
+      docs.push(section);
+    } else {
+      sources.push(section);
+    }
+  }
+
+  return { docs, sources, missing };
+}
+
 // --- internals ---
 
 function validateDocPath(docPath: string, repoPath: string): void {
@@ -83,6 +134,56 @@ function validateDocPath(docPath: string, repoPath: string): void {
   if (!absolute.startsWith(path.resolve(repoPath) + path.sep)) {
     throw new Error(`Doc path is outside target repo: ${docPath}`);
   }
+}
+
+function collectExplicitPathCandidates(body: string): string[] {
+  const candidates = new Set<string>();
+
+  for (const match of body.matchAll(/`([^`\n]+)`/g)) {
+    const normalized = normalizeExplicitPathCandidate(match[1]);
+    if (normalized) candidates.add(normalized);
+  }
+
+  for (const line of body.split('\n')) {
+    const normalized = normalizeBulletPathCandidate(line);
+    if (normalized) candidates.add(normalized);
+  }
+
+  return [...candidates];
+}
+
+function normalizeBulletPathCandidate(line: string): string | null {
+  const match = line.match(/^\s*(?:[-*]|\d+\.)\s+([A-Za-z0-9._/-]+)\s*$/);
+  if (!match) return null;
+  return normalizeExplicitPathCandidate(match[1]);
+}
+
+function normalizeExplicitPathCandidate(candidate: string): string | null {
+  const trimmed = candidate.trim();
+  if (trimmed.length === 0) return null;
+  if (trimmed.includes('://')) return null;
+  if (trimmed.startsWith('/')) return null;
+  if (trimmed.includes('#')) return null;
+  if (!/^[A-Za-z0-9._/-]+$/.test(trimmed)) return null;
+
+  const normalized = path.posix.normalize(trimmed);
+  if (normalized === '.' || normalized === '..') return null;
+  if (normalized.startsWith('../')) return null;
+  if (path.posix.isAbsolute(normalized)) return null;
+  if (normalized.split('/').some((segment) => segment === '..' || segment.length === 0)) return null;
+  if (!hasRecognizedRepoFileShape(normalized)) return null;
+
+  return normalized;
+}
+
+function hasRecognizedRepoFileShape(filePath: string): boolean {
+  if (EXPLICIT_ROOT_FILES.has(filePath)) return true;
+  return EXPLICIT_FILE_EXTENSIONS.has(path.posix.extname(filePath).toLowerCase());
+}
+
+function isDocReferencePath(filePath: string): boolean {
+  if (EXPLICIT_ROOT_FILES.has(filePath)) return true;
+  return DOC_EXTENSIONS.has(path.posix.extname(filePath).toLowerCase());
 }
 
 async function gatherCandidates(repoPath: string, exclude: Set<string>): Promise<string[]> {
