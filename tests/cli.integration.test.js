@@ -229,6 +229,151 @@ test('invalid config subcommands fail with non-zero exit codes', async (t) => {
   assert.notEqual(invalidListPath.code, 0);
 });
 
+test('spec plan dry-run full output uses mocked gh data and keeps task package on stdout only', async (t) => {
+  const fixture = await createSpecPlanFixture(t);
+
+  const result = await runSpec(
+    ['plan', fixture.issueUrl, '--repo', fixture.repoDir, '--dry-run'],
+    { env: fixture.env }
+  );
+
+  assert.equal(result.code, 0, result.stderr);
+  assert.match(result.stdout, /Issue #57 fetched: Add backend auth database fixture plan coverage/);
+  assert.match(result.stdout, /Detected domains: .*auth/);
+  assert.match(result.stdout, /Detected domains: .*database/);
+  assert.match(result.stdout, /Guardrails matched: auth-review, db-migration/);
+  assert.match(result.stdout, /# Task Package: Add backend auth database fixture plan coverage/);
+  assert.match(result.stdout, /## 3\. Always-Read Files/);
+  assert.match(result.stdout, /### docs\/always-read\.md/);
+  assert.match(result.stdout, /### presets\/core\/ai-collaboration\.md/);
+  assert.match(result.stdout, /## 4\. Auto-Discovered Documentation/);
+  assert.match(result.stdout, /### docs\/auth-runbook\.md/);
+  assert.match(result.stdout, /## 5\. Auto-Discovered Source Files/);
+  assert.match(result.stdout, /### src\/auth-handler\.ts/);
+  assert.match(result.stdout, /## 6\. Matched Guardrails/);
+  assert.match(result.stdout, /\*\*auth-review\*\*: Require auth reviewer before changing login or permission flows\./);
+  assert.match(result.stdout, /## 7\. Missing Files/);
+  assert.match(result.stdout, /- `docs\/missing-handbook\.md` — not found/);
+  assert.doesNotMatch(result.stdout, /issue-57-task-package\.md/);
+  await assertFileMissing(fixture.taskPackagePath);
+  assert.deepEqual(await readGhLog(fixture.ghLogPath), [
+    'issue view 57 --repo Erick52106/spec-injector --json number,title,body,labels,url,state',
+  ]);
+});
+
+test('spec plan dry-run prompt output stays compact and omits long inline docs', async (t) => {
+  const fixture = await createSpecPlanFixture(t);
+
+  const result = await runSpec(
+    ['plan', fixture.issueUrl, '--repo', fixture.repoDir, '--dry-run', '--format', 'prompt'],
+    { env: fixture.env }
+  );
+
+  assert.equal(result.code, 0, result.stderr);
+  assert.match(result.stdout, /# Implementation Plan Prompt: Add backend auth database fixture plan coverage/);
+  assert.match(result.stdout, /## 4\. Relevant File References/);
+  assert.match(result.stdout, /### Always-Read Files/);
+  assert.match(result.stdout, /- `docs\/always-read\.md`/);
+  assert.match(result.stdout, /- `presets\/core\/ai-collaboration\.md`/);
+  assert.match(result.stdout, /### Discovered Docs/);
+  assert.match(result.stdout, /- `docs\/auth-runbook\.md`/);
+  assert.match(result.stdout, /### Rule-Matched Docs/);
+  assert.match(result.stdout, /- `docs\/database-guardrail\.md`/);
+  assert.match(result.stdout, /### Discovered Source Files/);
+  assert.match(result.stdout, /- `src\/auth-handler\.ts`/);
+  assert.match(result.stdout, /## 5\. Missing Files/);
+  assert.match(result.stdout, /- `docs\/missing-handbook\.md` — not found/);
+  assert.doesNotMatch(result.stdout, /# Task Package:/);
+  assert.doesNotMatch(result.stdout, /### docs\/always-read\.md/);
+  assert.doesNotMatch(result.stdout, /Always read instructions for deterministic planning\./);
+  assert.doesNotMatch(result.stdout, /Auth handler for login, permission, session, and token checks\./);
+  await assertFileMissing(fixture.taskPackagePath);
+});
+
+test('spec plan non-dry-run writes task package file with mocked gh data', async (t) => {
+  const fixture = await createSpecPlanFixture(t);
+
+  const result = await runSpec(
+    ['plan', fixture.issueUrl, '--repo', fixture.repoDir],
+    { env: fixture.env }
+  );
+
+  assert.equal(result.code, 0, result.stderr);
+  assert.match(result.stdout, /Task package written: \.spec-injector\/out\/issue-57-task-package\.md/);
+  await assertFileExists(fixture.taskPackagePath);
+
+  const written = await readFile(fixture.taskPackagePath);
+  assert.match(written, /# Task Package: Add backend auth database fixture plan coverage/);
+  assert.match(written, /## 6\. Matched Guardrails/);
+  assert.match(written, /## 4\. Auto-Discovered Documentation/);
+  assert.match(written, /### docs\/database-guardrail\.md/);
+  assert.match(written, /## 5\. Auto-Discovered Source Files/);
+  assert.match(written, /### src\/database-auth-service\.ts/);
+  assert.match(written, /## 7\. Missing Files/);
+});
+
+test('spec plan keeps missing always_read files non-fatal and reports found vs missing references', async (t) => {
+  const fixture = await createSpecPlanFixture(t);
+
+  const result = await runSpec(
+    ['plan', fixture.issueUrl, '--repo', fixture.repoDir, '--dry-run', '--format', 'prompt'],
+    { env: fixture.env }
+  );
+
+  assert.equal(result.code, 0, result.stderr);
+  const alwaysReadSection = sectionBetween(result.stdout, '### Always-Read Files', '### Discovered Docs');
+  assert.match(alwaysReadSection, /- `docs\/always-read\.md`/);
+  assert.doesNotMatch(alwaysReadSection, /docs\/missing-handbook\.md/);
+  assert.match(result.stdout, /## 5\. Missing Files/);
+  assert.match(result.stdout, /- `docs\/missing-handbook\.md` — not found/);
+  assert.match(result.stderr, /Not found: docs\/missing-handbook\.md/);
+});
+
+test('spec plan surfaces matched guardrail risk text for triggered domains', async (t) => {
+  const fixture = await createSpecPlanFixture(t);
+
+  const result = await runSpec(
+    ['plan', fixture.issueUrl, '--repo', fixture.repoDir, '--dry-run'],
+    { env: fixture.env }
+  );
+
+  assert.equal(result.code, 0, result.stderr);
+  assert.match(result.stdout, /Detected domains: .*auth/);
+  assert.match(result.stdout, /Detected domains: .*database/);
+  assert.match(result.stdout, /Detected domains: .*testing/);
+  assert.match(result.stdout, /\*\*db-migration\*\*: Review schema and migration blast radius before changing auth data persistence\./);
+  assert.match(result.stdout, /### Rule-Matched Documentation/);
+  assert.match(result.stdout, /### docs\/database-guardrail\.md/);
+});
+
+test('spec plan fixture output stays deterministic across repeated runs', async (t) => {
+  const fixture = await createSpecPlanFixture(t);
+
+  const promptFirst = await runSpec(
+    ['plan', fixture.issueUrl, '--repo', fixture.repoDir, '--dry-run', '--format', 'prompt'],
+    { env: fixture.env }
+  );
+  const promptSecond = await runSpec(
+    ['plan', fixture.issueUrl, '--repo', fixture.repoDir, '--dry-run', '--format', 'prompt'],
+    { env: fixture.env }
+  );
+  const fullFirst = await runSpec(
+    ['plan', fixture.issueUrl, '--repo', fixture.repoDir, '--dry-run'],
+    { env: fixture.env }
+  );
+  const fullSecond = await runSpec(
+    ['plan', fixture.issueUrl, '--repo', fixture.repoDir, '--dry-run'],
+    { env: fixture.env }
+  );
+
+  assert.equal(promptFirst.code, 0, promptFirst.stderr);
+  assert.equal(promptSecond.code, 0, promptSecond.stderr);
+  assert.equal(fullFirst.code, 0, fullFirst.stderr);
+  assert.equal(fullSecond.code, 0, fullSecond.stderr);
+  assert.equal(promptSecond.stdout, promptFirst.stdout);
+  assert.equal(normalizeFullPlanOutput(fullSecond.stdout), normalizeFullPlanOutput(fullFirst.stdout));
+});
+
 async function createTempRepo(t) {
   const repoDir = await fs.mkdtemp(path.join(os.tmpdir(), 'spec-injector-test-'));
   t.after(async () => {
@@ -237,11 +382,128 @@ async function createTempRepo(t) {
   return repoDir;
 }
 
-function runSpec(args) {
+async function createSpecPlanFixture(t) {
+  const repoDir = await createTempRepo(t);
+  await writeRepoFiles(repoDir, {
+    '.spec-injector/config.json': JSON.stringify({
+      version: 2,
+      always_read: ['docs/always-read.md', 'docs/missing-handbook.md'],
+      discovery: {
+        docs: ['docs/database-guardrail.md'],
+        source: ['src'],
+        max_docs: 3,
+        max_source_files: 2,
+      },
+      guardrails: [
+        {
+          id: 'auth-review',
+          when_detected: ['auth', 'backend'],
+          risk: 'Require auth reviewer before changing login or permission flows.',
+        },
+        {
+          id: 'db-migration',
+          when_detected: ['database'],
+          risk: 'Review schema and migration blast radius before changing auth data persistence.',
+        },
+      ],
+    }, null, 2) + '\n',
+    'docs/always-read.md': '# Always Read\n\nAlways read instructions for deterministic planning.\n',
+    'docs/auth-runbook.md': '# Auth Runbook\n\nAuthentication checklist for backend login and session review.\n',
+    'docs/database-guardrail.md': '# Database Guardrail\n\nDatabase migration review steps for auth schema updates.\n',
+    'docs/testing-fixtures.md': '# Testing Fixtures\n\nFixture notes for spec plan tests.\n',
+    'src/auth-handler.ts': 'export function authHandler() { return "Auth handler for login, permission, session, and token checks."; }\n',
+    'src/database-auth-service.ts': 'export function databaseAuthService() { return "Database service for schema migration and auth persistence."; }\n',
+    'README.md': '# Spec Injector Fixture\n\nBackend auth database planning notes.\n',
+  });
+
+  const issue = {
+    number: 57,
+    title: 'Add backend auth database fixture plan coverage',
+    body: [
+      'Need deterministic fixture-based integration coverage for spec plan.',
+      '',
+      '- [ ] verify auth guardrail guidance in dry-run output',
+      '- [ ] verify database source references in generated task package',
+      '',
+      'Focus on backend auth database CLI behavior with mocked gh output and fixture docs.',
+    ].join('\n'),
+    labels: [{ name: 'test' }, { name: 'backend' }, { name: 'auth' }, { name: 'database' }],
+    url: 'https://github.com/Erick52106/spec-injector/issues/57',
+    state: 'OPEN',
+  };
+  const fakeGh = await createFakeGh(t, issue);
+
+  return {
+    repoDir,
+    env: fakeGh.env,
+    ghLogPath: fakeGh.logPath,
+    issueUrl: issue.url,
+    taskPackagePath: path.join(repoDir, '.spec-injector', 'out', 'issue-57-task-package.md'),
+  };
+}
+
+async function createFakeGh(t, issuePayload) {
+  const binDir = await fs.mkdtemp(path.join(os.tmpdir(), 'spec-injector-gh-'));
+  t.after(async () => {
+    await fs.rm(binDir, { recursive: true, force: true });
+  });
+
+  const responsePath = path.join(binDir, 'issue.json');
+  const logPath = path.join(binDir, 'gh.log');
+  const ghPath = path.join(binDir, 'gh');
+
+  await fs.writeFile(responsePath, JSON.stringify(issuePayload), 'utf8');
+  await fs.writeFile(logPath, '', 'utf8');
+  await fs.writeFile(ghPath, `#!/usr/bin/env node
+import fs from 'node:fs';
+
+const args = process.argv.slice(2);
+fs.appendFileSync(process.env.FAKE_GH_LOG, args.join(' ') + '\\n', 'utf8');
+
+if (args[0] !== 'issue' || args[1] !== 'view') {
+  console.error('Unsupported gh invocation: ' + args.join(' '));
+  process.exit(1);
+}
+
+if (args[2] !== process.env.FAKE_GH_EXPECT_REF) {
+  console.error('Unexpected issue ref: ' + args[2]);
+  process.exit(1);
+}
+
+const repoFlagIndex = args.indexOf('--repo');
+if (repoFlagIndex === -1 || args[repoFlagIndex + 1] !== process.env.FAKE_GH_EXPECT_REPO) {
+  console.error('Unexpected repo flag: ' + args.join(' '));
+  process.exit(1);
+}
+
+const jsonFlagIndex = args.indexOf('--json');
+if (jsonFlagIndex === -1 || args[jsonFlagIndex + 1] !== 'number,title,body,labels,url,state') {
+  console.error('Unexpected json fields: ' + args.join(' '));
+  process.exit(1);
+}
+
+process.stdout.write(fs.readFileSync(process.env.FAKE_GH_RESPONSE_FILE, 'utf8'));
+`, 'utf8');
+  await fs.chmod(ghPath, 0o755);
+
+  return {
+    env: {
+      ...process.env,
+      PATH: `${binDir}${path.delimiter}${process.env.PATH ?? ''}`,
+      FAKE_GH_RESPONSE_FILE: responsePath,
+      FAKE_GH_LOG: logPath,
+      FAKE_GH_EXPECT_REF: '57',
+      FAKE_GH_EXPECT_REPO: 'Erick52106/spec-injector',
+    },
+    logPath,
+  };
+}
+
+function runSpec(args, options = {}) {
   return new Promise((resolve, reject) => {
     const child = spawn(process.execPath, [cliPath, ...args], {
-      cwd: repoRoot,
-      env: process.env,
+      cwd: options.cwd ?? repoRoot,
+      env: options.env ?? process.env,
       stdio: ['ignore', 'pipe', 'pipe'],
     });
 
@@ -287,6 +549,13 @@ async function readFile(filePath) {
   return fs.readFile(filePath, 'utf8');
 }
 
+async function readGhLog(filePath) {
+  return (await readFile(filePath))
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean);
+}
+
 async function assertFileExists(filePath) {
   await fs.access(filePath);
 }
@@ -301,4 +570,20 @@ function escapeRegExp(value) {
 
 function countOccurrences(value, needle) {
   return value.split(needle).length - 1;
+}
+
+function normalizeFullPlanOutput(value) {
+  return value
+    .replace(/\*\*Generated:\*\* .+/g, '**Generated:** <normalized>')
+    .replace(/spec-injector-test-[^/]+/g, 'spec-injector-test-normalized')
+    .replace(/spec-injector-gh-[^/]+/g, 'spec-injector-gh-normalized');
+}
+
+function sectionBetween(value, startMarker, endMarker) {
+  const startIndex = value.indexOf(startMarker);
+  const endIndex = value.indexOf(endMarker, startIndex + startMarker.length);
+  if (startIndex === -1 || endIndex === -1) {
+    throw new Error(`Could not extract section between "${startMarker}" and "${endMarker}"`);
+  }
+  return value.slice(startIndex, endIndex);
 }
