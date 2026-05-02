@@ -621,10 +621,12 @@ test('spec plan dry-run full output uses mocked gh data and keeps task package o
     '## 1. Issue',
     '## 2. Classification',
     '## 3. Always-Read Files',
-    '## 4. Auto-Discovered Documentation',
-    '## 5. Auto-Discovered Source Files',
-    '## 6. Matched Guardrails',
-    '## 7. Missing Files',
+    '## 4. Issue-Mentioned Documentation',
+    '## 5. Issue-Mentioned Source Files',
+    '## 6. Auto-Discovered Documentation',
+    '## 7. Auto-Discovered Source Files',
+    '## 8. Matched Guardrails',
+    '## 9. Missing Files',
   ]);
   assert.match(result.stdout, /### docs\/always-read\.md/);
   assert.match(result.stdout, /### presets\/core\/ai-collaboration\.md/);
@@ -658,9 +660,11 @@ test('spec plan dry-run prompt output stays compact and omits long inline docs',
     '## 3. Guardrails',
     '## 4. Relevant File References',
     '### Always-Read Files',
-    '### Discovered Docs',
+    '### Issue-Mentioned Docs',
+    '### Issue-Mentioned Source Files',
+    '### Auto-Discovered Docs',
     '### Rule-Matched Docs',
-    '### Discovered Source Files',
+    '### Auto-Discovered Source Files',
     '## 5. Missing Files',
     '## 6. Instructions',
   ]);
@@ -694,7 +698,7 @@ test('spec plan distinguishes built-in preset references from repo always_read r
   assert.equal(promptResult.code, 0, promptResult.stderr);
   assert.equal(fullResult.code, 0, fullResult.stderr);
 
-  const promptAlwaysReadSection = sectionBetween(promptResult.stdout, '### Always-Read Files', '### Discovered Docs');
+  const promptAlwaysReadSection = sectionBetween(promptResult.stdout, '### Always-Read Files', '### Issue-Mentioned Docs');
   assertOrderedSubstrings(promptAlwaysReadSection, [
     '- `docs/always-read.md` — repo always_read',
     '- `presets/core/ai-collaboration.md` — built-in preset',
@@ -702,13 +706,95 @@ test('spec plan distinguishes built-in preset references from repo always_read r
   assert.doesNotMatch(promptAlwaysReadSection, /docs\/always-read\.md` — built-in preset/);
   assert.doesNotMatch(promptAlwaysReadSection, /presets\/core\/ai-collaboration\.md` — repo always_read/);
 
-  const fullAlwaysReadSection = sectionBetween(fullResult.stdout, '## 3. Always-Read Files', '## 4. Auto-Discovered Documentation');
+  const fullAlwaysReadSection = sectionBetween(fullResult.stdout, '## 3. Always-Read Files', '## 4. Issue-Mentioned Documentation');
   assertOrderedSubstrings(fullAlwaysReadSection, [
     '### docs/always-read.md\n\n_source: repo always_read_',
     '### presets/core/ai-collaboration.md\n\n_source: built-in preset_',
   ]);
   assert.doesNotMatch(fullAlwaysReadSection, /### docs\/always-read\.md\n\n_source: built-in preset_/);
   assert.doesNotMatch(fullAlwaysReadSection, /### presets\/core\/ai-collaboration\.md\n\n_source: repo always_read_/);
+});
+
+test('spec plan separates issue-mentioned references from auto-discovered references deterministically', async (t) => {
+  const fixture = await createExplicitPathPlanFixture(t, {
+    issueNumber: 84,
+    title: 'Separate payment refund issue references from auto discovery',
+    bodyLines: [
+      'Payment refund work needs explicit issue references and supporting auto discovery.',
+      'Relevant files:',
+      '- `docs/issue-contract.md`',
+      '- `src/issue-handler.ts`',
+      '- `docs/duplicate-ref.md`',
+    ],
+    repoFiles: {
+      'docs/issue-contract.md': '# Issue Contract\n\nISSUE_MENTIONED_DOC_SENTINEL payment refund\n',
+      'docs/payment-runbook.md': '# Payment Runbook\n\nAUTO_DISCOVERED_DOC_SENTINEL payment refund operations\n',
+      'docs/duplicate-ref.md': '# Duplicate Ref\n\nDUPLICATE_ISSUE_DOC_SENTINEL payment refund\n',
+      'src/issue-handler.ts': 'export const issueHandler = "ISSUE_MENTIONED_SOURCE_SENTINEL payment refund";\n',
+      'src/payment-worker.ts': 'export const paymentWorker = "AUTO_DISCOVERED_SOURCE_SENTINEL payment refund";\n',
+    },
+  });
+
+  const promptFirst = await runSpec(['plan', fixture.issueUrl, '--repo', fixture.repoDir, '--dry-run', '--format', 'prompt'], { env: fixture.env });
+  const promptSecond = await runSpec(['plan', fixture.issueUrl, '--repo', fixture.repoDir, '--dry-run', '--format', 'prompt'], { env: fixture.env });
+  const fullFirst = await runSpec(['plan', fixture.issueUrl, '--repo', fixture.repoDir, '--dry-run'], { env: fixture.env });
+  const fullSecond = await runSpec(['plan', fixture.issueUrl, '--repo', fixture.repoDir, '--dry-run'], { env: fixture.env });
+
+  assert.equal(promptFirst.code, 0, promptFirst.stderr);
+  assert.equal(promptSecond.code, 0, promptSecond.stderr);
+  assert.equal(fullFirst.code, 0, fullFirst.stderr);
+  assert.equal(fullSecond.code, 0, fullSecond.stderr);
+  assert.equal(normalizePlanOutput(promptSecond.stdout), normalizePlanOutput(promptFirst.stdout));
+  assert.equal(normalizePlanOutput(fullSecond.stdout), normalizePlanOutput(fullFirst.stdout));
+
+  assertOrderedSubstrings(promptFirst.stdout, [
+    '### Always-Read Files',
+    '### Issue-Mentioned Docs',
+    '### Issue-Mentioned Source Files',
+    '### Auto-Discovered Docs',
+    '### Rule-Matched Docs',
+    '### Auto-Discovered Source Files',
+  ]);
+  const promptIssueDocs = sectionBetween(promptFirst.stdout, '### Issue-Mentioned Docs', '### Issue-Mentioned Source Files');
+  const promptIssueSources = sectionBetween(promptFirst.stdout, '### Issue-Mentioned Source Files', '### Auto-Discovered Docs');
+  const promptAutoDocs = sectionBetween(promptFirst.stdout, '### Auto-Discovered Docs', '### Rule-Matched Docs');
+  const promptAutoSources = sectionBetween(promptFirst.stdout, '### Auto-Discovered Source Files', '## 5. Missing Files');
+
+  assert.match(promptIssueDocs, /`docs\/issue-contract\.md` — issue-mentioned; mentioned in issue/);
+  assert.match(promptIssueDocs, /`docs\/duplicate-ref\.md` — issue-mentioned; mentioned in issue/);
+  assert.doesNotMatch(promptIssueDocs, /auto-discovered/);
+  assert.match(promptIssueSources, /`src\/issue-handler\.ts` — issue-mentioned; mentioned in issue/);
+  assert.doesNotMatch(promptIssueSources, /auto-discovered/);
+  assert.match(promptAutoDocs, /`docs\/payment-runbook\.md` — auto-discovered/);
+  assert.doesNotMatch(promptAutoDocs, /issue-mentioned|mentioned in issue|docs\/issue-contract\.md|docs\/duplicate-ref\.md/);
+  assert.match(promptAutoSources, /`src\/payment-worker\.ts` — auto-discovered/);
+  assert.doesNotMatch(promptAutoSources, /issue-mentioned|mentioned in issue|src\/issue-handler\.ts/);
+
+  assertOrderedSubstrings(fullFirst.stdout, [
+    '## 3. Always-Read Files',
+    '## 4. Issue-Mentioned Documentation',
+    '## 5. Issue-Mentioned Source Files',
+    '## 6. Auto-Discovered Documentation',
+    '## 7. Auto-Discovered Source Files',
+    '## 8. Matched Guardrails',
+    '## 9. Missing Files',
+  ]);
+  const fullIssueDocs = sectionBetween(fullFirst.stdout, '## 4. Issue-Mentioned Documentation', '## 5. Issue-Mentioned Source Files');
+  const fullIssueSources = sectionBetween(fullFirst.stdout, '## 5. Issue-Mentioned Source Files', '## 6. Auto-Discovered Documentation');
+  const fullAutoDocs = sectionBetween(fullFirst.stdout, '## 6. Auto-Discovered Documentation', '## 7. Auto-Discovered Source Files');
+  const fullAutoSources = sectionBetween(fullFirst.stdout, '## 7. Auto-Discovered Source Files', '## 8. Matched Guardrails');
+
+  assert.match(fullIssueDocs, /### docs\/issue-contract\.md\n\n_source: issue-mentioned; mentioned in issue_/);
+  assert.match(fullIssueDocs, /### docs\/duplicate-ref\.md\n\n_source: issue-mentioned; mentioned in issue_/);
+  assert.doesNotMatch(fullIssueDocs, /auto-discovered/);
+  assert.match(fullIssueSources, /### src\/issue-handler\.ts\n\n_source: issue-mentioned; mentioned in issue_/);
+  assert.doesNotMatch(fullIssueSources, /auto-discovered/);
+  assert.match(fullAutoDocs, /### docs\/payment-runbook\.md\n\n_source: auto-discovered_/);
+  assert.doesNotMatch(fullAutoDocs, /issue-mentioned|mentioned in issue|docs\/issue-contract\.md|docs\/duplicate-ref\.md/);
+  assert.match(fullAutoSources, /### src\/payment-worker\.ts\n\n_source: auto-discovered_/);
+  assert.doesNotMatch(fullAutoSources, /issue-mentioned|mentioned in issue|src\/issue-handler\.ts/);
+  assert.equal(countOccurrences(promptFirst.stdout, 'docs/duplicate-ref.md'), 1);
+  assert.equal(countOccurrences(fullFirst.stdout, '### docs/duplicate-ref.md'), 1);
 });
 
 test('spec plan verbose output shows classifier diagnostics without changing rendered prompt', async (t) => {
@@ -768,13 +854,15 @@ test('spec plan non-dry-run writes task package file with mocked gh data', async
     '## 1. Issue',
     '## 2. Classification',
     '## 3. Always-Read Files',
-    '## 4. Auto-Discovered Documentation',
-    '## 5. Auto-Discovered Source Files',
-    '## 6. Matched Guardrails',
-    '## 7. Missing Files',
+    '## 4. Issue-Mentioned Documentation',
+    '## 5. Issue-Mentioned Source Files',
+    '## 6. Auto-Discovered Documentation',
+    '## 7. Auto-Discovered Source Files',
+    '## 8. Matched Guardrails',
+    '## 9. Missing Files',
   ]);
   assert.match(written, /### docs\/database-guardrail\.md/);
-  assert.match(written, /## 5\. Auto-Discovered Source Files/);
+  assert.match(written, /## 7\. Auto-Discovered Source Files/);
   assert.match(written, /### src\/database-auth-service\.ts/);
   assert.match(written, /ALWAYS_READ_LONG_BODY_SENTINEL/);
   assert.match(written, /DISCOVERED_DOC_LONG_BODY_SENTINEL/);
@@ -794,7 +882,7 @@ test('spec plan keeps missing always_read files non-fatal and reports found vs m
   );
 
   assert.equal(result.code, 0, result.stderr);
-  const alwaysReadSection = sectionBetween(result.stdout, '### Always-Read Files', '### Discovered Docs');
+  const alwaysReadSection = sectionBetween(result.stdout, '### Always-Read Files', '### Issue-Mentioned Docs');
   assert.match(alwaysReadSection, /- `docs\/always-read\.md`/);
   assert.doesNotMatch(alwaysReadSection, /docs\/missing-handbook\.md/);
   assert.match(result.stdout, /## 5\. Missing Files/);
@@ -992,12 +1080,12 @@ test('spec plan keeps explicit superpowers docs issue-mentioned without reintrod
 
   assert.equal(promptResult.code, 0, promptResult.stderr);
   assert.equal(fullResult.code, 0, fullResult.stderr);
-  assert.match(promptResult.stdout, /`docs\/superpowers\/plans\/old-plan\.md` — mentioned in issue/);
+  assert.match(promptResult.stdout, /`docs\/superpowers\/plans\/old-plan\.md` — issue-mentioned; mentioned in issue/);
   assert.doesNotMatch(promptResult.stdout, /`docs\/superpowers\/plans\/old-plan\.md` — [^\n]*auto-discovered/);
-  assert.match(promptResult.stdout, /`docs\/architecture\.md` — mentioned in issue/);
-  assert.match(promptResult.stdout, /`apps\/dashboard\/src\/providers\/dataProvider\.ts` — mentioned in issue/);
+  assert.match(promptResult.stdout, /`docs\/architecture\.md` — issue-mentioned; mentioned in issue/);
+  assert.match(promptResult.stdout, /`apps\/dashboard\/src\/providers\/dataProvider\.ts` — issue-mentioned; mentioned in issue/);
   assert.equal(countOccurrences(promptResult.stdout, 'docs/superpowers/plans/old-plan.md'), 1);
-  assert.match(fullResult.stdout, /### docs\/superpowers\/plans\/old-plan\.md\n\n_mentioned in issue_/);
+  assert.match(fullResult.stdout, /### docs\/superpowers\/plans\/old-plan\.md\n\n_source: issue-mentioned; mentioned in issue_/);
   assert.doesNotMatch(fullResult.stdout, /### docs\/superpowers\/plans\/old-plan\.md\n\n_[^\n]*auto-discovered_/);
   assert.match(fullResult.stdout, /SUPERPOWERS_EXPLICIT_SENTINEL/);
   assert.match(fullResult.stdout, /### docs\/architecture\.md/);
@@ -1023,7 +1111,7 @@ test('spec plan reports missing explicit issue-mentioned file paths without fail
   assert.equal(fullResult.code, 0, fullResult.stderr);
   assert.match(promptResult.stdout, /## 5\. Missing Files/);
   assert.match(promptResult.stdout, /apps\/dashboard\/src\/providers\/missingProvider\.ts/);
-  assert.match(fullResult.stdout, /## 7\. Missing Files/);
+  assert.match(fullResult.stdout, /## 9\. Missing Files/);
   assert.match(fullResult.stdout, /apps\/dashboard\/src\/providers\/missingProvider\.ts/);
 });
 
@@ -1066,7 +1154,7 @@ test('spec plan ignores URLs, traversal paths, and absolute paths', async (t) =>
   const result = await runSpec(['plan', fixture.issueUrl, '--repo', fixture.repoDir, '--dry-run'], { env: fixture.env });
 
   assert.equal(result.code, 0, result.stderr);
-  const refsSection = sectionBetween(result.stdout, '## 3. Always-Read Files', '## 8. Suggested Verification Checklist');
+  const refsSection = sectionBetween(result.stdout, '## 3. Always-Read Files', '## 10. Suggested Verification Checklist');
   assert.doesNotMatch(refsSection, /https:\/\/github\.com\/nurockplayer\/tachigo\/issues\/467/);
   assert.doesNotMatch(refsSection, /\.\.\/secrets\.env/);
   assert.doesNotMatch(refsSection, /\/absolute\/path\.ts/);

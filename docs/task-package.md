@@ -22,6 +22,8 @@ Full task package 目前包含：
 - Issue metadata and body
 - Classification / detected domains
 - Always-Read Files
+- Issue-Mentioned Documentation
+- Issue-Mentioned Source Files
 - Auto-Discovered Documentation
 - Auto-Discovered Source Files
 - Matched Guardrails
@@ -35,11 +37,19 @@ Prompt output 目前包含：
 - Detected Domains
 - Guardrails
 - Relevant File References
+  - Always-Read Files
+  - Issue-Mentioned Docs
+  - Issue-Mentioned Source Files
+  - Auto-Discovered Docs
+  - Rule-Matched Docs
+  - Auto-Discovered Source Files
 - Missing Files
 - Instructions
 - Suggested verification checklist
 
 Always-Read Files 會標示 reference source，讓 built-in preset references 與 repo `always_read` references 不會被混淆。Prompt output 以 compact path list 顯示 source label；full task package 會在每個 inline reference content 前加入 source metadata。
+
+Issue-mentioned references 會和 auto-discovered references 分開呈現。Issue-mentioned docs/source files 標示為 `issue-mentioned`，auto-discovered docs/source files 標示為 `auto-discovered`，讓 explicit issue signal 與 inferred discovery signal 不會混在同一個 section。
 
 ## Deterministic Output
 

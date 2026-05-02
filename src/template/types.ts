@@ -11,11 +11,15 @@ export interface TemplateVars {
   matched_guardrails: string;
   matched_hints: string;
   prompt_always_files: string;
+  prompt_issue_docs: string;
+  prompt_issue_sources: string;
   prompt_discovered_docs: string;
   prompt_rule_docs: string;
   prompt_discovered_sources: string;
   prompt_implementation_constraints: string;
   always_docs: string;
+  issue_docs: string;
+  issue_sources: string;
   discovered_docs: string;
   rule_docs: string;
   missing_docs: string;

@@ -26,19 +26,31 @@ export const DEFAULT_TEMPLATE = `# Task Package: {{issue_title}}
 
 ---
 
-## 4. Auto-Discovered Documentation
+## 4. Issue-Mentioned Documentation
+
+{{issue_docs}}
+
+---
+
+## 5. Issue-Mentioned Source Files
+
+{{issue_sources}}
+
+---
+
+## 6. Auto-Discovered Documentation
 
 {{discovered_docs}}
 
 ---
 
-## 5. Auto-Discovered Source Files
+## 7. Auto-Discovered Source Files
 
 {{discovered_sources}}
 
 ---
 
-## 6. Matched Guardrails
+## 8. Matched Guardrails
 
 {{matched_guardrails}}
 
@@ -48,13 +60,13 @@ export const DEFAULT_TEMPLATE = `# Task Package: {{issue_title}}
 
 ---
 
-## 7. Missing Files
+## 9. Missing Files
 
 {{missing_docs}}
 
 ---
 
-## 8. Suggested Verification Checklist
+## 10. Suggested Verification Checklist
 
 > Auto-extracted from issue body (edit as needed)
 
