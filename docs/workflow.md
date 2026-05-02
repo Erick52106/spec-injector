@@ -6,6 +6,8 @@
 
 `spec-injector` 負責產生 deterministic task package。AI implementer 與 human review process 負責實作、驗證與 merge decision。Root `AGENTS.md` 是 AI agent 進入 repo 的第一層規範入口；本文件提供詳細流程。
 
+相鄰工具與 roadmap 邊界請見 [docs/positioning.md](positioning.md)。
+
 ## Worktree-first workflow
 
 Main repo 是 control plane，應保持 clean / synced。Code/docs implementation 不直接在 main repo worktree 做。
