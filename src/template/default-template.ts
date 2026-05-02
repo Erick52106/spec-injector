@@ -54,13 +54,7 @@ export const DEFAULT_TEMPLATE = `# Task Package: {{issue_title}}
 
 ---
 
-## 8. Implementation Constraints
-
-{{matched_hints}}
-
----
-
-## 9. Suggested Verification Checklist
+## 8. Suggested Verification Checklist
 
 > Auto-extracted from issue body (edit as needed)
 
