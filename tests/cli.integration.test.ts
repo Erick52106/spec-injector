@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
-import { spawn } from 'node:child_process';
+import { spawn, execFile } from 'node:child_process';
 import { classifyDomains, classifyDomainsWithEvidence } from '../dist/classifier/domain.js';
 
 const repoRoot = process.cwd();
@@ -873,6 +873,113 @@ test('spec plan non-dry-run writes task package file with mocked gh data', async
   assert.doesNotMatch(written, /Implementation Constraints:\s*\(none\)/);
 });
 
+test('spec plan does not warn when target git repo is clean', async (t) => {
+  const fixture = await createSpecPlanFixture(t);
+  await initCleanGitRepo(fixture.repoDir);
+
+  const result = await runSpec(
+    ['plan', fixture.issueUrl, '--repo', fixture.repoDir, '--dry-run'],
+    { env: fixture.env }
+  );
+
+  assert.equal(result.code, 0, result.stderr);
+  assert.doesNotMatch(result.stderr, /target repo dirty/i);
+  assert.doesNotMatch(result.stderr, /uncommitted or untracked changes/i);
+});
+
+test('spec plan warns without failing when target git repo has modified tracked files', async (t) => {
+  const fixture = await createSpecPlanFixture(t);
+  await initCleanGitRepo(fixture.repoDir);
+  await fs.appendFile(path.join(fixture.repoDir, 'README.md'), '\nDirty tracked change.\n', 'utf8');
+
+  const result = await runSpec(
+    ['plan', fixture.issueUrl, '--repo', fixture.repoDir, '--dry-run'],
+    { env: fixture.env }
+  );
+
+  assert.equal(result.code, 0, result.stderr);
+  assertDirtyWarning(result.stderr);
+});
+
+test('spec plan warns without failing when target git repo has untracked files', async (t) => {
+  const fixture = await createSpecPlanFixture(t);
+  await initCleanGitRepo(fixture.repoDir);
+  await fs.writeFile(path.join(fixture.repoDir, 'untracked-notes.md'), 'Untracked fixture notes.\n', 'utf8');
+
+  const result = await runSpec(
+    ['plan', fixture.issueUrl, '--repo', fixture.repoDir, '--dry-run'],
+    { env: fixture.env }
+  );
+
+  assert.equal(result.code, 0, result.stderr);
+  assertDirtyWarning(result.stderr);
+});
+
+test('spec plan checks --repo target state instead of current repo state', async (t) => {
+  const fixture = await createSpecPlanFixture(t);
+  await initCleanGitRepo(fixture.repoDir);
+  await fs.appendFile(path.join(fixture.repoDir, 'README.md'), '\nTarget-only dirty change.\n', 'utf8');
+
+  const result = await runSpec(
+    ['plan', fixture.issueUrl, '--repo', fixture.repoDir, '--dry-run'],
+    { cwd: repoRoot, env: fixture.env }
+  );
+
+  assert.equal(result.code, 0, result.stderr);
+  assertDirtyWarning(result.stderr);
+});
+
+test('spec plan silently skips dirty warning when target is not a git repo', async (t) => {
+  const fixture = await createSpecPlanFixture(t);
+
+  const result = await runSpec(
+    ['plan', fixture.issueUrl, '--repo', fixture.repoDir, '--dry-run'],
+    { env: fixture.env }
+  );
+
+  assert.equal(result.code, 0, result.stderr);
+  assert.doesNotMatch(result.stderr, /target repo dirty/i);
+  assert.doesNotMatch(result.stderr, /unable to determine target repo worktree state/i);
+});
+
+test('spec plan warns without failing when git worktree state check fails unexpectedly', async (t) => {
+  const fixture = await createSpecPlanFixture(t);
+  const env = await createFailingGitEnv(t, fixture.env);
+
+  const result = await runSpec(
+    ['plan', fixture.issueUrl, '--repo', fixture.repoDir, '--dry-run'],
+    { env }
+  );
+
+  assert.equal(result.code, 0, result.stderr);
+  assert.match(result.stderr, /unable to determine target repo worktree state/i);
+  assertNoCleanupCommands(result.stderr);
+});
+
+test('spec plan dirty warning stays on stderr and out of rendered full and prompt output', async (t) => {
+  const fixture = await createSpecPlanFixture(t);
+  await initCleanGitRepo(fixture.repoDir);
+  await fs.writeFile(path.join(fixture.repoDir, 'untracked-dirty.md'), 'dirty\n', 'utf8');
+
+  const fullResult = await runSpec(
+    ['plan', fixture.issueUrl, '--repo', fixture.repoDir, '--dry-run'],
+    { env: fixture.env }
+  );
+  const promptResult = await runSpec(
+    ['plan', fixture.issueUrl, '--repo', fixture.repoDir, '--dry-run', '--format', 'prompt'],
+    { env: fixture.env }
+  );
+
+  assert.equal(fullResult.code, 0, fullResult.stderr);
+  assert.equal(promptResult.code, 0, promptResult.stderr);
+  assertDirtyWarning(fullResult.stderr);
+  assertDirtyWarning(promptResult.stderr);
+  assert.doesNotMatch(fullResult.stdout, /target repo dirty/i);
+  assert.doesNotMatch(promptResult.stdout, /target repo dirty/i);
+  assert.doesNotMatch(fullResult.stdout, /current worktree/i);
+  assert.doesNotMatch(promptResult.stdout, /current worktree/i);
+});
+
 test('spec plan keeps missing always_read files non-fatal and reports found vs missing references', async (t) => {
   const fixture = await createSpecPlanFixture(t);
 
@@ -1380,6 +1487,47 @@ process.stdout.write(fs.readFileSync(process.env.FAKE_GH_RESPONSE_FILE, 'utf8'))
   };
 }
 
+async function createFailingGitEnv(t, baseEnv) {
+  const binDir = await fs.mkdtemp(path.join(os.tmpdir(), 'spec-injector-git-'));
+  t.after(async () => {
+    await fs.rm(binDir, { recursive: true, force: true });
+  });
+
+  const gitPath = path.join(binDir, 'git');
+  await fs.writeFile(gitPath, [
+    '#!/bin/sh',
+    'echo "simulated git failure" >&2',
+    'exit 2',
+    '',
+  ].join('\n'), 'utf8');
+  await fs.chmod(gitPath, 0o755);
+
+  return {
+    ...baseEnv,
+    PATH: `${binDir}${path.delimiter}${baseEnv.PATH ?? process.env.PATH ?? ''}`,
+  };
+}
+
+async function initCleanGitRepo(repoDir) {
+  await runCommand('git', ['init'], repoDir);
+  await runCommand('git', ['config', 'user.email', 'spec-injector@example.test'], repoDir);
+  await runCommand('git', ['config', 'user.name', 'Spec Injector Test'], repoDir);
+  await runCommand('git', ['add', '.'], repoDir);
+  await runCommand('git', ['commit', '-m', 'Initial fixture commit'], repoDir);
+}
+
+function runCommand(command, args, cwd) {
+  return new Promise((resolve, reject) => {
+    execFile(command, args, { cwd }, (error, stdout, stderr) => {
+      if (error) {
+        reject(new Error(`${command} ${args.join(' ')} failed\nstdout:\n${stdout}\nstderr:\n${stderr}`));
+        return;
+      }
+      resolve({ stdout, stderr });
+    });
+  });
+}
+
 function runSpec(args, options = {}) {
   return new Promise((resolve, reject) => {
     const child = spawn(process.execPath, [cliPath, ...args], {
@@ -1454,6 +1602,20 @@ async function assertFileMissing(filePath) {
 function assertNoRawStackTrace(result) {
   const combined = `${result.stdout}\n${result.stderr}`;
   assert.doesNotMatch(combined, /\n\s*at .+\(.+:\d+:\d+\)|\n\s*at .+:\d+:\d+/);
+}
+
+function assertDirtyWarning(stderr) {
+  assert.match(stderr, /target repo dirty/i);
+  assert.match(stderr, /references may reflect the current worktree/i);
+  assert.match(stderr, /human/i);
+  assert.match(stderr, /continue without modifying files/i);
+  assertNoCleanupCommands(stderr);
+}
+
+function assertNoCleanupCommands(value) {
+  assert.doesNotMatch(value, /\bstash\b/i);
+  assert.doesNotMatch(value, /\bclean\b/i);
+  assert.doesNotMatch(value, /\breset\b/i);
 }
 
 function escapeRegExp(value) {
