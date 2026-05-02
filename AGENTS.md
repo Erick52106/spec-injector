@@ -86,6 +86,7 @@ Source issue 必須有 implementation evidence comment。PR body 回填後必須
 ## Testing / validation
 
 - 依 issue 執行最小但足夠的 validation。
+- 不同 change type 的 validation matrix 與 quality gates 見 `docs/validation.md`。
 - 常見 validation：`pnpm build`、`pnpm test`、`git diff --check`。
 - Tests / feature implementation 不應依賴真實 GitHub API 或 network。
 - 正常 GitHub workflow 操作，例如 `gh pr view`、`gh pr checks`、push branch、create PR，不屬於 feature tests 打真 API。
