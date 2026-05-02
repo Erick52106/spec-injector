@@ -235,6 +235,7 @@ Important fields:
 - Agent instructions: [AGENTS.md](AGENTS.md)
 - Architecture: [docs/architecture.md](docs/architecture.md)
 - Core concepts: [docs/concepts.md](docs/concepts.md)
+- Positioning and adjacent workflows: [docs/positioning.md](docs/positioning.md)
 - Classifier: [docs/classifier.md](docs/classifier.md)
 - References: [docs/references.md](docs/references.md)
 - Guardrails: [docs/guardrails.md](docs/guardrails.md)
