@@ -155,6 +155,12 @@ Edit `.spec-injector/config.json` in your target repo:
 
 ---
 
+## Conventions
+
+For issue labels and issue/PR title conventions, see [docs/conventions.md](docs/conventions.md).
+
+---
+
 ## Domain Classification
 
 Domain classification is entirely deterministic and keyword-based. No LLMs or external APIs are used. Keywords found in the issue title (weight 3), labels (weight 2), and body (weight 1) are scored, and the top 5 domains are returned.
