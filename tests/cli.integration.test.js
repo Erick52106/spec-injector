@@ -476,6 +476,8 @@ test('spec plan dry-run full output uses mocked gh data and keeps task package o
   assert.match(result.stdout, /### src\/auth-handler\.ts/);
   assert.match(result.stdout, /\*\*auth-review\*\*: Require auth reviewer before changing login or permission flows\./);
   assert.match(result.stdout, /- `docs\/missing-handbook\.md` — not found/);
+  assert.doesNotMatch(result.stdout, /## 8\. Implementation Constraints/);
+  assert.doesNotMatch(result.stdout, /Implementation Constraints:\s*\(none\)/);
   assert.doesNotMatch(result.stdout, /issue-57-task-package\.md/);
   await assertFileMissing(fixture.taskPackagePath);
   assert.deepEqual(await readGhLog(fixture.ghLogPath), [
@@ -553,6 +555,8 @@ test('spec plan non-dry-run writes task package file with mocked gh data', async
   assert.match(written, /SOURCE_SNIPPET_BODY_SENTINEL/);
   assert.match(written, /Review schema and migration blast radius before changing auth data persistence\./);
   assert.match(written, /- `docs\/missing-handbook\.md` — not found/);
+  assert.doesNotMatch(written, /## 8\. Implementation Constraints/);
+  assert.doesNotMatch(written, /Implementation Constraints:\s*\(none\)/);
 });
 
 test('spec plan keeps missing always_read files non-fatal and reports found vs missing references', async (t) => {
