@@ -96,7 +96,10 @@ export async function plan(
   const combinedSourceReferences = [...explicitSources, ...filteredDiscoveredSources];
 
   // 7. Summarise
-  console.log(`✓ Docs — always: ${filteredAlwaysDocs.filter(d => d.found).length}, discovered: ${filteredDiscoveredDocs.length}, explicit: ${explicitDocs.length + filteredDiscoveryDocs.filter(d => d.found).length}, missing: ${missingDocs.length}, sources: ${combinedSourceReferences.length}`);
+  const foundAlwaysDocs = filteredAlwaysDocs.filter((d) => d.found);
+  const repoAlwaysReadCount = foundAlwaysDocs.filter((d) => d.kind === 'always').length;
+  const builtInPresetCount = foundAlwaysDocs.filter((d) => d.kind === 'built-in-preset').length;
+  console.log(`✓ Docs — repo always_read: ${repoAlwaysReadCount}, built-in presets: ${builtInPresetCount}, discovered: ${filteredDiscoveredDocs.length}, explicit: ${explicitDocs.length + filteredDiscoveryDocs.filter(d => d.found).length}, missing: ${missingDocs.length}, sources: ${combinedSourceReferences.length}`);
   if (missingDocs.length > 0) {
     for (const d of missingDocs) console.warn(`  ⚠  Not found: ${d.filePath}`);
   }
@@ -131,15 +134,15 @@ function renderDocList(docs: DocSection[]): string {
   if (docs.length === 0) return '(none)';
   return docs
     .map((d) => {
-      const reasonLine = renderReasonLine(d);
-      return `### ${d.filePath}\n\n${reasonLine}${d.content.trim()}`;
+      const metadataLine = renderMetadataLine(d);
+      return `### ${d.filePath}\n\n${metadataLine}${d.content.trim()}`;
     })
     .join('\n\n---\n\n');
 }
 
 function renderPathList(docs: DocSection[]): string {
   if (docs.length === 0) return '(none)';
-  return docs.map((d) => `- \`${d.filePath}\`${renderReasonSuffix(d)}`).join('\n');
+  return docs.map((d) => `- \`${d.filePath}\`${renderMetadataSuffix(d)}`).join('\n');
 }
 
 function renderImplementationConstraints(matchedGuardrails: Guardrail[]): string {
@@ -186,7 +189,7 @@ function buildTemplateVars(
     .join('\n') || '(none found)';
 
   const missingList = missingDocs.length > 0
-    ? missingDocs.map((d) => `- \`${d.filePath}\` — not found${renderReasonSuffix(d, true)}`).join('\n')
+    ? missingDocs.map((d) => `- \`${d.filePath}\` — not found${renderMetadataSuffix(d, true)}`).join('\n')
     : '(none)';
 
   return {
@@ -259,6 +262,8 @@ function reasonForKind(kind: DocSection['kind']): string | null {
   switch (kind) {
     case 'always':
       return 'always_read';
+    case 'built-in-preset':
+      return 'built-in preset';
     case 'rule':
       return 'rule-matched';
     case 'discovered':
@@ -270,13 +275,39 @@ function reasonForKind(kind: DocSection['kind']): string | null {
   }
 }
 
-function renderReasonLine(doc: DocSection): string {
-  if (!doc.reasons || doc.reasons.length === 0) return '';
-  return `_${doc.reasons.join('; ')}_\n\n`;
+function renderMetadataLine(doc: DocSection): string {
+  const metadata = renderDocMetadata(doc, { includeSourcePrefix: true });
+  if (metadata.length === 0) return '';
+  return `_${metadata.join('; ')}_\n\n`;
 }
 
-function renderReasonSuffix(doc: DocSection, parenthetical: boolean = false): string {
-  if (!doc.reasons || doc.reasons.length === 0) return '';
-  const rendered = doc.reasons.join('; ');
+function renderMetadataSuffix(doc: DocSection, parenthetical: boolean = false): string {
+  const metadata = renderDocMetadata(doc);
+  if (metadata.length === 0) return '';
+  const rendered = metadata.join('; ');
   return parenthetical ? ` (${rendered})` : ` — ${rendered}`;
+}
+
+function renderDocMetadata(
+  doc: DocSection,
+  opts: { includeSourcePrefix?: boolean } = {}
+): string[] {
+  const metadata: string[] = [];
+  const sourceLabel = referenceSourceLabel(doc);
+  if (sourceLabel) {
+    metadata.push(opts.includeSourcePrefix ? `source: ${sourceLabel}` : sourceLabel);
+  }
+  metadata.push(...(doc.reasons ?? []));
+  return metadata;
+}
+
+function referenceSourceLabel(doc: DocSection): string | null {
+  switch (doc.kind) {
+    case 'always':
+      return 'repo always_read';
+    case 'built-in-preset':
+      return 'built-in preset';
+    default:
+      return null;
+  }
 }

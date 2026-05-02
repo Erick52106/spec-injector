@@ -45,7 +45,7 @@ export async function loadCorePreset(): Promise<DocSection> {
     filePath: 'presets/core/ai-collaboration.md',
     content,
     found: true,
-    kind: 'always',
+    kind: 'built-in-preset',
   };
 }
 

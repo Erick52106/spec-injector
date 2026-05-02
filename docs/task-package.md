@@ -39,6 +39,8 @@ Prompt output 目前包含：
 - Instructions
 - Suggested verification checklist
 
+Always-Read Files 會標示 reference source，讓 built-in preset references 與 repo `always_read` references 不會被混淆。Prompt output 以 compact path list 顯示 source label；full task package 會在每個 inline reference content 前加入 source metadata。
+
 ## Deterministic Output
 
 Task package 應是 deterministic output。給定相同 issue、target repo files 與 `.spec-injector/config.json`，pipeline 應產生穩定的 context selection 與 Markdown structure。

@@ -1,5 +1,6 @@
 export type DocSourceKind =
   | 'always'
+  | 'built-in-preset'
   | 'discovered'
   | 'rule'
   | 'missing'

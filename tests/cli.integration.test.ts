@@ -679,6 +679,38 @@ test('spec plan dry-run prompt output stays compact and omits long inline docs',
   await assertFileMissing(fixture.taskPackagePath);
 });
 
+test('spec plan distinguishes built-in preset references from repo always_read references', async (t) => {
+  const fixture = await createSpecPlanFixture(t);
+
+  const promptResult = await runSpec(
+    ['plan', fixture.issueUrl, '--repo', fixture.repoDir, '--dry-run', '--format', 'prompt'],
+    { env: fixture.env }
+  );
+  const fullResult = await runSpec(
+    ['plan', fixture.issueUrl, '--repo', fixture.repoDir, '--dry-run'],
+    { env: fixture.env }
+  );
+
+  assert.equal(promptResult.code, 0, promptResult.stderr);
+  assert.equal(fullResult.code, 0, fullResult.stderr);
+
+  const promptAlwaysReadSection = sectionBetween(promptResult.stdout, '### Always-Read Files', '### Discovered Docs');
+  assertOrderedSubstrings(promptAlwaysReadSection, [
+    '- `docs/always-read.md` — repo always_read',
+    '- `presets/core/ai-collaboration.md` — built-in preset',
+  ]);
+  assert.doesNotMatch(promptAlwaysReadSection, /docs\/always-read\.md` — built-in preset/);
+  assert.doesNotMatch(promptAlwaysReadSection, /presets\/core\/ai-collaboration\.md` — repo always_read/);
+
+  const fullAlwaysReadSection = sectionBetween(fullResult.stdout, '## 3. Always-Read Files', '## 4. Auto-Discovered Documentation');
+  assertOrderedSubstrings(fullAlwaysReadSection, [
+    '### docs/always-read.md\n\n_source: repo always_read_',
+    '### presets/core/ai-collaboration.md\n\n_source: built-in preset_',
+  ]);
+  assert.doesNotMatch(fullAlwaysReadSection, /### docs\/always-read\.md\n\n_source: built-in preset_/);
+  assert.doesNotMatch(fullAlwaysReadSection, /### presets\/core\/ai-collaboration\.md\n\n_source: repo always_read_/);
+});
+
 test('spec plan verbose output shows classifier diagnostics without changing rendered prompt', async (t) => {
   const fixture = await createExplicitPathPlanFixture(t, {
     issueNumber: 91,
