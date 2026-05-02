@@ -1,7 +1,7 @@
 import path from 'path';
 import fs from 'fs';
 
-type ConfigAction = 'list' | 'add' | 'remove';
+type ConfigAction = 'list' | 'add' | 'remove' | 'suggest';
 
 interface ConfigCommandOptions {
   repo?: string;
@@ -14,6 +14,14 @@ export async function config(
   opts: ConfigCommandOptions
 ): Promise<void> {
   const repoPath = path.resolve(opts.repo ?? process.cwd());
+
+  const normalizedAction = parseAction(action);
+
+  if (normalizedAction === 'suggest') {
+    await suggestConfig(repoPath, section, filePath);
+    return;
+  }
+
   const configPath = path.join(repoPath, '.spec-injector', 'config.json');
 
   if (!fs.existsSync(configPath)) {
@@ -21,8 +29,6 @@ export async function config(
     console.error(`  Run "spec init --repo ${repoPath}" first.`);
     process.exit(1);
   }
-
-  const normalizedAction = parseAction(action);
 
   if (normalizedAction === 'list') {
     validateListArgs(section, filePath);
@@ -49,11 +55,30 @@ export async function config(
 }
 
 function parseAction(action: string): ConfigAction {
-  if (action === 'list' || action === 'add' || action === 'remove') {
+  if (action === 'list' || action === 'add' || action === 'remove' || action === 'suggest') {
     return action;
   }
-  console.error('✗ Unsupported config action. Use list, add, or remove.');
+  console.error('✗ Unsupported config action. Use list, add, remove, or suggest.');
   process.exit(1);
+}
+
+async function suggestConfig(
+  repoPath: string,
+  section: string | undefined,
+  filePath: string | undefined
+): Promise<void> {
+  if (section !== 'always-read') {
+    console.error('✗ Unsupported suggest section. Usage: spec config suggest always-read --repo <repo>');
+    process.exit(1);
+  }
+
+  if (filePath !== undefined) {
+    console.error('✗ The suggest always-read command does not accept a path. Usage: spec config suggest always-read --repo <repo>');
+    process.exit(1);
+  }
+
+  const { suggestAlwaysRead } = await import('./config-suggest.js');
+  suggestAlwaysRead(repoPath);
 }
 
 function validateListArgs(section: string | undefined, filePath: string | undefined): void {
