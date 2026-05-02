@@ -10,7 +10,7 @@ const DOMAIN_KEYWORDS: Record<string, string[]> = {
   'cloud-storage': ['s3', 'gcs', 'storage', 'bucket', 'upload', 'download', 'blob', 'cdn', 'file upload', 'asset', 'object storage'],
   blockchain: ['blockchain', 'chain', 'block', 'hash', 'ledger', 'consensus', 'miner', 'ethereum', 'solana', 'web3', 'nft', 'defi'],
   'smart-contract': ['smart contract', 'contract', 'solidity', 'abi', 'evm', 'vyper', 'bytecode', 'deploy contract'],
-  wallet: ['wallet', 'private key', 'public key', 'address', 'sign', 'transaction', 'send', 'receive', 'balance', 'seed phrase', 'mnemonic'],
+  wallet: ['wallet', 'connect wallet', 'wallet address', 'private key', 'public key', 'address', 'signature', 'signing', 'transaction hash', 'tx hash', 'token transfer', 'on-chain', 'send', 'receive', 'balance', 'seed phrase', 'mnemonic'],
   i18n: ['i18n', 'l10n', 'locale', 'translation', 'lang', 'language', 'localize', 'multilang'],
   testing: ['test', 'spec', 'unit', 'integration', 'e2e', 'mock', 'stub', 'coverage', 'jest', 'vitest', 'playwright', 'cypress', 'assert', 'fixture'],
   docs: ['docs', 'documentation', 'readme', 'guide', 'changelog', 'wiki', 'jsdoc', 'typedoc'],

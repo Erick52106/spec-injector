@@ -4,9 +4,64 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import { spawn } from 'node:child_process';
+import { classifyDomains } from '../dist/classifier/domain.js';
 
 const repoRoot = process.cwd();
 const cliPath = path.join(repoRoot, 'bin', 'spec.js');
+
+test('classifier does not treat dashboard transactions endpoint wording as wallet evidence', () => {
+  const domains = classifyDomains({
+    number: 77,
+    title: 'Dashboard frontend UI refine transactions/settings endpoint contract',
+    body: [
+      'Align the transactions endpoint and settings endpoint API contract.',
+      'Update the backend server route handler and controller for dashboard records.',
+      'Keep the frontend dashboard page and data provider response shape in sync.',
+    ].join('\n'),
+    labels: ['frontend', 'api', 'backend'],
+    url: 'https://github.com/Erick52106/spec-injector/issues/77',
+    state: 'open',
+  });
+
+  assert.ok(domains.includes('frontend'), `Expected frontend in ${domains.join(', ')}`);
+  assert.ok(domains.includes('api'), `Expected api in ${domains.join(', ')}`);
+  assert.ok(domains.includes('backend'), `Expected backend in ${domains.join(', ')}`);
+  assert.ok(!domains.includes('wallet'), `Expected wallet to be absent from ${domains.join(', ')}`);
+});
+
+test('classifier keeps wallet detection for explicit wallet and on-chain transaction evidence', () => {
+  const domains = classifyDomains({
+    number: 77,
+    title: 'Connect wallet token transfer transaction hash tracking',
+    body: [
+      'Record the connected wallet address after users connect wallet.',
+      'Show token transfer status, tx hash, transaction hash, and on-chain confirmation.',
+    ].join('\n'),
+    labels: ['wallet'],
+    url: 'https://github.com/Erick52106/spec-injector/issues/77',
+    state: 'open',
+  });
+
+  assert.ok(domains.includes('wallet'), `Expected wallet in ${domains.join(', ')}`);
+});
+
+test('classifier does not overfit product transaction records to wallet', () => {
+  const domains = classifyDomains({
+    number: 77,
+    title: 'Admin dashboard transaction history endpoint',
+    body: [
+      'Expose billing transaction records API for product support workflows.',
+      'The backend handler should read app records from database rows.',
+    ].join('\n'),
+    labels: ['api', 'backend'],
+    url: 'https://github.com/Erick52106/spec-injector/issues/77',
+    state: 'open',
+  });
+
+  assert.ok(domains.includes('api'), `Expected api in ${domains.join(', ')}`);
+  assert.ok(domains.includes('backend'), `Expected backend in ${domains.join(', ')}`);
+  assert.ok(!domains.includes('wallet'), `Expected wallet to be absent from ${domains.join(', ')}`);
+});
 
 test('spec --help lists deterministic CLI purpose and available commands', async () => {
   const result = await runSpec(['--help']);
