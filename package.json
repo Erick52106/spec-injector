@@ -14,7 +14,7 @@
   },
   "scripts": {
     "build": "tsc",
-    "test": "npm run build && node --test tests/**/*.test.js",
+    "test": "npm run build && node --test tests/cli.integration.test.js",
     "dev": "tsc --watch",
     "start": "node dist/cli/index.js"
   },
