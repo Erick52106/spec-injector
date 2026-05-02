@@ -92,7 +92,6 @@ export async function plan(
     [...filteredAlwaysDocs, ...filteredDiscoveryDocs].filter((d) => !d.found),
     explicitReferences.missing
   );
-  const combinedDocReferences = [...explicitDocs, ...filteredDiscoveredDocs];
   const combinedSourceReferences = [...explicitSources, ...filteredDiscoveredSources];
 
   // 7. Summarise
@@ -110,11 +109,13 @@ export async function plan(
     domains,
     matchedGuardrails,
     filteredAlwaysDocs,
-    combinedDocReferences,
+    explicitDocs,
+    filteredDiscoveredDocs,
     filteredDiscoveryDocs,
     missingDocs,
     repoPath,
-    combinedSourceReferences
+    explicitSources,
+    filteredDiscoveredSources
   );
   const template = format === 'prompt' ? PROMPT_TEMPLATE : DEFAULT_TEMPLATE;
   const rendered = renderTemplate(template, vars);
@@ -177,10 +178,12 @@ function buildTemplateVars(
   domains: string[],
   matchedGuardrails: Guardrail[],
   alwaysDocs: DocSection[],
+  issueDocs: DocSection[],
   discoveredDocs: DocSection[],
   discoveryDocs: DocSection[],
   missingDocs: DocSection[],
   repoPath: string,
+  issueSources: DocSection[],
   discoveredSources: DocSection[]
 ): TemplateVars {
   const checklist = issue.body
@@ -209,11 +212,15 @@ function buildTemplateVars(
       : '(none matched)',
     matched_hints: '(none)',
     prompt_always_files: renderPathList(alwaysDocs.filter((d) => d.found)),
+    prompt_issue_docs: renderPathList(issueDocs),
+    prompt_issue_sources: renderPathList(issueSources),
     prompt_discovered_docs: renderPathList(discoveredDocs),
     prompt_rule_docs: renderPathList(discoveryDocs.filter((d) => d.found)),
     prompt_discovered_sources: renderPathList(discoveredSources),
     prompt_implementation_constraints: renderImplementationConstraints(matchedGuardrails),
     always_docs: renderDocList(alwaysDocs.filter((d) => d.found)),
+    issue_docs: renderDocList(issueDocs),
+    issue_sources: renderDocList(issueSources),
     discovered_docs: renderDocList(discoveredDocs),
     rule_docs: renderDocList(discoveryDocs.filter((d) => d.found)),
     missing_docs: missingList,
@@ -267,9 +274,8 @@ function reasonForKind(kind: DocSection['kind']): string | null {
     case 'rule':
       return 'rule-matched';
     case 'discovered':
-      return 'auto-discovered';
     case 'source':
-      return 'auto-discovered';
+      return null;
     default:
       return null;
   }
@@ -307,6 +313,12 @@ function referenceSourceLabel(doc: DocSection): string | null {
       return 'repo always_read';
     case 'built-in-preset':
       return 'built-in preset';
+    case 'issue-doc':
+    case 'issue-source':
+      return 'issue-mentioned';
+    case 'discovered':
+    case 'source':
+      return 'auto-discovered';
     default:
       return null;
   }

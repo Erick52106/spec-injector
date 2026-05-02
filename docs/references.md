@@ -15,7 +15,7 @@ Reference collection 是 deterministic context selection，不是 general-purpos
 3. issue-mentioned references
 4. auto-discovered references
 
-部分 taxonomy 已在目前 CLI 中實作；與 future classifier evidence visibility、custom domains、agent output 相關的延伸能力仍是 planned / future-facing。
+這四類會在目前 `spec plan` output 中以 source label 或獨立 section 呈現；與 future classifier evidence visibility、custom domains、agent output 相關的延伸能力仍是 planned / future-facing。
 
 ## Built-in Preset References
 
@@ -58,7 +58,7 @@ Issue-mentioned references 是 issue body 中明確提到的 repo-relative file 
 - inline code path：``docs/architecture.md``
 - bullet path：`- src/cli/plan.ts`
 
-Issue-mentioned references 會被標示 reason，例如 `mentioned in issue`。若檔案不存在，會進入 Missing Files。
+Issue-mentioned references 會在 prompt output 與 full task package 中獨立呈現，並標示 source `issue-mentioned` 與 reason `mentioned in issue`。若檔案不存在，會進入 Missing Files。
 
 這類 references 通常是 strongest issue-local signal，但仍應遵守 scope guard：被提到不代表一定要修改。
 
@@ -75,6 +75,8 @@ Auto-discovered references 由 deterministic scan / scoring 產生。
 
 Auto-discovered references 是 context candidates。它們可能有 false positives / false negatives，因此不應被視為完整 dependency graph。
 
+在 `spec plan` output 中，auto-discovered docs/source references 會標示為 `auto-discovered`，並與 issue-mentioned references 分開，避免 inferred context 被誤讀成 issue author 明確指定的檔案。
+
 ## Configured Discovery Docs
 
 `.spec-injector/config.json` 的 `discovery.docs` 可列出固定納入的 documentation paths。
@@ -86,8 +88,8 @@ Auto-discovered references 是 context candidates。它們可能有 false positi
 實務上，AI implementer 應以以下優先順序理解 references：
 
 1. Issue body 與 human instructions
-2. Built-in preset 與 repo `always_read`
-3. Issue-mentioned references
+2. Issue-mentioned references
+3. Built-in preset 與 repo `always_read`
 4. Configured discovery docs
 5. Auto-discovered docs / source candidates
 

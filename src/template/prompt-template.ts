@@ -21,7 +21,15 @@ export const PROMPT_TEMPLATE = `# Implementation Plan Prompt: {{issue_title}}
 
 {{prompt_always_files}}
 
-### Discovered Docs
+### Issue-Mentioned Docs
+
+{{prompt_issue_docs}}
+
+### Issue-Mentioned Source Files
+
+{{prompt_issue_sources}}
+
+### Auto-Discovered Docs
 
 {{prompt_discovered_docs}}
 
@@ -29,7 +37,7 @@ export const PROMPT_TEMPLATE = `# Implementation Plan Prompt: {{issue_title}}
 
 {{prompt_rule_docs}}
 
-### Discovered Source Files
+### Auto-Discovered Source Files
 
 {{prompt_discovered_sources}}
 
