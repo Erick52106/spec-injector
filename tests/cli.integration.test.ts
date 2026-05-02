@@ -1480,6 +1480,92 @@ test('spec plan reports missing explicit issue-mentioned file paths without fail
   assert.match(fullResult.stdout, /apps\/dashboard\/src\/providers\/missingProvider\.ts/);
 });
 
+test('spec plan distinguishes missing files from existing paths that cannot be read', async (t) => {
+  const fixture = await createExplicitPathPlanFixture(t, {
+    issueNumber: 74,
+    title: 'Distinguish unreadable and missing references',
+    bodyLines: [
+      'Payment references to inspect:',
+      '- `docs/missing-issue.md`',
+      '- `docs/unreadable-issue.md`',
+      '- `src/readable-reference.ts`',
+    ],
+    config: {
+      always_read: [
+        'docs/readable-always.md',
+        'docs/missing-always.md',
+        'docs/unreadable-always.md',
+      ],
+      discovery: {
+        docs: [],
+        source: ['src'],
+        max_docs: 5,
+        max_source_files: 5,
+      },
+    },
+    repoFiles: {
+      'docs/readable-always.md': '# Readable Always\n\nREADABLE_ALWAYS_SENTINEL payment\n',
+      'docs/unreadable-always.md/child.md': '# Directory child\n',
+      'docs/unreadable-issue.md/child.md': '# Directory child\n',
+      'docs/payment-runbook.md': '# Payment Runbook\n\nAUTO_DISCOVERED_PAYMENT_SENTINEL payment\n',
+      'src/readable-reference.ts': 'export const readableReference = "ISSUE_READABLE_SOURCE_SENTINEL payment";\n',
+      'src/payment-worker.ts': 'export const paymentWorker = "AUTO_DISCOVERED_SOURCE_SENTINEL payment";\n',
+    },
+  });
+
+  const promptFirst = await runSpec(
+    ['plan', fixture.issueUrl, '--repo', fixture.repoDir, '--dry-run', '--format', 'prompt'],
+    { env: fixture.env }
+  );
+  const promptSecond = await runSpec(
+    ['plan', fixture.issueUrl, '--repo', fixture.repoDir, '--dry-run', '--format', 'prompt'],
+    { env: fixture.env }
+  );
+  const fullResult = await runSpec(
+    ['plan', fixture.issueUrl, '--repo', fixture.repoDir, '--dry-run'],
+    { env: fixture.env }
+  );
+
+  assert.equal(promptFirst.code, 0, promptFirst.stderr);
+  assert.equal(promptSecond.code, 0, promptSecond.stderr);
+  assert.equal(fullResult.code, 0, fullResult.stderr);
+  assert.equal(normalizePlanOutput(promptSecond.stdout), normalizePlanOutput(promptFirst.stdout));
+  assertNoRawStackTrace(promptFirst);
+  assertNoRawStackTrace(fullResult);
+
+  const promptMissing = sectionBetween(promptFirst.stdout, '## 5. Missing Files', '## 6. Instructions');
+  assert.match(promptMissing, /`docs\/missing-issue\.md` — not found \(issue-mentioned; mentioned in issue\)/);
+  assert.match(promptMissing, /`docs\/missing-always\.md` — not found \(repo always_read; always_read\)/);
+  assert.match(promptMissing, /`docs\/unreadable-issue\.md` — read failed \(EISDIR; issue-mentioned; mentioned in issue\)/);
+  assert.match(promptMissing, /`docs\/unreadable-always\.md` — read failed \(EISDIR; repo always_read; always_read\)/);
+  assert.doesNotMatch(promptMissing, /docs\/unreadable-issue\.md` — not found/);
+  assert.doesNotMatch(promptMissing, /docs\/unreadable-always\.md` — not found/);
+  assert.doesNotMatch(promptMissing, /docs\/missing-issue\.md` — read failed/);
+
+  const promptIssueSources = sectionBetween(promptFirst.stdout, '### Issue-Mentioned Source Files', '### Auto-Discovered Docs');
+  assert.match(promptIssueSources, /`src\/readable-reference\.ts` — issue-mentioned; mentioned in issue/);
+  assert.doesNotMatch(promptIssueSources, /read failed|not found/);
+
+  const promptAutoDocs = sectionBetween(promptFirst.stdout, '### Auto-Discovered Docs', '### Rule-Matched Docs');
+  const promptAutoSources = sectionBetween(promptFirst.stdout, '### Auto-Discovered Source Files', '## 5. Missing Files');
+  assert.match(promptAutoDocs, /`docs\/payment-runbook\.md` — auto-discovered/);
+  assert.match(promptAutoSources, /`src\/payment-worker\.ts` — auto-discovered/);
+  assert.doesNotMatch(promptAutoDocs, /issue-mentioned|mentioned in issue/);
+  assert.doesNotMatch(promptAutoSources, /issue-mentioned|mentioned in issue/);
+
+  assert.match(promptFirst.stderr, /Not found: docs\/missing-issue\.md/);
+  assert.match(promptFirst.stderr, /Not found: docs\/missing-always\.md/);
+  assert.match(promptFirst.stderr, /Read failed: docs\/unreadable-issue\.md \(EISDIR\)/);
+  assert.match(promptFirst.stderr, /Read failed: docs\/unreadable-always\.md \(EISDIR\)/);
+  assert.doesNotMatch(promptFirst.stderr, /Not found: docs\/unreadable-issue\.md/);
+  assert.doesNotMatch(promptFirst.stderr, /Not found: docs\/unreadable-always\.md/);
+
+  assert.match(fullResult.stdout, /### src\/readable-reference\.ts\n\n_source: issue-mentioned; mentioned in issue_/);
+  assert.match(fullResult.stdout, /ISSUE_READABLE_SOURCE_SENTINEL/);
+  assert.match(fullResult.stdout, /### docs\/payment-runbook\.md\n\n_source: auto-discovered_/);
+  assert.match(fullResult.stdout, /### src\/payment-worker\.ts\n\n_source: auto-discovered_/);
+});
+
 test('spec plan ignores API and route paths when extracting file references', async (t) => {
   const fixture = await createExplicitPathPlanFixture(t, {
     issueNumber: 83,

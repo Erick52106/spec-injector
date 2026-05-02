@@ -91,18 +91,23 @@ export async function plan(
   const filteredDiscoveredDocs = discoveredDocs.filter((d) => !explicitDocPaths.has(d.filePath));
   const filteredDiscoveredSources = discoveredSources.filter((d) => !explicitSourcePaths.has(d.filePath));
   const missingDocs = mergeMissingSections(
-    [...filteredAlwaysDocs, ...filteredDiscoveryDocs].filter((d) => !d.found),
+    [
+      ...filteredAlwaysDocs,
+      ...filteredDiscoveryDocs,
+      ...filteredDiscoveredDocs,
+      ...filteredDiscoveredSources,
+    ].filter((d) => !d.found),
     explicitReferences.missing
   );
-  const combinedSourceReferences = [...explicitSources, ...filteredDiscoveredSources];
+  const combinedSourceReferences = [...explicitSources, ...filteredDiscoveredSources.filter((d) => d.found)];
 
   // 7. Summarise
   const foundAlwaysDocs = filteredAlwaysDocs.filter((d) => d.found);
   const repoAlwaysReadCount = foundAlwaysDocs.filter((d) => d.kind === 'always').length;
   const builtInPresetCount = foundAlwaysDocs.filter((d) => d.kind === 'built-in-preset').length;
-  console.log(`✓ Docs — repo always_read: ${repoAlwaysReadCount}, built-in presets: ${builtInPresetCount}, discovered: ${filteredDiscoveredDocs.length}, explicit: ${explicitDocs.length + filteredDiscoveryDocs.filter(d => d.found).length}, missing: ${missingDocs.length}, sources: ${combinedSourceReferences.length}`);
+  console.log(`✓ Docs — repo always_read: ${repoAlwaysReadCount}, built-in presets: ${builtInPresetCount}, discovered: ${filteredDiscoveredDocs.filter((d) => d.found).length}, explicit: ${explicitDocs.length + filteredDiscoveryDocs.filter(d => d.found).length}, missing/read issues: ${missingDocs.length}, sources: ${combinedSourceReferences.length}`);
   if (missingDocs.length > 0) {
-    for (const d of missingDocs) console.warn(`  ⚠  Not found: ${d.filePath}`);
+    for (const d of missingDocs) console.warn(`  ⚠  ${renderReadDiagnosticLabel(d)}: ${d.filePath}${renderReadErrorCodeSuffix(d)}`);
   }
 
   // 8. Build vars and render
@@ -206,7 +211,7 @@ function buildTemplateVars(
     .join('\n') || '(none found)';
 
   const missingList = missingDocs.length > 0
-    ? missingDocs.map((d) => `- \`${d.filePath}\` — not found${renderMetadataSuffix(d, true)}`).join('\n')
+    ? missingDocs.map((d) => `- \`${d.filePath}\` — ${renderReadIssueLabel(d)}${renderReadIssueMetadataSuffix(d)}`).join('\n')
     : '(none)';
 
   return {
@@ -230,18 +235,54 @@ function buildTemplateVars(
     prompt_issue_sources: renderPathList(issueSources),
     prompt_discovered_docs: renderPathList(discoveredDocs),
     prompt_rule_docs: renderPathList(discoveryDocs.filter((d) => d.found)),
-    prompt_discovered_sources: renderPathList(discoveredSources),
+    prompt_discovered_sources: renderPathList(discoveredSources.filter((d) => d.found)),
     prompt_implementation_constraints: renderImplementationConstraints(matchedGuardrails),
     always_docs: renderDocList(alwaysDocs.filter((d) => d.found)),
     issue_docs: renderDocList(issueDocs),
     issue_sources: renderDocList(issueSources),
-    discovered_docs: renderDocList(discoveredDocs),
+    discovered_docs: renderDocList(discoveredDocs.filter((d) => d.found)),
     rule_docs: renderDocList(discoveryDocs.filter((d) => d.found)),
     missing_docs: missingList,
-    discovered_sources: renderDocList(discoveredSources),
+    discovered_sources: renderDocList(discoveredSources.filter((d) => d.found)),
     repo_path: repoPath,
     generated_at: new Date().toISOString(),
   };
+}
+
+function renderReadIssueLabel(doc: DocSection): string {
+  switch (doc.readStatus ?? 'missing') {
+    case 'unreadable':
+      return 'unreadable';
+    case 'read-error':
+      return 'read failed';
+    case 'missing':
+      return 'not found';
+  }
+}
+
+function renderReadDiagnosticLabel(doc: DocSection): string {
+  switch (doc.readStatus ?? 'missing') {
+    case 'unreadable':
+      return 'Unreadable';
+    case 'read-error':
+      return 'Read failed';
+    case 'missing':
+      return 'Not found';
+  }
+}
+
+function renderReadIssueMetadataSuffix(doc: DocSection): string {
+  const metadata = [
+    ...(doc.readStatus && doc.readStatus !== 'missing' && doc.readErrorCode ? [doc.readErrorCode] : []),
+    ...renderDocMetadata(doc),
+  ];
+  if (metadata.length === 0) return '';
+  return ` (${metadata.join('; ')})`;
+}
+
+function renderReadErrorCodeSuffix(doc: DocSection): string {
+  if (!doc.readStatus || doc.readStatus === 'missing' || !doc.readErrorCode) return '';
+  return ` (${doc.readErrorCode})`;
 }
 
 function mergeReasonSignals(primary: DocSection[], secondary: DocSection[]): DocSection[] {
@@ -264,7 +305,10 @@ function mergeMissingSections(primary: DocSection[], secondary: DocSection[]): D
   for (const doc of [...primary, ...secondary]) {
     const existing = merged.get(doc.filePath);
     if (!existing) {
-      merged.set(doc.filePath, doc);
+      const reasons = new Set<string>(doc.reasons ?? []);
+      const mappedCurrent = reasonForKind(doc.kind);
+      if (mappedCurrent) reasons.add(mappedCurrent);
+      merged.set(doc.filePath, { ...doc, reasons: [...reasons] });
       continue;
     }
 
