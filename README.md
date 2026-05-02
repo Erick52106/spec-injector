@@ -238,6 +238,7 @@ Important fields:
 - Guardrails: [docs/guardrails.md](docs/guardrails.md)
 - Task package: [docs/task-package.md](docs/task-package.md)
 - Workflow: [docs/workflow.md](docs/workflow.md)
+- Validation matrix and quality gates: [docs/validation.md](docs/validation.md)
 - Dogfood: [docs/dogfood.md](docs/dogfood.md)
 - Install / release strategy: [docs/release.md](docs/release.md)
 - AI workflow guides: [docs/workflows/README.md](docs/workflows/README.md)

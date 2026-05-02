@@ -2,7 +2,7 @@
 
 ## Purpose
 
-本文件說明 `spec-injector` 在 issue-to-PR 流程中的位置，以及 AI agent 應如何使用 isolated git worktree、issue / PR structure、labels、implementation evidence、PR body backfill、review / merge / cleanup rules。
+本文件說明 `spec-injector` 在 issue-to-PR 流程中的位置，以及 AI agent 應如何使用 isolated git worktree、issue / PR structure、labels、validation matrix、implementation evidence、PR body backfill、review / merge / cleanup rules。
 
 `spec-injector` 負責產生 deterministic task package。AI implementer 與 human review process 負責實作、驗證與 merge decision。Root `AGENTS.md` 是 AI agent 進入 repo 的第一層規範入口；本文件提供詳細流程。
 
@@ -128,6 +128,12 @@ PR 建立後要在 source issue 留 implementation evidence comment，再把 iss
 - 包含 scope guard / non-goals confirmation
 
 CI 通過後，若 PR checklist 有 CI item，應勾選。AI agent 不自行 merge PR。
+
+## Validation matrix
+
+不同 change type 的 required validation、recommended validation、quality gates 與 stop-and-report conditions 見 `docs/validation.md`。
+
+Implementation prompt、PR body 與 issue evidence 應依該 matrix 回報實際執行的命令、結果、skipped reason 與 scope guard。
 
 ## Labels workflow
 
