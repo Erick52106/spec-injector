@@ -200,6 +200,8 @@ test('spec plan/config/clean help describe AI-facing usage and safety constraint
   assert.match(planHelp.stdout, /do not write/i);
   assert.match(planHelp.stdout, /format prompt/i);
   assert.match(planHelp.stdout, /compact ai planning prompt/i);
+  assert.match(planHelp.stdout, /--config <path>/);
+  assert.match(planHelp.stdout, /external config file path/i);
   assert.match(planHelp.stdout, /verbose/i);
   assert.match(planHelp.stdout, /pipeline steps/i);
   assert.match(planHelp.stdout, /\.spec-injector\/out\/issue-<number>-task-package\.md/);
@@ -641,6 +643,74 @@ test('spec plan dry-run full output uses mocked gh data and keeps task package o
   assert.deepEqual(await readGhLog(fixture.ghLogPath), [
     'issue view 57 --repo Erick52106/spec-injector --json number,title,body,labels,url,state',
   ]);
+});
+
+test('spec plan keeps default target repo config behavior without --config', async (t) => {
+  const fixture = await createSpecPlanFixture(t);
+
+  const result = await runSpec(
+    ['plan', fixture.issueUrl, '--repo', fixture.repoDir, '--dry-run'],
+    { env: fixture.env }
+  );
+
+  assert.equal(result.code, 0, result.stderr);
+  assert.match(result.stdout, /### docs\/always-read\.md/);
+  assert.match(result.stdout, /ALWAYS_READ_LONG_BODY_SENTINEL/);
+  assert.match(result.stdout, /Require auth reviewer before changing login or permission flows\./);
+  await assertFileMissing(fixture.taskPackagePath);
+});
+
+test('spec plan reads external config outside target repo without modifying target repo', async (t) => {
+  const fixture = await createExternalConfigPlanFixture(t);
+  const beforeSnapshot = await readDirectorySnapshot(fixture.repoDir);
+
+  const result = await runSpec(
+    ['plan', fixture.issueUrl, '--repo', fixture.repoDir, '--config', fixture.configPath, '--dry-run'],
+    { env: fixture.env }
+  );
+
+  assert.equal(result.code, 0, result.stderr);
+  assert.match(result.stdout, /### docs\/external-always\.md/);
+  assert.match(result.stdout, /EXTERNAL_ALWAYS_READ_SENTINEL/);
+  assert.match(result.stdout, /\*\*external-auth-review\*\*: External config guardrail for read-only dogfood\./);
+  assert.doesNotMatch(result.stderr, /No \.spec-injector\/ directory found/i);
+  await assertFileMissing(path.join(fixture.repoDir, '.spec-injector'));
+  assert.deepEqual(await readDirectorySnapshot(fixture.repoDir), beforeSnapshot);
+});
+
+test('spec plan reports missing external config path clearly without falling back to target config', async (t) => {
+  const fixture = await createExternalConfigPlanFixture(t);
+  const missingConfigPath = path.join(path.dirname(fixture.configPath), 'missing-config.json');
+
+  const result = await runSpec(
+    ['plan', fixture.issueUrl, '--repo', fixture.repoDir, '--config', missingConfigPath, '--dry-run'],
+    { env: fixture.env }
+  );
+
+  assert.notEqual(result.code, 0);
+  assert.match(result.stderr, /External config file not found/i);
+  assert.match(result.stderr, new RegExp(escapeRegExp(missingConfigPath)));
+  assert.doesNotMatch(result.stderr, /No \.spec-injector\/ directory found/i);
+  assertNoRawStackTrace(result);
+  await assertFileMissing(path.join(fixture.repoDir, '.spec-injector'));
+});
+
+test('spec plan reports invalid external config clearly without requiring target config', async (t) => {
+  const fixture = await createExternalConfigPlanFixture(t);
+  const invalidConfigPath = path.join(path.dirname(fixture.configPath), 'invalid-config.json');
+  await fs.writeFile(invalidConfigPath, '{ invalid json\n', 'utf8');
+
+  const result = await runSpec(
+    ['plan', fixture.issueUrl, '--repo', fixture.repoDir, '--config', invalidConfigPath, '--dry-run'],
+    { env: fixture.env }
+  );
+
+  assert.notEqual(result.code, 0);
+  assert.match(result.stderr, /Invalid config\.json/i);
+  assert.match(result.stderr, new RegExp(escapeRegExp(invalidConfigPath)));
+  assert.doesNotMatch(result.stderr, /No \.spec-injector\/ directory found/i);
+  assertNoRawStackTrace(result);
+  await assertFileMissing(path.join(fixture.repoDir, '.spec-injector'));
 });
 
 test('spec plan dry-run prompt output stays compact and omits long inline docs', async (t) => {
@@ -1389,6 +1459,62 @@ async function createSpecPlanFixture(t) {
   };
 }
 
+async function createExternalConfigPlanFixture(t) {
+  const repoDir = await createTempRepo(t, 'spec-injector-external-target-');
+  const configDir = await fs.mkdtemp(path.join(os.tmpdir(), 'spec-injector-external-config-'));
+  t.after(async () => {
+    await fs.rm(configDir, { recursive: true, force: true });
+  });
+
+  const configPath = path.join(configDir, 'config.json');
+  await fs.writeFile(configPath, `${JSON.stringify({
+    version: 2,
+    always_read: ['docs/external-always.md'],
+    discovery: {
+      docs: [],
+      source: ['src'],
+      max_docs: 2,
+      max_source_files: 2,
+    },
+    guardrails: [
+      {
+        id: 'external-auth-review',
+        when_detected: ['auth'],
+        risk: 'External config guardrail for read-only dogfood.',
+      },
+    ],
+  }, null, 2)}\n`, 'utf8');
+
+  await writeRepoFiles(repoDir, {
+    'docs/external-always.md': '# External Always\n\nEXTERNAL_ALWAYS_READ_SENTINEL\n',
+    'docs/auth-note.md': '# Auth Note\n\nExternal config dogfood auth documentation.\n',
+    'src/auth.ts': 'export const authSentinel = "EXTERNAL_CONFIG_SOURCE_SENTINEL";\n',
+    'README.md': '# External Config Target\n\nRead-only dogfood fixture.\n',
+  });
+
+  const issue = {
+    number: 113,
+    title: 'Support external auth config for read-only dogfood',
+    body: [
+      'Use external config while planning auth changes.',
+      '',
+      '- [ ] verify external config guardrails',
+    ].join('\n'),
+    labels: [{ name: 'auth' }],
+    url: 'https://github.com/Erick52106/spec-injector/issues/113',
+    state: 'OPEN',
+  };
+  const fakeGh = await createFakeGh(t, issue);
+  fakeGh.env.FAKE_GH_EXPECT_REF = '113';
+
+  return {
+    repoDir,
+    configPath,
+    env: fakeGh.env,
+    issueUrl: issue.url,
+  };
+}
+
 async function createExplicitPathPlanFixture(t, options) {
   const repoDir = await createTempRepo(t);
   const issueNumber = options.issueNumber ?? 80;
@@ -1582,6 +1708,26 @@ async function writeConfig(repoDir, config) {
 
 async function readFile(filePath) {
   return fs.readFile(filePath, 'utf8');
+}
+
+async function readDirectorySnapshot(dirPath) {
+  const snapshot = {};
+
+  async function walk(currentDir) {
+    const entries = await fs.readdir(currentDir, { withFileTypes: true });
+    for (const entry of entries) {
+      const absolutePath = path.join(currentDir, entry.name);
+      const relativePath = path.relative(dirPath, absolutePath);
+      if (entry.isDirectory()) {
+        await walk(absolutePath);
+        continue;
+      }
+      snapshot[relativePath] = await fs.readFile(absolutePath, 'utf8');
+    }
+  }
+
+  await walk(dirPath);
+  return snapshot;
 }
 
 async function readGhLog(filePath) {

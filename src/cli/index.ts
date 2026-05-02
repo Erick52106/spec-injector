@@ -15,6 +15,7 @@ program
   .command('plan <issue>')
   .description('Read a GitHub issue via gh CLI and generate a task package')
   .option('--repo <path>', 'Path to target repo (default: CWD)')
+  .option('--config <path>', 'External config file path (may be outside target repo)')
   .option('--dry-run', 'Print output to stdout only; do not write a task package file')
   .option('--verbose', 'Show detailed pipeline steps while planning')
   .option('--format <format>', 'Output format: "full" task package or "prompt" compact AI planning prompt (default: full)')
@@ -27,9 +28,10 @@ Non-dry-run output:
 Notes:
   --dry-run        Preview output without writing files
   --format prompt  Emit a compact AI planning prompt instead of the full package
+  --config <path>  Read an external config file without copying it into the target repo
   --verbose        Print fetch / config / discovery pipeline steps
 `)
-  .action(async (issue: string, opts: { repo?: string; dryRun?: boolean; verbose?: boolean; format?: string }) => {
+  .action(async (issue: string, opts: { repo?: string; config?: string; dryRun?: boolean; verbose?: boolean; format?: string }) => {
     const { plan } = await import('./plan.js');
     await plan(issue, opts);
   });

@@ -3,8 +3,16 @@ import fs from 'fs';
 import { safeReadFile } from '../utils/fs.js';
 import type { Config, SpecConfig, Guardrail } from './types.js';
 
-export async function loadConfig(repoPath: string): Promise<Config> {
+interface LoadConfigOptions {
+  configPath?: string;
+}
+
+export async function loadConfig(repoPath: string, opts: LoadConfigOptions = {}): Promise<Config> {
   const resolved = path.resolve(repoPath);
+  if (opts.configPath) {
+    return loadExternalConfig(resolved, opts.configPath);
+  }
+
   const specAgentDir = findSpecAgentDir(resolved);
 
   const configPath = path.join(specAgentDir, 'config.json');
@@ -21,6 +29,40 @@ export async function loadConfig(repoPath: string): Promise<Config> {
   }
 
   return { repoPath: resolved, specAgentDir, specConfig };
+}
+
+async function loadExternalConfig(repoPath: string, configPath: string): Promise<Config> {
+  const resolvedConfigPath = path.resolve(configPath);
+  let stat: fs.Stats;
+  try {
+    stat = await fs.promises.stat(resolvedConfigPath);
+  } catch (err) {
+    const code = (err as NodeJS.ErrnoException).code;
+    if (code === 'ENOENT') {
+      throw new Error(`External config file not found: ${resolvedConfigPath}`);
+    }
+    throw new Error(`External config file is not readable: ${resolvedConfigPath}: ${(err as Error).message}`);
+  }
+
+  if (!stat.isFile()) {
+    throw new Error(`External config path is not a file: ${resolvedConfigPath}`);
+  }
+
+  let configText: string;
+  try {
+    configText = await fs.promises.readFile(resolvedConfigPath, 'utf8');
+  } catch (err) {
+    throw new Error(`External config file is not readable: ${resolvedConfigPath}: ${(err as Error).message}`);
+  }
+
+  let specConfig: SpecConfig;
+  try {
+    specConfig = parseAndValidateConfig(configText, resolvedConfigPath);
+  } catch (err) {
+    throw new Error(`Invalid config.json at ${resolvedConfigPath}: ${(err as Error).message}`);
+  }
+
+  return { repoPath, specAgentDir: path.dirname(resolvedConfigPath), specConfig };
 }
 
 function findSpecAgentDir(startPath: string): string {
