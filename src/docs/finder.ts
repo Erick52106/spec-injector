@@ -5,6 +5,17 @@ import { safeReadFile } from '../utils/fs.js';
 import { isPlanDiscoveryExcluded } from './exclusions.js';
 import type { DocSection, DocSourceKind } from './types.js';
 import type { Issue } from '../github/types.js';
+import type { SafeReadFileResult } from '../utils/fs.js';
+
+type SafeReadFileFailure = Extract<SafeReadFileResult, { content: null }>;
+type ScoredReference = {
+  filePath: string;
+  score: number;
+  content: string;
+  found: boolean;
+  readStatus?: DocSection['readStatus'];
+  readErrorCode?: string;
+};
 
 const EXPLICIT_FILE_EXTENSIONS = new Set([
   '.ts', '.tsx', '.js', '.jsx', '.go', '.md', '.json', '.yml', '.yaml', '.sql', '.css', '.html', '.sh',
@@ -14,7 +25,7 @@ const DOC_EXTENSIONS = new Set(['.md']);
 const ISSUE_MENTIONED_REASON = 'mentioned in issue';
 
 // Load explicitly listed doc paths with a given kind label.
-// Missing files get kind 'missing' and found: false.
+// Failed reads keep their source kind and carry a deterministic read status.
 export async function loadExplicitDocs(
   docPaths: string[],
   repoPath: string,
@@ -25,11 +36,11 @@ export async function loadExplicitDocs(
     unique.map(async (docPath): Promise<DocSection> => {
       validateDocPath(docPath, repoPath);
       const absolute = path.resolve(repoPath, docPath);
-      const content = await safeReadFile(absolute);
-      if (content === null) {
-        return { filePath: docPath, content: '', found: false, kind: 'missing' };
+      const readResult = await safeReadFile(absolute);
+      if (readResult.status !== 'ok') {
+        return unreadableDocSection(docPath, kind, readResult);
       }
-      return { filePath: docPath, content, found: true, kind };
+      return { filePath: docPath, content: readResult.content, found: true, kind };
     })
   );
 }
@@ -37,13 +48,16 @@ export async function loadExplicitDocs(
 // Load the built-in core preset from the spec-injector package directory.
 export async function loadCorePreset(): Promise<DocSection> {
   const presetPath = fileURLToPath(new URL('../../presets/core/ai-collaboration.md', import.meta.url));
-  const content = await safeReadFile(presetPath);
-  if (content === null) {
+  const readResult = await safeReadFile(presetPath);
+  if (readResult.status === 'missing') {
     throw new Error('Core preset not found: presets/core/ai-collaboration.md');
+  }
+  if (readResult.status !== 'ok') {
+    throw new Error(`Core preset read failed: presets/core/ai-collaboration.md (${readResult.code ?? readResult.status})`);
   }
   return {
     filePath: 'presets/core/ai-collaboration.md',
-    content,
+    content: readResult.content,
     found: true,
     kind: 'built-in-preset',
   };
@@ -61,22 +75,35 @@ export async function discoverRelevantDocs(
   if (keywords.length === 0) return [];
 
   const candidates = await gatherCandidates(repoPath, excludePaths);
-  const scored: Array<{ filePath: string; score: number; content: string }> = [];
+  const scored: ScoredReference[] = [];
 
   for (const relPath of candidates) {
     const absolute = path.resolve(repoPath, relPath);
-    const content = await safeReadFile(absolute);
-    if (content === null) continue;
-    const score = scoreDoc(keywords, relPath, content);
-    if (score > 0) scored.push({ filePath: relPath, score, content });
+    const readResult = await safeReadFile(absolute);
+    if (readResult.status !== 'ok') {
+      const score = scorePath(keywords, relPath);
+      if (score > 0) scored.push({
+        filePath: relPath,
+        score,
+        content: '',
+        found: false,
+        readStatus: readResult.status,
+        readErrorCode: readResult.code,
+      });
+      continue;
+    }
+    const score = scoreDoc(keywords, relPath, readResult.content);
+    if (score > 0) scored.push({ filePath: relPath, score, content: readResult.content, found: true });
   }
 
   scored.sort((a, b) => b.score - a.score);
 
-  return scored.slice(0, maxDocs).map(({ filePath, content }) => ({
+  return scored.slice(0, maxDocs).map(({ filePath, content, found, readStatus, readErrorCode }) => ({
     filePath,
     content,
-    found: true,
+    found,
+    readStatus,
+    readErrorCode,
     kind: 'discovered' as DocSourceKind,
   }));
 }
@@ -93,15 +120,18 @@ export async function extractExplicitIssueFileReferences(
   for (const filePath of candidates) {
     validateDocPath(filePath, repoPath);
     const absolute = path.resolve(repoPath, filePath);
-    const content = await safeReadFile(absolute);
     const isDoc = isDocReferencePath(filePath);
+    const kind = isDoc ? 'issue-doc' : 'issue-source';
+    const readResult = await safeReadFile(absolute);
 
-    if (content === null) {
+    if (readResult.status !== 'ok') {
       missing.push({
         filePath,
         content: '',
         found: false,
-        kind: 'missing',
+        kind,
+        readStatus: readResult.status,
+        readErrorCode: readResult.code,
         reasons: [ISSUE_MENTIONED_REASON],
       });
       continue;
@@ -109,9 +139,9 @@ export async function extractExplicitIssueFileReferences(
 
     const section: DocSection = {
       filePath,
-      content,
+      content: readResult.content,
       found: true,
-      kind: isDoc ? 'issue-doc' : 'issue-source',
+      kind,
       reasons: [ISSUE_MENTIONED_REASON],
     };
 
@@ -238,14 +268,21 @@ function tokenize(text: string): string[] {
 }
 
 function scoreDoc(keywords: string[], filePath: string, content: string): number {
+  let score = scorePath(keywords, filePath);
+  const sample = content.slice(0, 2000).toLowerCase();
+  for (const kw of keywords) {
+    if (sample.includes(kw)) score += 1;
+  }
+  return score;
+}
+
+function scorePath(keywords: string[], filePath: string): number {
   const pathLower = filePath.toLowerCase();
   const baseLower = path.basename(filePath).toLowerCase();
-  const sample = content.slice(0, 2000).toLowerCase();
   let score = 0;
   for (const kw of keywords) {
     if (pathLower.includes(kw)) score += 2;
     if (baseLower.includes(kw)) score += 2;
-    if (sample.includes(kw)) score += 1;
   }
   return score;
 }
@@ -274,23 +311,53 @@ export async function discoverSourceFiles(
     }
   }
 
-  const scored: Array<{ filePath: string; score: number; content: string }> = [];
+  const scored: ScoredReference[] = [];
   for (const relPath of candidates) {
     const absolute = path.resolve(repoPath, relPath);
-    const raw = await safeReadFile(absolute);
-    if (raw === null) continue;
-    const score = scoreSrc(keywords, relPath, raw);
-    if (score > 0) scored.push({ filePath: relPath, score, content: raw.slice(0, 500) });
+    const readResult = await safeReadFile(absolute);
+    if (readResult.status !== 'ok') {
+      const score = scorePath(keywords, relPath);
+      if (score > 0) {
+        scored.push({
+          filePath: relPath,
+          score,
+          content: '',
+          readStatus: readResult.status,
+          readErrorCode: readResult.code,
+          found: false,
+        });
+      }
+      continue;
+    }
+    const score = scoreSrc(keywords, relPath, readResult.content);
+    if (score > 0) scored.push({ filePath: relPath, score, content: readResult.content.slice(0, 500), found: true });
   }
 
   scored.sort((a, b) => b.score - a.score);
 
-  return scored.slice(0, maxFiles).map(({ filePath, content }) => ({
-    filePath,
-    content,
-    found: true,
+  return scored.slice(0, maxFiles).map((entry) => ({
+    filePath: entry.filePath,
+    content: entry.content,
+    found: entry.found,
+    readStatus: entry.readStatus,
+    readErrorCode: entry.readErrorCode,
     kind: 'source' as DocSourceKind,
   }));
+}
+
+function unreadableDocSection(
+  filePath: string,
+  kind: DocSourceKind,
+  readResult: SafeReadFileFailure
+): DocSection {
+  return {
+    filePath,
+    content: '',
+    found: false,
+    kind,
+    readStatus: readResult.status,
+    readErrorCode: readResult.code,
+  };
 }
 
 function walkSource(dir: string, repoPath: string, results: string[]): void {

@@ -16,14 +16,17 @@ export async function loadConfig(repoPath: string, opts: LoadConfigOptions = {})
   const specAgentDir = findSpecAgentDir(resolved);
 
   const configPath = path.join(specAgentDir, 'config.json');
-  const configText = await safeReadFile(configPath);
-  if (configText === null) {
+  const configReadResult = await safeReadFile(configPath);
+  if (configReadResult.status === 'missing') {
     return { repoPath: resolved, specAgentDir, specConfig: { version: 2, guardrails: [] } };
+  }
+  if (configReadResult.status !== 'ok') {
+    throw new Error(`Config file is not readable: ${configPath} (${configReadResult.code ?? configReadResult.status})`);
   }
 
   let specConfig: SpecConfig;
   try {
-    specConfig = parseAndValidateConfig(configText, configPath);
+    specConfig = parseAndValidateConfig(configReadResult.content, configPath);
   } catch (err) {
     throw new Error(`Invalid config.json: ${(err as Error).message}`);
   }

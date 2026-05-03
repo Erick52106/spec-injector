@@ -45,7 +45,7 @@ Repo `always_read` references 由 target repo 的 `.spec-injector/config.json` �
 
 `spec config suggest always-read --repo .` 可以 deterministic 掃描候選文件，但只會建議，不會自動修改 config。
 
-Missing `always_read` files 會在 task package 的 Missing Files 中呈現。這是 config health signal，不一定是 fatal plan error。
+Missing `always_read` files 會在 task package 的 Missing Files 中呈現。這是 config health signal，不一定是 fatal plan error。若 path 存在但讀取失敗，Missing Files 會標示為 `read failed` 或 `unreadable`，而不是 `not found`。
 
 在 `spec plan` output 中，repo `always_read` references 會標示為 `repo always_read`，與 built-in preset references 分開。
 
@@ -58,7 +58,7 @@ Issue-mentioned references 是 issue body 中明確提到的 repo-relative file 
 - inline code path：``docs/architecture.md``
 - bullet path：`- src/cli/plan.ts`
 
-Issue-mentioned references 會在 prompt output 與 full task package 中獨立呈現，並標示 source `issue-mentioned` 與 reason `mentioned in issue`。若檔案不存在，會進入 Missing Files。
+Issue-mentioned references 會在 prompt output 與 full task package 中獨立呈現，並標示 source `issue-mentioned` 與 reason `mentioned in issue`。若檔案不存在或讀取失敗，會進入 Missing Files，並保留 `issue-mentioned` source metadata。
 
 這類 references 通常是 strongest issue-local signal，但仍應遵守 scope guard：被提到不代表一定要修改。
 
