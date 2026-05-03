@@ -11,6 +11,10 @@
 - 實作型任務預設交給 Codex 或依 human 指示執行。
 - Claude Code 若被要求直接實作，仍必須遵守 `AGENTS.md` 的 worktree-first workflow、scope discipline、evidence workflow、labels workflow、validation rules 與 stop-and-report rules。
 
+## Merge-time review closeout reminder
+
+Claude Code 做 read-only PR review、architecture review 或 planning review 時，必須依 `AGENTS.md`、`docs/workflow.md` 與 `docs/validation.md` 檢查 merge-time review closeout 是否完整。特別是 CodeRabbit / Codex auto review findings 是否已分類與處理、是否存在 unresolved actionable review conversation、stale evidence 或 needs-human-review finding。Claude Code 的 review verdict 不等於 merge authorization；若發現上述未處理事項，不應建議 merge。Conversation resolve、merge execution、issue closeout 仍必須依 canonical workflow 與 explicit human authorization 執行；除非任務明確授權且已有必要佐證，Claude Code 不自行 approve、merge、close issue 或 resolve conversations。
+
 ## Planning discipline
 
 - Claude Code 不應把 suggestion 當 approval。
