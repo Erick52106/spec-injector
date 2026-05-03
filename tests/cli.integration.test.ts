@@ -288,6 +288,108 @@ test('classifier reports wallet rejected reason for generic product transaction 
   }]);
 });
 
+test('classifier ignores generic transaction records wording for database domain', () => {
+  const issue = {
+    number: 137,
+    title: 'Dashboard transaction records endpoint contract',
+    body: [
+      'Review the billing transaction history list and product transaction page.',
+      'Update the backend route handler and API response contract for user transaction details.',
+      'Keep transaction settings copy aligned with dashboard support workflows.',
+    ].join('\n'),
+    labels: ['api', 'backend'],
+    url: 'https://github.com/Erick52106/spec-injector/issues/137',
+    state: 'open' as const,
+  };
+
+  const first = classifyDomainsWithEvidence(issue);
+  const second = classifyDomainsWithEvidence(issue);
+
+  assert.deepEqual(first, second);
+  assert.ok(first.domains.includes('api'), `Expected api in ${first.domains.join(', ')}`);
+  assert.ok(first.domains.includes('backend'), `Expected backend in ${first.domains.join(', ')}`);
+  assert.ok(!first.domains.includes('database'), `Expected database to be absent from ${first.domains.join(', ')}`);
+  assert.ok(!first.evidence.some((e) => e.domain === 'database'), `Expected no database evidence, got ${JSON.stringify(first.evidence)}`);
+  assert.ok(first.rejected.some((r) =>
+    r.domain === 'database' &&
+    r.signal === 'transaction' &&
+    r.source === 'title' &&
+    r.reason === 'generic transaction wording'
+  ));
+  assert.ok(!first.rejected.some((r) => !['wallet', 'smart-contract', 'database'].includes(r.domain)));
+});
+
+test('classifier keeps database domain for legitimate transaction table evidence', () => {
+  const result = classifyDomainsWithEvidence({
+    number: 137,
+    title: 'Add transaction table migration and SQL schema',
+    body: [
+      'Create a migration for transactions with table columns and indexes.',
+      'Update the repository layer and persistence data model for persisted records.',
+      'Cover PostgreSQL query behavior through the ORM path.',
+    ].join('\n'),
+    labels: ['backend'],
+    url: 'https://github.com/Erick52106/spec-injector/issues/137',
+    state: 'open',
+  });
+
+  assert.ok(result.domains.includes('database'), `Expected database in ${result.domains.join(', ')}`);
+  assert.ok(result.evidence.some((e) =>
+    e.domain === 'database' && e.term === 'migration' && e.source === 'title'
+  ));
+  assert.ok(result.evidence.some((e) =>
+    e.domain === 'database' && e.term === 'table' && e.source === 'title'
+  ));
+  assert.ok(result.evidence.some((e) =>
+    e.domain === 'database' && e.term === 'schema' && e.source === 'title'
+  ));
+  assert.ok(!result.rejected.some((r) => r.domain === 'database'), `Expected no database rejected reason, got ${JSON.stringify(result.rejected)}`);
+});
+
+test('classifier keeps generic transaction API backend wording out of database', () => {
+  const issue = {
+    number: 137,
+    title: 'Transaction endpoint API contract',
+    body: [
+      'Align backend route handler behavior for product transaction details.',
+      'Document request and response examples for the dashboard transaction API.',
+      'Do not change billing dashboard UI layout in this backend-only pass.',
+    ].join('\n'),
+    labels: ['api', 'backend'],
+    url: 'https://github.com/Erick52106/spec-injector/issues/137',
+    state: 'open' as const,
+  };
+
+  const first = classifyDomainsWithEvidence(issue);
+  const second = classifyDomainsWithEvidence(issue);
+
+  assert.deepEqual(first, second);
+  assert.ok(first.domains.includes('api'), `Expected api in ${first.domains.join(', ')}`);
+  assert.ok(first.domains.includes('backend'), `Expected backend in ${first.domains.join(', ')}`);
+  assert.ok(!first.domains.includes('database'), `Expected database to be absent from ${first.domains.join(', ')}`);
+  assert.ok(!first.evidence.some((e) => e.domain === 'database'), `Expected no database evidence, got ${JSON.stringify(first.evidence)}`);
+  assert.deepEqual(first.rejected, [
+    {
+      domain: 'wallet',
+      signal: 'transaction',
+      source: 'title',
+      reason: 'generic product transaction wording',
+    },
+    {
+      domain: 'smart-contract',
+      signal: 'contract',
+      source: 'title',
+      reason: 'generic API contract wording',
+    },
+    {
+      domain: 'database',
+      signal: 'transaction',
+      source: 'title',
+      reason: 'generic transaction wording',
+    },
+  ]);
+});
+
 test('classifier reports deterministic rejected reason for generic API contract wording only', () => {
   const issue = {
     number: 114,

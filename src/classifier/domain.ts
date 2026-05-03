@@ -26,7 +26,7 @@ const DOMAIN_KEYWORDS: Record<string, string[]> = {
   backend: ['server', 'service', 'handler', 'controller', 'middleware', 'worker', 'daemon', 'queue', 'job', 'cron', 'scheduler', 'grpc', 'rpc'],
   api: ['api', 'endpoint', 'rest', 'graphql', 'http', 'route', 'swagger', 'openapi', 'webhook', 'request', 'response'],
   auth: ['auth', 'login', 'logout', 'token', 'jwt', 'oauth', 'session', 'password', 'credential', 'permission', 'role', 'access', 'signup', 'register'],
-  database: ['database', 'db', 'sql', 'query', 'migration', 'schema', 'table', 'model', 'orm', 'postgres', 'mysql', 'mongo', 'redis', 'index', 'transaction'],
+  database: ['database', 'db', 'sql', 'query', 'queries', 'migration', 'schema', 'table', 'column', 'model', 'data model', 'orm', 'repository layer', 'persistence', 'persisted', 'record storage', 'postgres', 'postgresql', 'mysql', 'sqlite', 'mongo', 'redis', 'index', 'prisma', 'drizzle', 'gorm'],
   infra: ['infra', 'deploy', 'docker', 'kubernetes', 'k8s', 'terraform', 'helm', 'nginx', 'network', 'devops', 'provision', 'cloud', 'vm', 'container'],
   'cloud-storage': ['s3', 'gcs', 'storage', 'bucket', 'upload', 'download', 'blob', 'cdn', 'file upload', 'asset', 'object storage'],
   blockchain: ['blockchain', 'on-chain', 'transaction hash', 'tx hash', 'block height', 'contract address', 'token transfer', 'gas', 'nonce', 'ethereum', 'evm', 'solana', 'polygon', 'web3', 'nft', 'defi', 'ledger', 'consensus', 'miner'],
@@ -45,6 +45,9 @@ const GENERIC_WALLET_REASON = 'generic product transaction wording';
 const GENERIC_API_CONTRACT_SIGNALS = ['contract'];
 const GENERIC_API_CONTRACT_CONTEXT = ['api', 'endpoint', 'route', 'request', 'response', 'backend', 'frontend', 'dashboard', 'settings'];
 const GENERIC_API_CONTRACT_REASON = 'generic API contract wording';
+const GENERIC_DATABASE_TRANSACTION_SIGNALS = ['transactions', 'transaction'];
+const GENERIC_DATABASE_TRANSACTION_CONTEXT = ['api', 'backend', 'billing', 'contract', 'dashboard', 'details', 'endpoint', 'frontend', 'history', 'list', 'page', 'product', 'record', 'records', 'request', 'response', 'route', 'settings', 'support', 'user'];
+const GENERIC_DATABASE_TRANSACTION_REASON = 'generic transaction wording';
 
 export function classifyDomains(issue: Issue): string[] {
   return classifyDomainsWithEvidence(issue).domains;
@@ -120,6 +123,11 @@ function buildRejectedDomainReasons(
     if (reason) rejected.push(reason);
   }
 
+  if (!detected.has('database') && hasGenericDatabaseTransactionContext(fields)) {
+    const reason = findRejectedSignal(fields, GENERIC_DATABASE_TRANSACTION_SIGNALS, GENERIC_DATABASE_TRANSACTION_REASON, 'database');
+    if (reason) rejected.push(reason);
+  }
+
   return rejected;
 }
 
@@ -148,4 +156,9 @@ function findRejectedSignal(
 function hasGenericApiContractContext(fields: Array<{ source: DomainEvidenceSource; value: string }>): boolean {
   const text = fields.map(({ value }) => value).join(' ');
   return GENERIC_API_CONTRACT_CONTEXT.some((term) => text.includes(term));
+}
+
+function hasGenericDatabaseTransactionContext(fields: Array<{ source: DomainEvidenceSource; value: string }>): boolean {
+  const text = fields.map(({ value }) => value).join(' ');
+  return GENERIC_DATABASE_TRANSACTION_CONTEXT.some((term) => text.includes(term));
 }
