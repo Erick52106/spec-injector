@@ -14,7 +14,7 @@
   },
   "scripts": {
     "build": "tsc",
-    "test": "pnpm build && node --test tests/cli.integration.test.ts",
+    "test": "pnpm build && node --test \"tests/**/*.test.ts\"",
     "dev": "tsc --watch",
     "start": "node dist/cli/index.js"
   },
