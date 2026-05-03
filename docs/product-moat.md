@@ -275,7 +275,7 @@ Issues #108 / #109 / #110 / #148 / #147 應優先服務 repo-local workflow guar
 
 - #130：最重要的 moat design。先定義 source trust / context budget，再談 richer output 或 context protocol。
 - #129：保留。先設計 deterministic input adapters，canonical design proposal 見 [docs/input-adapters.md](input-adapters.md)；不做 hidden LLM / RAG / semantic search。
-- #107：catalog / protocol design，應對齊 #130，避免 taxonomy 散落與過早 custom domains runtime。
+- #107：catalog / protocol design，canonical proposal 見 [docs/catalog-protocol.md](catalog-protocol.md)，應對齊 #130，避免 taxonomy 散落與過早 custom domains runtime。
 - #147：internal workflow contract，晚於 #130 / #107，不 runtime 化，不把 internal harness discipline 當產品主軸。
 - #108 / #109 / #110：workflow guardrails，晚於 strategy / design；可服務 repo-local workflow，不做 automation platform。
 - #132 / #133 / #100 / #111 / #112：Layer 4 deferred。可以設計 mascot / companion / visual workflow，但不要 rename、不要 runtime、不要 README showcase before proof。

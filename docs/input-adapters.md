@@ -6,6 +6,8 @@
 
 `spec-injector` 的產品定位是 deterministic request-to-context compiler for AI coding agents。GitHub issue 是目前已實作入口；本文件只設計 input adapter vocabulary、source trust mapping、context budget behavior、diagnostics 與 future implementation split。
 
+Catalog / protocol vocabulary 的收斂設計見 [docs/catalog-protocol.md](catalog-protocol.md)。
+
 本文件不代表 runtime 已實作，不新增 CLI command / flag，不改 config schema，不實作 parser，也不引入 hidden LLM、semantic RAG、vector search 或 target repo automation。
 
 ## Problem Statement
