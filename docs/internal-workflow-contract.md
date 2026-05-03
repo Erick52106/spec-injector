@@ -165,7 +165,7 @@ Example: a PR touching `docs/validation.md` and `.github/workflows/ci.yml` match
 
 | Tier | Description | Examples | Required validation | Evidence requirement | Review requirement | Stop-and-report | Human approval |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `docs-only` | Prose-only docs that do not alter workflow rules or runtime behavior. | `docs/concepts.md`, README glossary link, explanatory docs. | `git diff --check`; Markdown sanity check; `pnpm build` / `pnpm test` when cheap or repo baseline expects it. | PR body and issue evidence confirm files changed and docs-only non-goals. | Reviewer checks future behavior is not written as implemented. | Runtime / CLI / config / CI edit appears necessary. | Required before merge; implementation can proceed after source issue scope is clear. |
+| `docs-only` | Prose-only docs that do not alter workflow rules or runtime behavior. | `docs/concepts.md`, README glossary link, explanatory docs. | `git diff --check`; Markdown sanity check. `pnpm build` / `pnpm test` are recommended by `validation_matrix.docs-only.recommended` and become required only when explicitly elevated by source issue or reviewer. | PR body and issue evidence confirm files changed and docs-only non-goals. | Reviewer checks future behavior is not written as implemented. | Runtime / CLI / config / CI edit appears necessary. | Required before merge; implementation can proceed after source issue scope is clear. |
 | `workflow-docs` | Docs that define repo process, evidence, validation, review, worktree, metadata, or AI agent behavior. | `AGENTS.md`, `CLAUDE.md`, `docs/workflow.md`, `docs/validation.md`, this file. | `git diff --check`; Markdown sanity; `pnpm build`; `pnpm test`; instruction consistency review. | Evidence must include scope guard, non-goals, and whether AGENTS / CLAUDE drift was avoided. | Review workflow wording for contradiction and product-boundary drift. | Rule conflicts, broad instruction rewrite, or checker implementation becomes necessary. | Required before merge; high-risk workflow changes may need human approval before implementation if issue is ambiguous. |
 | `tests-only` | Test files change without runtime behavior changes. | `tests/**/*.test.ts`, fake `gh` fixtures. | `pnpm build`; `pnpm test`; targeted test command; `git diff --check`. | Evidence explains tested behavior and confirms no runtime source change. | Review avoids brittle snapshots or network-dependent GitHub tests. | Test requires real GitHub API / network or implies runtime change outside scope. | Required before merge. |
 | `runtime-low-risk` | Small implementation change with narrow behavior impact. | Safe read handling, localized CLI output fix, small helper. | `pnpm build`; `pnpm test`; targeted regression; `git diff --check`. | Evidence includes files, behavior, validation, commit hash. | Review changed behavior and regression coverage. | Wider refactor, config/schema/CI change, or missing deterministic test appears necessary. | Required before merge; before implementation if issue is `status:needs-design` or scope unclear. |
@@ -185,7 +185,7 @@ Global rules:
 - `git diff --check` is baseline for file-changing PRs.
 - Markdown sanity check is required for docs changes.
 - `pnpm build` is required exactly where `validation_matrix.*.required` lists it; for `docs-only`, it remains recommended unless the source issue or reviewer makes it required.
-- `pnpm test` is required for runtime, workflow-docs, classifier/reference/template behavior, config/schema, and generally recommended for docs-only when cheap.
+- `pnpm test` is required exactly where `validation_matrix.*.required` lists it; for `docs-only`, it remains recommended unless the source issue or reviewer makes it required.
 - `pnpm lint` should run only if the script exists.
 - `pnpm typecheck` should run only if the script exists.
 - A missing script must be reported as skipped with reason; do not claim it passed.
@@ -271,7 +271,7 @@ validation_matrix:
       - no repo file changes, unless explicitly scoped
 ```
 
-Docs-only PRs still should run available baseline validation when cheap, especially in this repo where `pnpm build` and `pnpm test` are lightweight. If a command does not exist, the evidence should say `skipped: package.json has no scripts.lint` or equivalent.
+Docs-only PRs should report whether recommended baseline validation was run, especially in this repo where `pnpm build` and `pnpm test` are lightweight. If a recommended or required command is skipped, the evidence should include a deterministic reason such as `skipped: package.json has no scripts.lint`.
 
 ## PR Body Requirements
 
