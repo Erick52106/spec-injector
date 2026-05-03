@@ -8,6 +8,10 @@ interface ConfigCommandOptions {
   repo?: string;
 }
 
+function failConfigCommand(message: string): never {
+  throw new Error(message);
+}
+
 export async function config(
   action: string,
   section: string | undefined,
@@ -27,9 +31,7 @@ export async function config(
   const configPath = path.join(repoPath, '.spec-injector', 'config.json');
 
   if (!fs.existsSync(configPath)) {
-    console.error(`✗ No .spec-injector/config.json found at ${configPath}`);
-    console.error(`  Run "spec init --repo ${repoPath}" first.`);
-    process.exit(1);
+    failConfigCommand(`No .spec-injector/config.json found at ${configPath}\n  Run "spec init --repo ${repoPath}" first.`);
   }
 
   if (normalizedAction === 'list') {
@@ -39,13 +41,11 @@ export async function config(
   }
 
   if (section !== 'always-read') {
-    console.error('✗ Unsupported config section. This command currently only supports always-read.');
-    process.exit(1);
+    failConfigCommand('Unsupported config section. This command currently only supports always-read.');
   }
 
   if (!filePath) {
-    console.error(`✗ Missing path. Usage: spec config ${normalizedAction} always-read <path> --repo <repo>`);
-    process.exit(1);
+    failConfigCommand(`Missing path. Usage: spec config ${normalizedAction} always-read <path> --repo <repo>`);
   }
 
   if (normalizedAction === 'add') {
@@ -60,8 +60,7 @@ function parseAction(action: string): ConfigAction {
   if (action === 'list' || action === 'add' || action === 'remove' || action === 'suggest') {
     return action;
   }
-  console.error('✗ Unsupported config action. Use list, add, remove, or suggest.');
-  process.exit(1);
+  failConfigCommand('Unsupported config action. Use list, add, remove, or suggest.');
 }
 
 async function suggestConfig(
@@ -70,13 +69,11 @@ async function suggestConfig(
   filePath: string | undefined
 ): Promise<void> {
   if (section !== 'always-read') {
-    console.error('✗ Unsupported suggest section. Usage: spec config suggest always-read --repo <repo>');
-    process.exit(1);
+    failConfigCommand('Unsupported suggest section. Usage: spec config suggest always-read --repo <repo>');
   }
 
   if (filePath !== undefined) {
-    console.error('✗ The suggest always-read command does not accept a path. Usage: spec config suggest always-read --repo <repo>');
-    process.exit(1);
+    failConfigCommand('The suggest always-read command does not accept a path. Usage: spec config suggest always-read --repo <repo>');
   }
 
   const { suggestAlwaysRead } = await import('./config-suggest.js');
@@ -85,13 +82,11 @@ async function suggestConfig(
 
 function validateListArgs(section: string | undefined, filePath: string | undefined): void {
   if (section !== undefined && section !== 'always-read') {
-    console.error('✗ Unsupported config section. This command currently only supports always-read.');
-    process.exit(1);
+    failConfigCommand('Unsupported config section. This command currently only supports always-read.');
   }
 
   if (filePath !== undefined) {
-    console.error('✗ The list action does not accept a path. Usage: spec config list [always-read] --repo <repo>');
-    process.exit(1);
+    failConfigCommand('The list action does not accept a path. Usage: spec config list [always-read] --repo <repo>');
   }
 }
 
@@ -104,8 +99,7 @@ function readConfig(configPath: string): Record<string, unknown> {
     }
     return raw as Record<string, unknown>;
   } catch (err) {
-    console.error(`✗ Invalid config.json: ${(err as Error).message}`);
-    process.exit(1);
+    failConfigCommand(`Invalid config.json: ${(err as Error).message}`);
   }
 }
 
@@ -113,8 +107,7 @@ function readAlwaysRead(raw: Record<string, unknown>): string[] {
   const value = raw['always_read'];
   if (value === undefined) return [];
   if (!Array.isArray(value) || value.some((item) => typeof item !== 'string')) {
-    console.error('✗ Invalid config.json: always_read must be an array of strings');
-    process.exit(1);
+    failConfigCommand('Invalid config.json: always_read must be an array of strings');
   }
   return value as string[];
 }
