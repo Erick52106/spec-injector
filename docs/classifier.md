@@ -14,7 +14,7 @@ Classifier 不是 LLM、不是 architecture reviewer，也不是最終決策者�
 - label keyword 命中次之
 - body keyword 命中提供輔助 evidence
 - 最多回傳 5 個 domains
-- keyword matching 使用 deterministic token / phrase boundary，避免 `FormData` 誤中 `orm`、`client` 誤中 `cli` 這類 substring false positive
+- keyword matching 使用 deterministic token / phrase boundary，phrase 可跨 whitespace / hyphen，避免 `FormData` 誤中 `orm`、`client` 誤中 `cli` 這類 substring false positive
 
 支援的 domains 由 runtime 內建，例如 `frontend`、`backend`、`api`、`auth`、`database`、`infra`、`cloud-storage`、`blockchain`、`smart-contract`、`wallet`、`i18n`、`testing`、`docs`、`ci`、`tooling`。
 
@@ -54,7 +54,7 @@ Frontend / UI / PDP / add-to-cart / server action 類 issue 會優先依賴 `fro
 
 `database` domain 仍應由明確 database evidence 觸發，例如 `migration`、`schema`、`SQL`、`table`、`ORM`、`database transaction` 或具體 persistence wording。`FormData` 或一般 `form` wording 不應單獨觸發 database。
 
-`tooling` domain 仍應由明確 tooling evidence 觸發，例如 `lint config`、`test runner`、`CI workflow`、`package manager config`、`build script`。Package manager command text such as `pnpm build` / `pnpm test` 若只是 validation hint，不應單獨讓 issue 變成 tooling task。
+`tooling` domain 仍應由明確 tooling evidence 觸發，例如 `lint config`、`test runner`、`CI workflow`、`package manager config`、`build script`。Package manager command text such as `pnpm build` / `pnpm test` 若只是 validation hint，不應單獨讓 issue 變成 tooling task；但 `upgrade pnpm`、`package manager version`、`lockfile` / `workspace` maintenance 這類 deterministic maintenance context 仍應保留 `tooling`。
 
 ## Wallet / Blockchain Evidence
 

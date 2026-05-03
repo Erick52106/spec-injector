@@ -41,6 +41,13 @@ const DOMAIN_KEYWORDS: Record<string, string[]> = {
 
 const MAX_DOMAINS = 5;
 const WEAK_TOOLING_SIGNALS = ['npm', 'yarn', 'pnpm', 'bun'];
+const PACKAGE_MANAGER_PATTERN = '(?:npm|yarn|pnpm|bun)';
+const STRONG_PACKAGE_MANAGER_CONTEXT_PATTERNS = [
+  new RegExp(`\\b(?:upgrade|update|bump|configure|configured|configuring|migrate|switch)\\s+${PACKAGE_MANAGER_PATTERN}\\b`, 'i'),
+  new RegExp(`\\b${PACKAGE_MANAGER_PATTERN}\\s+(?:version|workspace|lockfile|config|configuration)\\b`, 'i'),
+  /\bpackage[\s-]+manager\b/i,
+  /\b(?:lockfile|workspace)\b/i,
+];
 const GENERIC_WALLET_SIGNALS = ['transactions', 'transaction'];
 const GENERIC_WALLET_REASON = 'generic product transaction wording';
 const GENERIC_API_CONTRACT_SIGNALS = ['contract'];
@@ -80,7 +87,7 @@ export function classifyDomainsWithEvidence(issue: Issue): DomainClassificationR
     }
   }
 
-  suppressWeakToolingEvidence(scores, evidenceByDomain);
+  suppressWeakToolingEvidence(scores, evidenceByDomain, fields);
 
   const domains = Object.entries(scores)
     .sort((a, b) => b[1] - a[1])
@@ -158,7 +165,8 @@ function findRejectedSignal(
 
 function suppressWeakToolingEvidence(
   scores: Record<string, number>,
-  evidenceByDomain: Map<string, DomainEvidence[]>
+  evidenceByDomain: Map<string, DomainEvidence[]>,
+  fields: Array<{ source: DomainEvidenceSource; value: string }>
 ): void {
   const evidence = evidenceByDomain.get('tooling') ?? [];
   if (evidence.length === 0) return;
@@ -169,8 +177,15 @@ function suppressWeakToolingEvidence(
   const hasTitleOrLabelSignal = evidence.some((entry) => entry.source === 'title' || entry.source === 'labels');
   if (hasTitleOrLabelSignal) return;
 
+  if (hasStrongPackageManagerContext(fields)) return;
+
   delete scores.tooling;
   evidenceByDomain.delete('tooling');
+}
+
+function hasStrongPackageManagerContext(fields: Array<{ source: DomainEvidenceSource; value: string }>): boolean {
+  const text = fields.map(({ value }) => value).join(' ');
+  return STRONG_PACKAGE_MANAGER_CONTEXT_PATTERNS.some((pattern) => pattern.test(text));
 }
 
 function matchesTerm(value: string, term: string): boolean {
@@ -178,7 +193,7 @@ function matchesTerm(value: string, term: string): boolean {
     return value.includes(term);
   }
 
-  const escaped = term.trim().split(/\s+/).map(escapeRegExp).join('\\s+');
+  const escaped = term.trim().split(/\s+/).map(escapeRegExp).join('[\\s-]+');
   return new RegExp(`(^|[^a-z0-9])${escaped}([^a-z0-9]|$)`, 'i').test(value);
 }
 
