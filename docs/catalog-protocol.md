@@ -33,7 +33,7 @@
 - Future input adapters 可能重複發明 source category / trust level，削弱 #130 的 canonical model。
 - Snapshot tests 容易因為 wording 調整大量 churn，而不是測到真正 contract。
 
-#107 應建立 catalog / protocol model，原因不是要立即 runtime 化，而是先定義哪些名稱穩定、哪些仍 internal-only、哪些只是 implementation candidate。穩定 vocabulary 讓 #108 / #109 / #110 / #147 / #151 後續能消費同一套語言，而不需要每張 issue 自己定義一套 partial schema。
+\#107 應建立 catalog / protocol model，原因不是要立即 runtime 化，而是先定義哪些名稱穩定、哪些仍 internal-only、哪些只是 implementation candidate。穩定 vocabulary 讓 #108 / #109 / #110 / #147 / #151 後續能消費同一套語言，而不需要每張 issue 自己定義一套 partial schema。
 
 這仍是 deterministic request-to-context compiler 的設計，因為 catalog 只描述 context compilation 的 inputs、trust labels、budget policy、diagnostics、guardrails 與 handoff sections。它不是 custom domains runtime、hosted platform、agent orchestration、merge bot、remediation loop、hidden LLM planner、semantic RAG、vector search 或 generic prompt generator。
 
@@ -236,7 +236,7 @@ example: issue-mentioned docs are strong; auto-discovered source files are mediu
 
 ## Input Adapter Vocabulary Catalog
 
-#129 defines the input adapter vocabulary that #107 should consume rather than redefine.
+\#129 defines the input adapter vocabulary that #107 should consume rather than redefine.
 
 | Vocabulary | Meaning | Future public output contract? | Current boundary |
 | --- | --- | --- | --- |
@@ -311,7 +311,7 @@ confirmation_required: human must choose before any candidate becomes confirmed 
 
 ## Context Budget / Include Policy Vocabulary
 
-#130 defines context budget and include policy vocabulary. #107 should treat these as canonical names:
+\#130 defines context budget and include policy vocabulary. #107 should treat these as canonical names:
 
 - `full-include`: content included in full task package, bounded by budget。
 - `reference-only`: path / source / reason visible, content omitted。
@@ -376,11 +376,11 @@ How this helps follow-ups:
 
 ### #147 internal workflow contract
 
-#147 should consume only vocabulary that is stable after #107 / #130: source category, trust level, diagnostics, budget policy, evidence metadata, validation state, confirmation requirement. It should remain an internal workflow contract for `spec-injector` repo discipline. It must not turn Harness-inspired practice into hosted control plane, agent orchestration, merge bot, remediation loop, or product runtime.
+\#147 should consume only vocabulary that is stable after #107 / #130: source category, trust level, diagnostics, budget policy, evidence metadata, validation state, confirmation requirement. It should remain an internal workflow contract for `spec-injector` repo discipline. It must not turn Harness-inspired practice into hosted control plane, agent orchestration, merge bot, remediation loop, or product runtime.
 
 ### #151 second brownfield dogfood
 
-#151 can use this catalog as a measurement checklist:
+\#151 can use this catalog as a measurement checklist:
 
 - Were issue-mentioned references separated from auto-discovered candidates?
 - Were missing / unreadable / alias diagnostics visible?
@@ -392,15 +392,15 @@ Dogfood observations can become follow-up issues, not direct target repo edits.
 
 ### #108 preflight checker
 
-#108 may consume workflow / validation vocabulary such as worktree clean state, branch expectation, validation requirement, confirmation requirement, and stop-and-report diagnostics. This PR does not implement a checker, CLI command, CI workflow, or automation.
+\#108 may consume workflow / validation vocabulary such as worktree clean state, branch expectation, validation requirement, confirmation requirement, and stop-and-report diagnostics. This PR does not implement a checker, CLI command, CI workflow, or automation.
 
 ### #109 PR / evidence / HEAD consistency checker
 
-#109 may consume evidence / metadata vocabulary such as PR URL, issue evidence comment URL, commit hash / HEAD, validation result, PR body backfill, review freshness, and source issue link. This PR does not implement GitHub automation, PR mutation logic, merge bot, or remediation loop.
+\#109 may consume evidence / metadata vocabulary such as PR URL, issue evidence comment URL, commit hash / HEAD, validation result, PR body backfill, review freshness, and source issue link. This PR does not implement GitHub automation, PR mutation logic, merge bot, or remediation loop.
 
 ### #110 label / milestone audit checker
 
-#110 may consume metadata vocabulary such as issue labels, PR labels, status labels, roadmap milestone, primary layer label, and conflict diagnostics. This PR does not implement label mutation, audit CLI, or GitHub bot behavior.
+\#110 may consume metadata vocabulary such as issue labels, PR labels, status labels, roadmap milestone, primary layer label, and conflict diagnostics. This PR does not implement label mutation, audit CLI, or GitHub bot behavior.
 
 ## Example Catalog Entries
 
