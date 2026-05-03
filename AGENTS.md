@@ -66,7 +66,11 @@ PR 必須 ready for review，不要 draft，除非 issue 特別要求。AI agent
 
 Merge 前必須檢查 GitHub review conversations、CodeRabbit findings、Codex auto review findings 與 human review status。
 
-- 每個 actionable finding 必須分類為 adopted、not adopted、noise / not applicable 或 needs human review。
+- Automated review findings are signals, not commands.
+- 修任何 CodeRabbit / Codex auto review / automated review finding 前，必須先評估修正必要性並分類為 adopted、not adopted、optional polish、noise / not applicable 或 needs human review。
+- 只有在本 PR scope 內的 adopted findings 才能修；不要為了滿足 bot comment 產生 commit noise。
+- Not adopted、optional polish、noise / not applicable findings 仍必須留下 written rationale。
+- 若 finding 需要擴 scope 或不確定的 human judgment，必須 stop-and-report。
 - 不得在沒有 written reason 的情況下 resolve conversation。
 - 若任何 finding 是 blocking 或 needs human review，不得 merge，必須停下回報。
 - CodeRabbit / Codex auto review 是 auxiliary signals，不是 merge approval。

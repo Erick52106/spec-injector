@@ -306,8 +306,15 @@ Before merge, review closeout must also confirm:
 - Issue evidence comment exists.
 - CI / required checks pass.
 - CodeRabbit / Codex auto review findings were inspected.
+- Automated review findings have been inspected.
+- Each actionable finding is classified according to `docs/workflow.md` as adopted, not adopted, optional polish, noise / not applicable, or needs human review.
+- Adopted findings have implementation / validation evidence.
+- Not adopted / optional polish / noise findings have written rationale.
+- Needs-human-review findings are not unresolved.
+- No conversation is resolved without written rationale.
+- No commit noise was introduced solely to satisfy a bot comment.
+- If the finding requires scope expansion, merge is blocked until human decision.
 - GitHub review conversations and human review verdict were inspected.
-- Actionable findings were classified as adopted, not adopted, noise / not applicable, or needs human review.
 - Blocking / needs-human-review findings are not unresolved; if any remain, stop-and-report instead of merging.
 - Conversations are only resolved after written rationale.
 - Human merge authorization exists.

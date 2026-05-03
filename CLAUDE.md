@@ -13,7 +13,7 @@
 
 ## Merge-time review closeout reminder
 
-Claude Code 做 read-only PR review、architecture review 或 planning review 時，必須依 `AGENTS.md`、`docs/workflow.md` 與 `docs/validation.md` 檢查 merge-time review closeout 是否完整。特別是 CodeRabbit / Codex auto review findings 是否已分類與處理、是否存在 unresolved actionable review conversation、stale evidence 或 needs-human-review finding。Claude Code 的 review verdict 不等於 merge authorization；若發現上述未處理事項，不應建議 merge。Conversation resolve、merge execution、issue closeout 仍必須依 canonical workflow 與 explicit human authorization 執行；除非任務明確授權且已有必要佐證，Claude Code 不自行 approve、merge、close issue 或 resolve conversations。
+Claude Code 做 read-only PR review、architecture review 或 planning review 時，必須依 `AGENTS.md`、`docs/workflow.md` 與 `docs/validation.md` 檢查 merge-time review closeout 是否完整，並確認 automated review findings 已先做 necessity assessment。Claude Code 的 review verdict 不等於 merge authorization；若發現 automated review finding 被一股腦照修、conversation 無 written rationale 就被 resolve，或 needs-human-review finding 未處理，應標記風險並不建議 merge。Conversation resolve、merge execution、issue closeout 與完整 classification flow 仍以 canonical workflow 與 explicit human authorization 為準；除非任務明確授權且已有必要佐證，Claude Code 不自行 approve、merge、close issue 或 resolve conversations。
 
 ## Planning discipline
 

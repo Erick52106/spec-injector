@@ -143,6 +143,49 @@ PR 建立後要在 source issue 留 implementation evidence comment，再把 iss
 
 CI 通過後，若 PR checklist 有 CI item，應勾選。AI agent 不自行 merge PR。
 
+## Automated review finding assessment
+
+Automated review finding assessment 適用於 CodeRabbit、Codex auto review、other automated review tools 與 GitHub review bot comments。
+
+原則：
+
+- Auto review 是訊號，不是命令。
+- 不可一股腦照修 automated review findings。
+- 只有分類為 `adopted` 且在本 PR scope 內的 finding 才修。
+- 不採納也要留下佐證，讓 reviewer 能追查採納與不採納的理由。
+- Summary、walkthrough、no actionable finding 可列為 `noise / not applicable`。
+- Finding 需要 human 判斷、scope decision 或風險不確定時，必須 stop-and-report。
+- CodeRabbit / Codex auto review 是 auxiliary signals，不是 approval；human merge decision 仍是唯一 merge 授權來源。
+
+分類定義：
+
+- `adopted`：finding 確實是 bug、risk 或 repo convention violation，且在本 PR scope 內。修正後必須留下 implementation evidence、validation evidence、commit hash 或 relevant commit。
+- `not adopted`：finding 不適用、會造成反效果，或與 repo design principle / workflow rule 衝突。必須留言說明技術理由，不得用沉默取代決策。
+- `optional polish`：finding 合理但非 blocking，不應阻擋 merge，可留待 follow-up 或 future cleanup。必須說明為何本 PR 不處理。
+- `noise / not applicable`：finding 是誤判、summary-only、walkthrough-only、已過期、已不成立，或不屬於本 PR scope。必須說明不適用理由。
+- `needs human review`：finding 不確定、需要 human decision、需要 scope expansion 或需要風險判斷。必須 stop-and-report，不 merge。
+
+Conversation resolve 規則：
+
+- 只有在留下 written rationale 後才可 resolve conversation。
+- `adopted` finding 應回覆修正內容與 validation。
+- `not adopted` finding 應回覆技術理由。
+- `optional polish` finding 應回覆為何不在本 PR 處理，以及是否需要 follow-up。
+- `noise / not applicable` finding 應回覆或記錄為何不適用。
+- 不要無說明 resolve conversation。
+- 如果 finding 沒有獨立 thread，或只是 summary / walkthrough / no actionable finding，可在 closeout log 記錄為 `noise / not applicable`，不必硬 resolve。
+
+Example:
+
+- PR #156 的 CodeRabbit finding 指出 `docs/source-trust.md` 可能缺 EOF trailing newline。
+- Codex 先 readback 檢查最後 byte 為 `0x0a`。
+- Finding 已不成立。
+- Classification: `noise / not applicable`。
+- Codex 留下 comment 佐證。
+- 不修改檔案，不產生 commit noise。
+
+本節不是 auto-fix 流程，也不暗示 bot findings 必須全部修正。
+
 ## Merge-time review closeout
 
 Merge-time review closeout 發生在 human 已決定可以 merge 之後、真正執行 merge 之前。這不是把 bot review 當 approval，而是確認所有 review 訊號都已被處理、記錄且可追查。
@@ -162,6 +205,7 @@ Merge 前必須檢查：
 
 - `adopted`：採納並完成修正；列出對應 implementation、commit hash 或 relevant commit，以及 validation。
 - `not adopted`：不採納；留下技術理由，說明為何目前不改。
+- `optional polish`：合理但非 blocking；說明為何本 PR 不處理，以及是否需要 follow-up。
 - `noise / not applicable`：summary、walkthrough、no actionable finding、誤報或與本 PR scope 無關；說明為何不適用。
 - `needs human review`：需要 human decision、scope decision 或風險判斷；stop-and-report，不 merge。
 
@@ -170,6 +214,7 @@ Conversation resolve 規則：
 - Resolve conversation 前必須先留下 written rationale。
 - 採納的 finding 應回覆修正內容與 validation。
 - 不採納的 finding 應回覆技術理由。
+- Optional polish finding 應回覆為何不在本 PR 處理，以及是否需要 follow-up。
 - Noise / not applicable finding 應說明為何不適用。
 - Summary / walkthrough / no actionable finding 可以在 closeout log 中記錄為 `noise / not applicable`，不必硬回覆每一則摘要。
 - 不得無說明 resolve review conversation。
