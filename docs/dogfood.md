@@ -229,6 +229,8 @@ False negatives 是 task package 遺漏了重要 context。
 
 Dogfood 可以支援 implementation planning，但不取代 approved plan。若 dogfood 發現真正需要修改 runtime code、classifier behavior、task package output、config schema 或 CLI command，應另開或回到對應 issue，不應在 dogfood report 中順手實作。
 
+Dogfood finding 何時應轉成 bounded follow-up issue、何時只需 report / docs / metadata evidence，見 [harness-gap-loop.md](harness-gap-loop.md)。
+
 ## Non-goals
 
 Dogfood 不是：

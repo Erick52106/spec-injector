@@ -182,7 +182,7 @@ Why it matters: Task package 是 human、Codex、Claude Code、reviewer 之間�
 
 有用原因：dogfood finding -> follow-up issue -> regression test -> evidence closeout 的 loop 能讓 repo 自身快速學習。
 
-為何不是單獨 moat：這是 internal workflow discipline，不是產品主軸。它應改善 `spec-injector` 開發品質，而不是把產品改造成 Harness platform。
+為何不是單獨 moat：這是 internal workflow discipline，不是產品主軸。它應改善 `spec-injector` 開發品質，而不是把產品改造成 Harness platform。具體 policy 見 [harness-gap-loop.md](harness-gap-loop.md)。
 
 ## Weak / Non-moat Candidates
 

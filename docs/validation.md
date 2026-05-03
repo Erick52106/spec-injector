@@ -237,6 +237,8 @@ Create or propose a follow-up issue instead of expanding the current PR when:
 - A validation failure reveals missing test coverage outside the current issue.
 - A docs-only or workflow issue discovers the need for runtime, config schema, CLI, package, or CI changes.
 
+Gap source classification、blocking vs non-blocking follow-up、與何時只需要 docs / metadata evidence，見 [harness-gap-loop.md](harness-gap-loop.md)。
+
 Only add or change CI in the current PR when the source issue explicitly scopes CI / automation work.
 
 ## PR Body Validation Reporting

@@ -6,6 +6,8 @@
 
 它的第一用途是維持 `spec-injector` 專案本身的 AI-assisted development workflow consistency，讓未來 #108 / #109 / #110 這類 repo-local workflow guardrail checkers 有共同規格來源。
 
+Dogfood finding、review blocker、CI failure、target repo safety near miss 與 evidence freshness gap 如何進入 follow-up issue / regression / closeout loop，見 [harness-gap-loop.md](harness-gap-loop.md)。該 loop 使用本文件的 risk-tier、validation、evidence 與 review vocabulary，但不新增 runtime contract。
+
 本文件不是 runtime schema，不是 JSON schema runtime file，不是 product-facing output，也不代表 `spec-injector` 已有 workflow runtime、checker、control plane、merge bot、remediation loop 或 PR automation platform。
 
 `spec-injector` 的產品定位仍是 deterministic request-to-context compiler for AI coding agents。此 contract 只描述 repo-local workflow expectations；branch、PR、issue evidence、metadata closeout 與 review handling 是 surrounding workflow discipline，不是 CLI core 的主要產品輸出。
@@ -467,6 +469,7 @@ Future consumers should wait for #147 vocabulary to stabilize and then split int
 - #109 PR / evidence / HEAD consistency checker: consume PR body, issue evidence, validation, latest HEAD, CI, and backfill vocabulary.
 - #110 label / milestone audit checker: consume metadata expectations, current taxonomy, warning / stop-and-report behavior, and #150 relationship.
 - #151 second brownfield dogfood checklist: consume target repo / dogfood safety and source trust vocabulary.
+- #148 harness gap loop policy: consume risk-tier、validation、evidence、review finding assessment vocabulary，定義 finding-to-follow-up discipline。
 - Future [workflow.md](workflow.md) / [validation.md](validation.md) sync: keep prose rules and contract vocabulary aligned.
 - `CLAUDE.md` may remain a thin adapter to `AGENTS.md`; if it references this contract later, it should point rather than duplicate.
 

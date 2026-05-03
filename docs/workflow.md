@@ -8,6 +8,8 @@
 
 Internal machine-readable workflow contract 的 design-only vocabulary 見 [internal-workflow-contract.md](internal-workflow-contract.md)。該 contract 只描述 repo-local workflow expectations，不代表 CLI runtime、checker、merge bot 或 PR automation 已實作。
 
+Dogfood finding、review blocker、CI failure、evidence freshness gap 與 repeated workflow failure 如何轉成 bounded follow-up issue，見 [harness-gap-loop.md](harness-gap-loop.md)。該 loop 是 repo-local workflow discipline，不是 hosted harness platform 或 remediation automation。
+
 相鄰工具與 roadmap 邊界請見 [docs/positioning.md](positioning.md)。多 agent / Codex / Claude Code / ChatGPT / other agents 的分工與 handoff patterns 請見 [docs/agent-handoff.md](agent-handoff.md)。
 
 ## Worktree-first workflow
