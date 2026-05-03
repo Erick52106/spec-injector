@@ -14,7 +14,7 @@
 - 哪些 evidence 可以支援 validation hints。
 - 哪些 output 不應給 AI 錯誤信任訊號。
 
-本文件是 #129 input adapters、#107 catalog / protocol、#147 internal workflow contract 的設計基礎。#129 的 canonical input adapter proposal 見 [docs/input-adapters.md](input-adapters.md)。它不是 runtime implementation，不改現有 task package / prompt output，不是 hidden LLM、RAG、semantic search 或 vector DB design。
+本文件是 #129 input adapters、#107 catalog / protocol、#147 internal workflow contract 的設計基礎。#129 的 canonical input adapter proposal 見 [docs/input-adapters.md](input-adapters.md)；#107 的 catalog / protocol vocabulary 見 [docs/catalog-protocol.md](catalog-protocol.md)。它不是 runtime implementation，不改現有 task package / prompt output，不是 hidden LLM、RAG、semantic search 或 vector DB design。
 
 ## Source Categories
 
