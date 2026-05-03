@@ -1937,17 +1937,19 @@ test('spec plan keeps basename-only missing diagnostics when no confirmed full p
   assert.match(promptResult.stderr, /Not found: variant-section-dynamic\.tsx; path alias hint: possible moved path src\/ui\/components\/pdp\/variant-section-dynamic\.tsx \(same basename; not a confirmed issue reference\)/);
 });
 
-test('spec plan preserves ambiguity when repeated basename could refer to multiple confirmed full paths', async (t) => {
+test('spec plan preserves ambiguity when a repeated basename is between multiple confirmed full paths', async (t) => {
   const fixture = await createExplicitPathPlanFixture(t, {
     issueNumber: 164,
     title: 'Keep ambiguous basename diagnostics when multiple confirmed full paths share a basename',
     bodyLines: [
       'Confirmed references:',
       '- `src/ui/components/pdp/variant-section-dynamic.tsx`',
-      '- `src/mobile/components/pdp/variant-section-dynamic.tsx`',
       '',
-      'Ambiguous shorthand mention that should stay diagnostic:',
+      'Ambiguous shorthand mention before a second confirmed full path:',
       '- `variant-section-dynamic.tsx`',
+      '',
+      'Second confirmed reference:',
+      '- `src/mobile/components/pdp/variant-section-dynamic.tsx`',
     ],
     config: {
       discovery: {
@@ -1977,6 +1979,51 @@ test('spec plan preserves ambiguity when repeated basename could refer to multip
 
   assert.match(promptIssueSources, /`src\/ui\/components\/pdp\/variant-section-dynamic\.tsx` — issue-mentioned; mentioned in issue/);
   assert.match(promptIssueSources, /`src\/mobile\/components\/pdp\/variant-section-dynamic\.tsx` — issue-mentioned; mentioned in issue/);
+  assert.match(promptMissing, /`variant-section-dynamic\.tsx` — not found \(issue-mentioned; mentioned in issue; path alias hint: ambiguous same basename candidates \(2\): /);
+  assert.match(promptMissing, /src\/ui\/components\/pdp\/variant-section-dynamic\.tsx/);
+  assert.match(promptMissing, /src\/mobile\/components\/pdp\/variant-section-dynamic\.tsx/);
+  assert.match(promptResult.stderr, /Not found: variant-section-dynamic\.tsx; path alias hint: ambiguous same basename candidates \(2\): /);
+});
+
+test('spec plan keeps basename ambiguity when another confirmed full path appears later in the issue', async (t) => {
+  const fixture = await createExplicitPathPlanFixture(t, {
+    issueNumber: 164,
+    title: 'Keep basename ambiguity when later full path introduces a second confirmed candidate',
+    bodyLines: [
+      'First confirmed reference:',
+      '- `src/ui/components/pdp/variant-section-dynamic.tsx`',
+      '',
+      'Shorthand mention before the second confirmed path:',
+      '- `variant-section-dynamic.tsx`',
+      '',
+      'Later confirmed reference with the same basename:',
+      '- `src/mobile/components/pdp/variant-section-dynamic.tsx`',
+    ],
+    config: {
+      discovery: {
+        docs: [],
+        source: [],
+        max_docs: 5,
+        max_source_files: 5,
+      },
+    },
+    repoFiles: {
+      'src/ui/components/pdp/variant-section-dynamic.tsx':
+        'export const desktopVariantSectionDynamic = "DESKTOP_VARIANT_SECTION_DYNAMIC_SENTINEL";\n',
+      'src/mobile/components/pdp/variant-section-dynamic.tsx':
+        'export const mobileVariantSectionDynamic = "MOBILE_VARIANT_SECTION_DYNAMIC_SENTINEL";\n',
+    },
+  });
+
+  const promptResult = await runSpec(
+    ['plan', fixture.issueUrl, '--repo', fixture.repoDir, '--dry-run', '--format', 'prompt'],
+    { env: fixture.env }
+  );
+
+  assert.equal(promptResult.code, 0, promptResult.stderr);
+
+  const promptMissing = sectionBetween(promptResult.stdout, '## 5. Missing Files', '## 6. Instructions');
+
   assert.match(promptMissing, /`variant-section-dynamic\.tsx` — not found \(issue-mentioned; mentioned in issue; path alias hint: ambiguous same basename candidates \(2\): /);
   assert.match(promptMissing, /src\/ui\/components\/pdp\/variant-section-dynamic\.tsx/);
   assert.match(promptMissing, /src\/mobile\/components\/pdp\/variant-section-dynamic\.tsx/);
