@@ -165,7 +165,7 @@ Key terms used across this project:
 - **Task package**: structured context used before AI starts work; it is not an autonomous execution plan.
 - **Implementation evidence**: the structured comment written back to the source issue after PR creation.
 
-For the full glossary, see [docs/concepts.md](docs/concepts.md). Classifier, references, and guardrails details are in [docs/classifier.md](docs/classifier.md), [docs/references.md](docs/references.md), and [docs/guardrails.md](docs/guardrails.md).
+For the full glossary, see [docs/concepts.md](docs/concepts.md). Classifier, references, and guardrails details are in [docs/classifier.md](docs/classifier.md), [docs/references.md](docs/references.md), and [docs/guardrails.md](docs/guardrails.md). Future request input adapter design is in [docs/input-adapters.md](docs/input-adapters.md).
 
 ## Configuration
 

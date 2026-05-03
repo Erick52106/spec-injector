@@ -29,7 +29,7 @@ Deterministic adapter 的工作不是猜人類真正想要什麼，而是把可�
 
 ### 如何延伸 #130 source trust / context budget
 
-#130 定義了 source category、trust level、include mode、diagnostic vocabulary 與 context budget policy。本文件延伸該模型到 input layer：input adapter 必須在任何 reference discovery、guardrail matching、task package rendering 之前，先替 request text 標上 provenance 與 trust labels。
+`#130` 定義了 source category、trust level、include mode、diagnostic vocabulary 與 context budget policy。本文件延伸該模型到 input layer：input adapter 必須在任何 reference discovery、guardrail matching、task package rendering 之前，先替 request text 標上 provenance 與 trust labels。
 
 換句話說，#129 不應重新發明 trust taxonomy；它應把 GitHub issue、raw request、local markdown brief 與 future inputs 都轉成 #130 可消費的 source trust metadata。
 
@@ -59,12 +59,19 @@ Adapter output 應至少包含：
 
 - `input_kind`：例如 `github_issue`、`raw_text_request`、`local_markdown_brief`。
 - `source_category`：對齊 [docs/source-trust.md](source-trust.md)。
-- `trust_level`：confirmed / strong / medium / weak hint / diagnostic / untrusted external。
+- `trust_level`：confirmed / strong / medium / weak / hint / diagnostic / untrusted / external。
 - `extracted_intent`：可由 title、heading、first paragraph 或 explicit goal section 抽出的 request summary。
 - `extracted_references`：explicit repo-relative paths、issue references、PR references、docs references。
 - `diagnostics`：missing / unreadable / ambiguous / conflicting / over-budget / unsupported claim。
 - `confirmation_required`：需要 human confirmation 的原因。
 - `budget_policy`：full-include、reference-only、diagnostics-only、hint-only 或 excluded 的建議。
+- `confidence`：只用於 weak / hint 或 diagnostics-only signals；不得升級 trust level。
+
+Schema naming notes:
+
+- `references` is a prose shorthand for `extracted_references`; future protocol work should use `extracted_references`.
+- `include_mode` is a per-reference expression of `budget_policy`; future protocol work should prefer `budget_policy` unless #107 defines a more precise catalog field.
+- `confidence` is only meaningful for weak / hint or diagnostics-only signals; it must not upgrade trust level.
 
 ## Adapter Definitions
 
@@ -190,7 +197,7 @@ Example: a CodeRabbit comment mentioning `docs/source-trust.md` can become a dia
 | --- | --- |
 | Source category | dogfood report / evaluation artifact; future input only。 |
 | Trust level | Medium for observed command output and diagnostics; weak for conclusions unless backed by exact evidence。 |
-| Extraction rules | Parse target repo identity, command, raw output excerpt, observed false positive / false negative, dirty-state note, follow-up recommendation。 |
+| Extraction rules | Parse target repo identity, command, raw output excerpt, false positive / false negative observations, dirty-state note, follow-up recommendation。 |
 | Allowed extracted signals | Repro command、observed output、target repo status、diagnostic category、candidate follow-up issue。 |
 | Diagnostics-only signals | Unverified conclusion、suggested root cause、target repo file paths not confirmed in source repo、mutation request。 |
 | Human confirmation requirements | Any target repo mutation、turning dogfood observation into implementation scope、changing target repo `.spec-injector/`。 |
@@ -244,7 +251,7 @@ source_category: raw_text_request
 trust_level: weak / hint
 confidence: low
 reason: raw prose used vague marker "可能"
-include_mode: diagnostics-only
+budget_policy: diagnostics-only
 ```
 
 ## Source Trust Mapping
@@ -260,7 +267,7 @@ include_mode: diagnostics-only
 | Local brief reference | local-brief-mentioned | weak to medium; found path can become confirmed path existence | reference-only by default | Mention does not prove the brief is authoritative。 |
 | Repo docs / always_read | repo always_read / configured docs | strong / confirmed when found | high-priority full-include or reference-only | Repo docs constrain work but do not expand issue scope。 |
 | Auto-discovered repo reference | auto-discovered | medium candidate | reference-only or budgeted full-include | Candidate, not human-requested scope。 |
-| AI-generated partial plan | ai-plan-advisory | low / untrusted external | diagnostics-only unless human confirms | Never trust unsupported claims by default。 |
+| AI-generated partial plan | ai-plan-advisory | untrusted / external | diagnostics-only unless human confirms | Never trust unsupported claims by default。 |
 
 ## Context Budget Behavior
 
@@ -309,7 +316,7 @@ input_kind: github_issue
 source_category: human-authored issue
 trust_level: strong
 extracted_intent: clarify source trust labels
-references:
+extracted_references:
   - path: docs/source-trust.md
     source_category: issue-mentioned
     trust_level: strong / confirmed if found
@@ -319,7 +326,7 @@ references:
     trust_level: weak / hint
     reason: mentioned as relationship, not implementation scope
 diagnostics: []
-context_budget:
+budget_policy:
   docs/source-trust.md: high-priority reference; full-include if budget allows
 must_not_infer:
   - runtime source trust implementation
@@ -344,7 +351,7 @@ input_kind: raw_text_request
 source_category: human pasted request
 trust_level: strong for instruction; external for repo facts
 extracted_intent: design raw request input
-references:
+extracted_references:
   - path: src/cli/plan.ts
     source_category: raw-request-mentioned
     trust_level: weak / hint
@@ -352,7 +359,7 @@ references:
     reason: vague marker "可能會碰"
 diagnostics:
   - runtime path mentioned while request says docs-only; require human confirmation before code changes
-context_budget:
+budget_policy:
   raw request: primary input context
   src/cli/plan.ts: diagnostics-only unless human confirms runtime scope
 must_not_infer:
@@ -389,7 +396,7 @@ input_kind: local_markdown_brief
 source_category: local markdown brief
 trust_level: medium pending human confirmation
 extracted_intent: Input adapter proposal
-references:
+extracted_references:
   - path: docs/input-adapters.md
     source_category: local-brief-mentioned
     trust_level: medium / confirmed path intent if output path is approved
@@ -398,7 +405,7 @@ references:
     trust_level: medium / confirmed if found
 diagnostics:
   - future inputs listed; mark as future-only, not near-term implementation targets
-context_budget:
+budget_policy:
   brief frontmatter and Scope: high priority
   Future section: diagnostics / roadmap relationship only
 must_not_infer:
@@ -411,7 +418,7 @@ must_not_infer:
 
 | Failure mode | Diagnostic behavior | Required boundary |
 | --- | --- | --- |
-| Missing file path | Show original repo-relative path, source category, and `not found`; optional alias stays hint-only。 | Do not replace with a guessed path。 |
+| Missing file path | Show original repo-relative path, source category, and `not found`; optional alias stays hint-only. | Do not replace with a guessed path。 |
 | Unreadable file path | Show `unreadable` or `read failed` with stable reason and source metadata。 | Do not call it missing; do not hide read issue。 |
 | Ambiguous request | Mark extracted intent as low confidence and require human confirmation。 | Do not invent allowed files or requirements。 |
 | Conflicting hints | Surface conflict between sections, labels, comments, or pasted text。 | Do not silently choose the broader scope。 |
@@ -424,10 +431,10 @@ must_not_infer:
 
 ## Relationship To Follow-up Issues
 
-- #107 catalog / protocol design should reuse the vocabulary defined here: `input_kind`, `source_category`, `trust_level`, `include_mode`, `diagnostic`, `confidence`, `reason`, `confirmation_required`, and budget fallback metadata。It should encode stable names only after #129 / #130 vocabulary is accepted。
-- #147 internal workflow contract should consume only stable internal workflow vocabulary after #107 / #130 are settled。It may check that task package / prompt context has evidence and trust labels, but it should not turn Harness-inspired discipline into a product control plane。
-- #151 second brownfield dogfood can use this design as a measuring ruler: were input signals source-labeled, were hints separated from confirmed references, did diagnostics catch missing / ambiguous paths, and did context budget stay bounded without target repo mutation。
-- #130 remains the source trust / context budget base layer. This document extends it at the input boundary rather than replacing it。
+- `#107` catalog / protocol design should reuse the vocabulary defined here: `input_kind`, `source_category`, `trust_level`, `budget_policy`, `diagnostic`, `confidence`, `reason`, `confirmation_required`, and budget fallback metadata。It should encode stable names only after `#129` / `#130` vocabulary is accepted。
+- `#147` internal workflow contract should consume only stable internal workflow vocabulary after `#107` / `#130` are settled。It may check that task package / prompt context has evidence and trust labels, but it should not turn Harness-inspired discipline into a product control plane。
+- `#151` second brownfield dogfood can use this design as a measuring ruler: were input signals source-labeled, were hints separated from confirmed references, did diagnostics catch missing / ambiguous paths, and did context budget stay bounded without target repo mutation。
+- `#130` remains the source trust / context budget base layer. This document extends it at the input boundary rather than replacing it。
 
 Suggested implementation issue split after this design:
 
