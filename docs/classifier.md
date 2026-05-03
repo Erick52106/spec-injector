@@ -14,6 +14,7 @@ Classifier 不是 LLM、不是 architecture reviewer，也不是最終決策者�
 - label keyword 命中次之
 - body keyword 命中提供輔助 evidence
 - 最多回傳 5 個 domains
+- keyword matching 使用 deterministic token / phrase boundary，phrase 可跨 whitespace / hyphen，避免 `FormData` 誤中 `orm`、`client` 誤中 `cli` 這類 substring false positive
 
 支援的 domains 由 runtime 內建，例如 `frontend`、`backend`、`api`、`auth`、`database`、`infra`、`cloud-storage`、`blockchain`、`smart-contract`、`wallet`、`i18n`、`testing`、`docs`、`ci`、`tooling`。
 
@@ -42,8 +43,18 @@ Generic product wording 需要小心處理。某些字在不同 domain 中都可
 - `block` / `hash` 單字容易出現在 generic engineering wording，應偏好 `block height`、`transaction hash`、`tx hash` 等更明確 evidence。
 - `address` 可以是 wallet address，也可以是 shipping address、email address 或 UI copy。
 - `send` / `receive` 可以是 wallet 動作，也可以是 messaging 或 notification。
+- `FormData` / `form` 可以是 frontend form action payload，不等於 database / ORM work。
+- `pnpm build` / `pnpm test` 可以是 validation hint，不等於 tooling task。
 
 原則是：generic wording 應弱於 legitimate domain evidence。
+
+## Frontend Form Actions And Tooling Hints
+
+Frontend / UI / PDP / add-to-cart / server action 類 issue 會優先依賴 `frontend`、`client component`、`server action`、`form action`、`add-to-cart` 等 deterministic signals。若 repo taxonomy 沒有更細的 checkout / storefront domain，runtime 會使用現有最接近的 `frontend` domain。
+
+`database` domain 仍應由明確 database evidence 觸發，例如 `migration`、`schema`、`SQL`、`table`、`ORM`、`database transaction` 或具體 persistence wording。`FormData` 或一般 `form` wording 不應單獨觸發 database。
+
+`tooling` domain 仍應由明確 tooling evidence 觸發，例如 `lint config`、`test runner`、`CI workflow`、`package manager config`、`build script`。Package manager command text such as `pnpm build` / `pnpm test` 若只是 validation hint，不應單獨讓 issue 變成 tooling task；但 `upgrade pnpm`、`package manager version`、`lockfile` / `workspace` maintenance 這類 deterministic maintenance context 仍應保留 `tooling`。
 
 ## Wallet / Blockchain Evidence
 

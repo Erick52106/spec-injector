@@ -22,10 +22,10 @@ export interface DomainClassificationResult {
 }
 
 const DOMAIN_KEYWORDS: Record<string, string[]> = {
-  frontend: ['ui', 'component', 'render', 'css', 'style', 'react', 'vue', 'angular', 'svelte', 'button', 'form', 'page', 'layout', 'responsive', 'animation', 'dom', 'html', 'tailwind', 'visual', 'design'],
+  frontend: ['frontend', 'ui', 'component', 'client component', 'server action', 'add-to-cart', 'form action', 'pdp', 'render', 'css', 'style', 'react', 'vue', 'angular', 'svelte', 'button', 'form', 'page', 'layout', 'responsive', 'animation', 'dom', 'html', 'tailwind', 'visual', 'design'],
   backend: ['server', 'service', 'handler', 'controller', 'middleware', 'worker', 'daemon', 'queue', 'job', 'cron', 'scheduler', 'grpc', 'rpc'],
   api: ['api', 'endpoint', 'rest', 'graphql', 'http', 'route', 'swagger', 'openapi', 'webhook', 'request', 'response'],
-  auth: ['auth', 'login', 'logout', 'token', 'jwt', 'oauth', 'session', 'password', 'credential', 'permission', 'role', 'access', 'signup', 'register'],
+  auth: ['auth', 'authentication', 'authorization', 'authorize', 'authorized', 'login', 'logout', 'token', 'jwt', 'oauth', 'session', 'password', 'credential', 'permission', 'role', 'access', 'signup', 'register'],
   database: ['database', 'db', 'sql', 'query', 'queries', 'migration', 'schema', 'table', 'column', 'model', 'data model', 'orm', 'repository layer', 'persistence', 'persisted', 'record storage', 'postgres', 'postgresql', 'mysql', 'sqlite', 'mongo', 'redis', 'index', 'prisma', 'drizzle', 'gorm'],
   infra: ['infra', 'deploy', 'docker', 'kubernetes', 'k8s', 'terraform', 'helm', 'nginx', 'network', 'devops', 'provision', 'cloud', 'vm', 'container'],
   'cloud-storage': ['s3', 'gcs', 'storage', 'bucket', 'upload', 'download', 'blob', 'cdn', 'file upload', 'asset', 'object storage'],
@@ -36,10 +36,18 @@ const DOMAIN_KEYWORDS: Record<string, string[]> = {
   testing: ['.spec.ts', '.spec.tsx', '.spec.js', '.spec.jsx', '.spec.mts', '.spec.mjs', '.spec.cts', '.spec.cjs', '.test.ts', '.test.tsx', '.test.js', '.test.jsx', '.test.mts', '.test.mjs', '.test.cts', '.test.cjs', 'test', 'unit', 'integration', 'e2e', 'mock', 'stub', 'coverage', 'jest', 'vitest', 'playwright', 'cypress', 'assert', 'fixture'],
   docs: ['docs', 'documentation', 'readme', 'guide', 'changelog', 'wiki', 'jsdoc', 'typedoc'],
   ci: ['ci', 'cd', 'pipeline', 'workflow', 'github action', 'jenkins', 'travis', 'circleci', 'build step', 'artifact', 'badge'],
-  tooling: ['lint', 'eslint', 'prettier', 'config', 'setup', 'cli', 'script', 'generator', 'plugin', 'npm', 'yarn', 'pnpm', 'bun'],
+  tooling: ['lint', 'eslint', 'prettier', 'config', 'setup', 'cli', 'script', 'generator', 'plugin', 'package manager', 'npm', 'yarn', 'pnpm', 'bun'],
 };
 
 const MAX_DOMAINS = 5;
+const WEAK_TOOLING_SIGNALS = ['npm', 'yarn', 'pnpm', 'bun'];
+const PACKAGE_MANAGER_PATTERN = '(?:npm|yarn|pnpm|bun)';
+const STRONG_PACKAGE_MANAGER_CONTEXT_PATTERNS = [
+  new RegExp(`\\b(?:upgrade|update|bump|configure|configured|configuring|migrate|switch)\\s+${PACKAGE_MANAGER_PATTERN}\\b`, 'i'),
+  new RegExp(`\\b${PACKAGE_MANAGER_PATTERN}\\s+(?:version|workspace|lockfile|config|configuration)\\b`, 'i'),
+  /\bpackage[\s-]+manager\b/i,
+  /\b(?:lockfile|workspace)\b/i,
+];
 const GENERIC_WALLET_SIGNALS = ['transactions', 'transaction'];
 const GENERIC_WALLET_REASON = 'generic product transaction wording';
 const GENERIC_API_CONTRACT_SIGNALS = ['contract'];
@@ -69,15 +77,17 @@ export function classifyDomainsWithEvidence(issue: Issue): DomainClassificationR
   for (const [domain, keywords] of Object.entries(DOMAIN_KEYWORDS)) {
     let score = 0;
     for (const kw of keywords) {
-      if (title.includes(kw)) score += 3;
-      if (labels.includes(kw)) score += 2;
-      if (body.includes(kw)) score += 1;
+      if (matchesTerm(title, kw)) score += 3;
+      if (matchesTerm(labels, kw)) score += 2;
+      if (matchesTerm(body, kw)) score += 1;
     }
     if (score > 0) {
       scores[domain] = score;
       evidenceByDomain.set(domain, collectEvidence(domain, keywords, fields));
     }
   }
+
+  suppressWeakToolingEvidence(scores, evidenceByDomain, fields);
 
   const domains = Object.entries(scores)
     .sort((a, b) => b[1] - a[1])
@@ -100,7 +110,7 @@ function collectEvidence(
 
   for (const { source, value } of fields) {
     for (const term of keywords) {
-      if (value.includes(term)) evidence.push({ domain, term, source });
+      if (matchesTerm(value, term)) evidence.push({ domain, term, source });
     }
   }
 
@@ -139,7 +149,7 @@ function findRejectedSignal(
 ): RejectedDomainReason | undefined {
   for (const { source, value } of fields) {
     for (const signal of signals) {
-      if (value.includes(signal)) {
+      if (matchesTerm(value, signal)) {
         return {
           domain,
           signal,
@@ -153,12 +163,50 @@ function findRejectedSignal(
   return undefined;
 }
 
+function suppressWeakToolingEvidence(
+  scores: Record<string, number>,
+  evidenceByDomain: Map<string, DomainEvidence[]>,
+  fields: Array<{ source: DomainEvidenceSource; value: string }>
+): void {
+  const evidence = evidenceByDomain.get('tooling') ?? [];
+  if (evidence.length === 0) return;
+
+  const hasOnlyWeakToolingSignals = evidence.every((entry) => WEAK_TOOLING_SIGNALS.includes(entry.term));
+  if (!hasOnlyWeakToolingSignals) return;
+
+  const hasTitleOrLabelSignal = evidence.some((entry) => entry.source === 'title' || entry.source === 'labels');
+  if (hasTitleOrLabelSignal) return;
+
+  if (hasStrongPackageManagerContext(fields)) return;
+
+  delete scores.tooling;
+  evidenceByDomain.delete('tooling');
+}
+
+function hasStrongPackageManagerContext(fields: Array<{ source: DomainEvidenceSource; value: string }>): boolean {
+  const text = fields.map(({ value }) => value).join(' ');
+  return STRONG_PACKAGE_MANAGER_CONTEXT_PATTERNS.some((pattern) => pattern.test(text));
+}
+
+function matchesTerm(value: string, term: string): boolean {
+  if (term.startsWith('.')) {
+    return value.includes(term);
+  }
+
+  const escaped = term.trim().split(/\s+/).map(escapeRegExp).join('[\\s-]+');
+  return new RegExp(`(^|[^a-z0-9])${escaped}([^a-z0-9]|$)`, 'i').test(value);
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 function hasGenericApiContractContext(fields: Array<{ source: DomainEvidenceSource; value: string }>): boolean {
   const text = fields.map(({ value }) => value).join(' ');
-  return GENERIC_API_CONTRACT_CONTEXT.some((term) => text.includes(term));
+  return GENERIC_API_CONTRACT_CONTEXT.some((term) => matchesTerm(text, term));
 }
 
 function hasGenericDatabaseTransactionContext(fields: Array<{ source: DomainEvidenceSource; value: string }>): boolean {
   const text = fields.map(({ value }) => value).join(' ');
-  return GENERIC_DATABASE_TRANSACTION_CONTEXT.some((term) => text.includes(term));
+  return GENERIC_DATABASE_TRANSACTION_CONTEXT.some((term) => matchesTerm(text, term));
 }

@@ -113,6 +113,57 @@ test('legitimate testing evidence still triggers testing domain', () => {
   ));
 });
 
+test('authentication wording still triggers auth after boundary matching', () => {
+  const result = classifyDomainsWithEvidence(issue({
+    title: 'Fix authentication callback flow',
+    body: [
+      'Users can fail after completing the authentication callback.',
+      'Keep credential behavior stable.',
+    ].join('\n'),
+    labels: [],
+  }));
+
+  assert.ok(result.domains.includes('auth'), `Expected auth in ${result.domains.join(', ')}`);
+  assert.ok(result.evidence.some((e) =>
+    e.domain === 'auth' && e.term === 'authentication' && e.source === 'title'
+  ));
+});
+
+test('authorization wording still triggers auth after boundary matching', () => {
+  const result = classifyDomainsWithEvidence(issue({
+    title: 'Fix authorization policy flow',
+    body: [
+      'Users can fail authorization after role changes.',
+      'Keep access behavior stable.',
+    ].join('\n'),
+    labels: [],
+  }));
+
+  assert.ok(result.domains.includes('auth'), `Expected auth in ${result.domains.join(', ')}`);
+  assert.ok(result.evidence.some((e) =>
+    e.domain === 'auth' && e.term === 'authorization' && e.source === 'title'
+  ));
+});
+
+test('explicit auth signals still trigger auth after boundary matching', () => {
+  const result = classifyDomainsWithEvidence(issue({
+    title: 'Fix login token session handling',
+    body: [
+      'Keep oauth credential and password behavior stable.',
+      'Do not change unrelated frontend copy.',
+    ].join('\n'),
+    labels: ['auth'],
+  }));
+
+  assert.ok(result.domains.includes('auth'), `Expected auth in ${result.domains.join(', ')}`);
+  assert.ok(result.evidence.some((e) =>
+    e.domain === 'auth' && e.term === 'login' && e.source === 'title'
+  ));
+  assert.ok(result.evidence.some((e) =>
+    e.domain === 'auth' && e.term === 'auth' && e.source === 'labels'
+  ));
+});
+
 test('legitimate database evidence still triggers database domain', () => {
   const result = classifyDomainsWithEvidence(issue({
     title: 'Add migration SQL schema and table indexes',
@@ -130,6 +181,243 @@ test('legitimate database evidence still triggers database domain', () => {
   assert.ok(result.evidence.some((e) =>
     e.domain === 'database' && e.term === 'postgresql' && e.source === 'body'
   ));
+});
+
+test('frontend form-action wording does not match database from FormData or form alone', () => {
+  const result = classifyDomainsWithEvidence(issue({
+    title: 'Fix add-to-cart server action silent fail on PDP',
+    body: [
+      'The frontend add-to-cart flow uses a server action with FormData from a product form.',
+      'The client component renders useFormStatus and useActionState while the action silently fails.',
+      'Keep the fix focused on UI feedback and form-action behavior.',
+    ].join('\n'),
+    labels: ['frontend'],
+  }));
+
+  assert.ok(result.domains.includes('frontend'), `Expected frontend in ${result.domains.join(', ')}`);
+  assert.ok(!result.domains.includes('database'), `Expected database to be absent from ${result.domains.join(', ')}`);
+  assert.ok(!result.evidence.some((e) => e.domain === 'database'), `Expected no database evidence, got ${JSON.stringify(result.evidence)}`);
+});
+
+test('hyphenated frontend form-action wording still matches frontend', () => {
+  const result = classifyDomainsWithEvidence(issue({
+    title: 'Fix server-action form-action add-to-cart flow',
+    body: [
+      'The client-component renders PDP UI feedback.',
+      'Keep FormData handling deterministic.',
+    ].join('\n'),
+    labels: [],
+  }));
+
+  assert.ok(result.domains.includes('frontend'), `Expected frontend in ${result.domains.join(', ')}`);
+  assert.ok(result.evidence.some((e) =>
+    e.domain === 'frontend' && e.term === 'server action' && e.source === 'title'
+  ));
+  assert.ok(result.evidence.some((e) =>
+    e.domain === 'frontend' && e.term === 'form action' && e.source === 'title'
+  ));
+});
+
+test('FormData alone does not match orm or database by substring', () => {
+  const result = classifyDomainsWithEvidence(issue({
+    title: 'Handle FormData payload in server action',
+    body: [
+      'Parse FormData fields from a frontend form action.',
+      'Keep the UI response deterministic.',
+    ].join('\n'),
+    labels: ['frontend'],
+  }));
+
+  assert.ok(result.domains.includes('frontend'), `Expected frontend in ${result.domains.join(', ')}`);
+  assert.ok(!result.domains.includes('database'), `Expected database to be absent from ${result.domains.join(', ')}`);
+  assert.ok(!result.evidence.some((e) => e.domain === 'database' && e.term === 'orm'), `Expected no orm evidence, got ${JSON.stringify(result.evidence)}`);
+});
+
+test('actual database issue still matches database after form-action suppression', () => {
+  const result = classifyDomainsWithEvidence(issue({
+    title: 'Add database migration for cart item table schema',
+    body: [
+      'Create SQL migration coverage for cart item records.',
+      'Update ORM transaction handling for the checkout table.',
+    ].join('\n'),
+    labels: ['backend'],
+  }));
+
+  assert.ok(result.domains.includes('database'), `Expected database in ${result.domains.join(', ')}`);
+  assert.ok(result.evidence.some((e) =>
+    e.domain === 'database' && e.term === 'migration' && e.source === 'title'
+  ));
+  assert.ok(result.evidence.some((e) =>
+    e.domain === 'database' && e.term === 'orm' && e.source === 'body'
+  ));
+});
+
+test('pnpm validation and client wording do not alone make a tooling task', () => {
+  const result = classifyDomainsWithEvidence(issue({
+    title: 'Fix client add-to-cart form feedback',
+    body: [
+      'The client component should show an error when the server action returns a silent failure.',
+      'Validation commands: pnpm build and pnpm test.',
+      'Do not change package scripts or build tooling.',
+    ].join('\n'),
+    labels: ['frontend'],
+  }));
+
+  assert.ok(result.domains.includes('frontend'), `Expected frontend in ${result.domains.join(', ')}`);
+  assert.ok(!result.domains.includes('tooling'), `Expected tooling to be absent from ${result.domains.join(', ')}`);
+  assert.ok(!result.evidence.some((e) => e.domain === 'tooling'), `Expected no tooling evidence, got ${JSON.stringify(result.evidence)}`);
+});
+
+test('client wording alone does not match cli or tooling by substring', () => {
+  const result = classifyDomainsWithEvidence(issue({
+    title: 'Fix client component form feedback',
+    body: [
+      'The client component should render clear UI feedback.',
+      'Keep the server action response visible to the page.',
+    ].join('\n'),
+    labels: ['frontend'],
+  }));
+
+  assert.ok(result.domains.includes('frontend'), `Expected frontend in ${result.domains.join(', ')}`);
+  assert.ok(!result.domains.includes('tooling'), `Expected tooling to be absent from ${result.domains.join(', ')}`);
+  assert.ok(!result.evidence.some((e) => e.domain === 'tooling' && e.term === 'cli'), `Expected no cli evidence, got ${JSON.stringify(result.evidence)}`);
+});
+
+test('run pnpm build validation wording alone does not match tooling', () => {
+  const result = classifyDomainsWithEvidence(issue({
+    title: 'Fix frontend form feedback',
+    body: [
+      'Run pnpm build and pnpm test as validation.',
+      'Keep the change focused on UI behavior.',
+    ].join('\n'),
+    labels: ['frontend'],
+  }));
+
+  assert.ok(result.domains.includes('frontend'), `Expected frontend in ${result.domains.join(', ')}`);
+  assert.ok(!result.domains.includes('tooling'), `Expected tooling to be absent from ${result.domains.join(', ')}`);
+  assert.ok(!result.evidence.some((e) => e.domain === 'tooling'), `Expected no tooling evidence, got ${JSON.stringify(result.evidence)}`);
+});
+
+test('package manager maintenance still matches tooling when package manager is the task', () => {
+  const result = classifyDomainsWithEvidence(issue({
+    title: 'Upgrade pnpm package manager version',
+    body: [
+      'Update the package manager config for the repository.',
+      'Keep lockfile behavior stable.',
+    ].join('\n'),
+    labels: [],
+  }));
+
+  assert.ok(result.domains.includes('tooling'), `Expected tooling in ${result.domains.join(', ')}`);
+  assert.ok(result.evidence.some((e) =>
+    e.domain === 'tooling' && e.term === 'pnpm' && e.source === 'title'
+  ));
+  assert.ok(result.evidence.some((e) =>
+    e.domain === 'tooling' && e.term === 'package manager' && e.source === 'title'
+  ));
+});
+
+test('body-only package manager maintenance still matches tooling', () => {
+  const result = classifyDomainsWithEvidence(issue({
+    title: 'Dependency maintenance',
+    body: [
+      'Upgrade pnpm to 10.35.',
+      'Keep the lockfile stable after the package manager version bump.',
+    ].join('\n'),
+    labels: [],
+  }));
+
+  assert.ok(result.domains.includes('tooling'), `Expected tooling in ${result.domains.join(', ')}`);
+  assert.ok(result.evidence.some((e) =>
+    e.domain === 'tooling' && e.term === 'pnpm' && e.source === 'body'
+  ));
+});
+
+test('body-only upgrade pnpm wording still matches tooling without exact version hard-coding', () => {
+  const result = classifyDomainsWithEvidence(issue({
+    title: 'Dependency maintenance',
+    body: [
+      'Upgrade pnpm to 10.35.',
+      'Keep lockfile behavior stable after the version bump.',
+    ].join('\n'),
+    labels: [],
+  }));
+
+  assert.ok(result.domains.includes('tooling'), `Expected tooling in ${result.domains.join(', ')}`);
+  assert.ok(result.evidence.some((e) =>
+    e.domain === 'tooling' && e.term === 'pnpm' && e.source === 'body'
+  ));
+});
+
+test('package manager version wording matches tooling without a concrete manager name', () => {
+  const result = classifyDomainsWithEvidence(issue({
+    title: 'Update package manager version',
+    body: [
+      'Keep workspace install behavior stable.',
+      'Do not change runtime features.',
+    ].join('\n'),
+    labels: [],
+  }));
+
+  assert.ok(result.domains.includes('tooling'), `Expected tooling in ${result.domains.join(', ')}`);
+  assert.ok(result.evidence.some((e) =>
+    e.domain === 'tooling' && e.term === 'package manager' && e.source === 'title'
+  ));
+});
+
+test('hyphenated package-manager wording matches tooling', () => {
+  const result = classifyDomainsWithEvidence(issue({
+    title: 'Update package-manager version',
+    body: [
+      'Keep workspace install behavior stable.',
+      'Do not change runtime features.',
+    ].join('\n'),
+    labels: [],
+  }));
+
+  assert.ok(result.domains.includes('tooling'), `Expected tooling in ${result.domains.join(', ')}`);
+  assert.ok(result.evidence.some((e) =>
+    e.domain === 'tooling' && e.term === 'package manager' && e.source === 'title'
+  ));
+});
+
+test('actual tooling issue still matches tooling', () => {
+  const result = classifyDomainsWithEvidence(issue({
+    title: 'Update build script lint config and test runner',
+    body: [
+      'Adjust the package manager config for CI workflow setup.',
+      'Keep the pnpm script and eslint config aligned with the test runner.',
+    ].join('\n'),
+    labels: ['area:tooling'],
+  }));
+
+  assert.ok(result.domains.includes('tooling'), `Expected tooling in ${result.domains.join(', ')}`);
+  assert.ok(result.evidence.some((e) =>
+    e.domain === 'tooling' && e.term === 'script' && e.source === 'title'
+  ));
+  assert.ok(result.evidence.some((e) =>
+    e.domain === 'tooling' && e.term === 'config' && e.source === 'body'
+  ));
+});
+
+test('dogfood-shaped add-to-cart issue keeps frontend signal without database or tooling noise', () => {
+  const result = classifyDomainsWithEvidence(issue({
+    title: 'Storefront add-to-cart fails from product page server action',
+    body: [
+      'Implement the PDP add-to-cart form action for a storefront product page.',
+      'The React client component passes FormData into a server action and uses useFormStatus / useActionState.',
+      'The current UI can silently fail when cart state is not updated.',
+      'Suggested validation: pnpm build and pnpm test.',
+      'Do not mutate checkout, payment, package scripts, or target repo configuration.',
+    ].join('\n'),
+    labels: ['frontend'],
+  }));
+
+  assert.ok(result.domains.includes('frontend'), `Expected frontend in ${result.domains.join(', ')}`);
+  assert.ok(!result.domains.includes('database'), `Expected database to be absent from ${result.domains.join(', ')}`);
+  assert.ok(!result.domains.includes('tooling'), `Expected tooling to be absent from ${result.domains.join(', ')}`);
+  assert.ok(!result.evidence.some((e) => e.domain === 'database'), `Expected no database evidence, got ${JSON.stringify(result.evidence)}`);
+  assert.ok(!result.evidence.some((e) => e.domain === 'tooling'), `Expected no tooling evidence, got ${JSON.stringify(result.evidence)}`);
 });
 
 test('classification evidence and rejected reasons keep deterministic shape and ordering', () => {
@@ -158,6 +446,12 @@ test('classification evidence and rejected reasons keep deterministic shape and 
       signal: 'transaction',
       source: 'title',
       reason: 'generic product transaction wording',
+    },
+    {
+      domain: 'database',
+      signal: 'transaction',
+      source: 'title',
+      reason: 'generic transaction wording',
     },
   ]);
 });
