@@ -8,6 +8,8 @@
 
 核心提醒：相鄰工具可以啟發 artifact discipline、workflow clarity、review handoff 與產品呈現，但不應把 `spec-injector` 推向 another Spec Kit、Spec Kitty lite，或 generic agent workflow platform。
 
+產品護城河、non-moat risk register、do-not-build list 與 roadmap ordering 的 source of truth 見 [docs/product-moat.md](product-moat.md)。
+
 ## spec-injector positioning
 
 `spec-injector` is a deterministic issue/request-to-context compiler for AI coding agents.
@@ -79,6 +81,12 @@ GitHub / platform agent workflow 更偏平台級 agent orchestration、tracking 
 這類工具值得借鏡的是 PR / issue integration、status visibility、review handoff、workflow logs 與 human review checkpoint。
 
 差異在於：`spec-injector` 不應正面硬撞平台級 agent workflow，也不應假設自己是 hosted orchestration layer。它應保持 transparent、deterministic、repo-safe context compiler：產出 agent-ready context，讓人或任意 agent 決定如何實作。
+
+### E. Harness Engineering as internal workflow inspiration
+
+Harness Engineering 可以作為 `spec-injector` repo 自身 AI-assisted development workflow 的借鏡，例如 commit-bound evidence、SHA / HEAD discipline、preflight checks、review freshness 與 dogfood-to-regression loop。
+
+差異在於：這是 internal workflow inspiration，不是產品主軸。`spec-injector` 不應因此成為 hosted control-plane platform、agent orchestration platform、remediation bot 或 merge bot。#108 / #109 / #110 / #148 / #147 應優先服務 repo-local workflow guardrails，而不是把 CLI core 轉成 Harness platform。
 
 ## Differentiation table
 
