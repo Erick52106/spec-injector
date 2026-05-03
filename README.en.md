@@ -235,6 +235,7 @@ These directions should get separate issues, tests, and corresponding docs updat
 - Agent instructions: [AGENTS.md](AGENTS.md)
 - Architecture: [docs/architecture.md](docs/architecture.md)
 - Core concepts: [docs/concepts.md](docs/concepts.md)
+- Product moat thesis: [docs/product-moat.md](docs/product-moat.md)
 - Classifier: [docs/classifier.md](docs/classifier.md)
 - References: [docs/references.md](docs/references.md)
 - Guardrails: [docs/guardrails.md](docs/guardrails.md)

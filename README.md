@@ -236,6 +236,7 @@ Important fields:
 - Agent handoff patterns: [docs/agent-handoff.md](docs/agent-handoff.md)
 - Architecture: [docs/architecture.md](docs/architecture.md)
 - Core concepts: [docs/concepts.md](docs/concepts.md)
+- Product moat thesis: [docs/product-moat.md](docs/product-moat.md)
 - Positioning and adjacent workflows: [docs/positioning.md](docs/positioning.md)
 - Classifier: [docs/classifier.md](docs/classifier.md)
 - References: [docs/references.md](docs/references.md)
