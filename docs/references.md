@@ -60,6 +60,14 @@ Issue-mentioned references 是 issue body 中明確提到的 repo-relative file 
 
 Issue-mentioned references 會在 prompt output 與 full task package 中獨立呈現，並標示 source `issue-mentioned` 與 reason `mentioned in issue`。若檔案不存在或讀取失敗，會進入 Missing Files，並保留 `issue-mentioned` source metadata。
 
+若 issue-mentioned path 不存在，spec-injector 會用 deterministic repo path matching 產生保守的 path alias hint。這些 hints 只出現在 Missing Files / diagnostics，並會標示 `not a confirmed issue reference`；hinted path 不會被提升成 issue-mentioned reference，也不會混進 normal references list。
+
+目前 path alias hint 只使用可解釋的 basename match：
+
+- 若只有一個 same-basename candidate，顯示 `possible moved path`。
+- 若有多個 same-basename candidates，顯示 ambiguous count 與有限候選清單。
+- 若沒有 deterministic candidate，維持原本 `not found` 行為。
+
 這類 references 通常是 strongest issue-local signal，但仍應遵守 scope guard：被提到不代表一定要修改。
 
 ## Auto-discovered References

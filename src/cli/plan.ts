@@ -107,7 +107,7 @@ export async function plan(
   const builtInPresetCount = foundAlwaysDocs.filter((d) => d.kind === 'built-in-preset').length;
   console.log(`✓ Docs — repo always_read: ${repoAlwaysReadCount}, built-in presets: ${builtInPresetCount}, discovered: ${filteredDiscoveredDocs.filter((d) => d.found).length}, explicit: ${explicitDocs.length + filteredDiscoveryDocs.filter(d => d.found).length}, missing/read issues: ${missingDocs.length}, sources: ${combinedSourceReferences.length}`);
   if (missingDocs.length > 0) {
-    for (const d of missingDocs) console.warn(`  ⚠  ${renderReadDiagnosticLabel(d)}: ${d.filePath}${renderReadErrorCodeSuffix(d)}`);
+    for (const d of missingDocs) console.warn(`  ⚠  ${renderReadDiagnosticLabel(d)}: ${d.filePath}${renderReadDiagnosticHintSuffix(d)}${renderReadErrorCodeSuffix(d)}`);
   }
 
   // 8. Build vars and render
@@ -285,6 +285,11 @@ function renderReadErrorCodeSuffix(doc: DocSection): string {
   return ` (${doc.readErrorCode})`;
 }
 
+function renderReadDiagnosticHintSuffix(doc: DocSection): string {
+  const hint = renderPathAliasHint(doc, { useMarkdown: false });
+  return hint ? `; ${hint}` : '';
+}
+
 function mergeReasonSignals(primary: DocSection[], secondary: DocSection[]): DocSection[] {
   const secondaryByPath = new Map(secondary.map((doc) => [doc.filePath, doc]));
   return primary.map((doc) => {
@@ -362,7 +367,28 @@ function renderDocMetadata(
     metadata.push(opts.includeSourcePrefix ? `source: ${sourceLabel}` : sourceLabel);
   }
   metadata.push(...(doc.reasons ?? []));
+  const aliasHint = renderPathAliasHint(doc, { useMarkdown: true });
+  if (aliasHint) metadata.push(aliasHint);
   return metadata;
+}
+
+function renderPathAliasHint(
+  doc: DocSection,
+  opts: { useMarkdown: boolean }
+): string | null {
+  const hint = doc.pathAliasHints?.[0];
+  if (!hint) return null;
+
+  const candidates = opts.useMarkdown
+    ? hint.candidatePaths.map((candidatePath) => `\`${candidatePath}\``).join(', ')
+    : hint.candidatePaths.join(', ');
+
+  switch (hint.kind) {
+    case 'possible-moved-path':
+      return `path alias hint: possible moved path ${candidates} (${hint.reason}; not a confirmed issue reference)`;
+    case 'ambiguous-same-basename-candidates':
+      return `path alias hint: ambiguous same basename candidates (${hint.candidateCount}): ${candidates} (not a confirmed issue reference)`;
+  }
 }
 
 function referenceSourceLabel(doc: DocSection): string | null {

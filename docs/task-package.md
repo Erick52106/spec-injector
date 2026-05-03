@@ -70,6 +70,8 @@ Task package 適合用於：
 
 Missing Files 會區分 `not found` 與 `read failed` / `unreadable` 類型的 read issue。不存在的 path 才應標示為 `not found`；已被發現但無法讀取的 reference 應保留 source metadata，避免把 read failure 誤當成 missing file。
 
+Issue-mentioned `not found` paths 可能附帶 deterministic path alias hint，例如 same-basename 的 possible moved path 或 ambiguous candidates。這是提示使用者確認 stale / renamed path 的輔助訊號，不是 confirmed reference；原始 missing path 仍會留在 Missing Files。
+
 ## What It Is Not
 
 Task package 不是：

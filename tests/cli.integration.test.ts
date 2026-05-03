@@ -1624,6 +1624,75 @@ test('spec plan reports missing explicit issue-mentioned file paths without fail
   assert.match(fullResult.stdout, /apps\/dashboard\/src\/providers\/missingProvider\.ts/);
 });
 
+test('spec plan adds deterministic path alias hints for missing issue-mentioned paths', async (t) => {
+  const fixture = await createExplicitPathPlanFixture(t, {
+    issueNumber: 135,
+    title: 'Add missing issue-mentioned path alias hints',
+    bodyLines: [
+      'Missing references to inspect:',
+      '- `old/path/foo.ts`',
+      '- `old/path/bar.ts`',
+      '- `old/path/missing.ts`',
+      '- `src/readable.ts`',
+    ],
+    config: {
+      discovery: {
+        docs: [],
+        source: [],
+        max_docs: 5,
+        max_source_files: 5,
+      },
+    },
+    repoFiles: {
+      'new/path/foo.ts': 'export const movedFoo = "MOVED_FOO_SENTINEL";\n',
+      'feature/one/bar.ts': 'export const firstBar = "FIRST_BAR_SENTINEL";\n',
+      'feature/two/bar.ts': 'export const secondBar = "SECOND_BAR_SENTINEL";\n',
+      'src/readable.ts': 'export const readable = "READABLE_ISSUE_SENTINEL";\n',
+    },
+  });
+
+  const promptFirst = await runSpec(
+    ['plan', fixture.issueUrl, '--repo', fixture.repoDir, '--dry-run', '--format', 'prompt'],
+    { env: fixture.env }
+  );
+  const promptSecond = await runSpec(
+    ['plan', fixture.issueUrl, '--repo', fixture.repoDir, '--dry-run', '--format', 'prompt'],
+    { env: fixture.env }
+  );
+  const fullResult = await runSpec(
+    ['plan', fixture.issueUrl, '--repo', fixture.repoDir, '--dry-run'],
+    { env: fixture.env }
+  );
+
+  assert.equal(promptFirst.code, 0, promptFirst.stderr);
+  assert.equal(promptSecond.code, 0, promptSecond.stderr);
+  assert.equal(fullResult.code, 0, fullResult.stderr);
+  assert.equal(normalizePlanOutput(promptSecond.stdout), normalizePlanOutput(promptFirst.stdout));
+
+  const promptIssueSources = sectionBetween(promptFirst.stdout, '### Issue-Mentioned Source Files', '### Auto-Discovered Docs');
+  const promptMissing = sectionBetween(promptFirst.stdout, '## 5. Missing Files', '## 6. Instructions');
+  const fullIssueSources = sectionBetween(fullResult.stdout, '## 5. Issue-Mentioned Source Files', '## 6. Auto-Discovered Documentation');
+  const fullMissing = sectionBetween(fullResult.stdout, '## 9. Missing Files', '## 10. Suggested Verification Checklist');
+
+  assert.match(promptIssueSources, /`src\/readable\.ts` — issue-mentioned; mentioned in issue/);
+  assert.doesNotMatch(promptIssueSources, /path alias hint/);
+  assert.doesNotMatch(promptIssueSources, /new\/path\/foo\.ts|feature\/one\/bar\.ts|feature\/two\/bar\.ts/);
+  assert.match(fullIssueSources, /### src\/readable\.ts\n\n_source: issue-mentioned; mentioned in issue_/);
+  assert.doesNotMatch(fullIssueSources, /### new\/path\/foo\.ts|### feature\/one\/bar\.ts|### feature\/two\/bar\.ts/);
+
+  assert.match(promptMissing, /`old\/path\/foo\.ts` — not found \(issue-mentioned; mentioned in issue; path alias hint: possible moved path `new\/path\/foo\.ts` \(same basename; not a confirmed issue reference\)\)/);
+  assert.match(fullMissing, /`old\/path\/foo\.ts` — not found \(issue-mentioned; mentioned in issue; path alias hint: possible moved path `new\/path\/foo\.ts` \(same basename; not a confirmed issue reference\)\)/);
+  assert.match(promptFirst.stderr, /Not found: old\/path\/foo\.ts; path alias hint: possible moved path new\/path\/foo\.ts \(same basename; not a confirmed issue reference\)/);
+
+  assert.match(promptMissing, /`old\/path\/bar\.ts` — not found \(issue-mentioned; mentioned in issue; path alias hint: ambiguous same basename candidates \(2\): `feature\/one\/bar\.ts`, `feature\/two\/bar\.ts` \(not a confirmed issue reference\)\)/);
+  assert.match(promptFirst.stderr, /Not found: old\/path\/bar\.ts; path alias hint: ambiguous same basename candidates \(2\): feature\/one\/bar\.ts, feature\/two\/bar\.ts \(not a confirmed issue reference\)/);
+
+  assert.match(promptMissing, /`old\/path\/missing\.ts` — not found \(issue-mentioned; mentioned in issue\)/);
+  assert.doesNotMatch(promptMissing, /old\/path\/missing\.ts[^\n]*path alias hint/);
+  assert.doesNotMatch(promptMissing, /MOVED_FOO_SENTINEL|FIRST_BAR_SENTINEL|SECOND_BAR_SENTINEL/);
+  assert.doesNotMatch(fullMissing, /MOVED_FOO_SENTINEL|FIRST_BAR_SENTINEL|SECOND_BAR_SENTINEL/);
+});
+
 test('spec plan distinguishes missing files from existing paths that cannot be read', async (t) => {
   const fixture = await createExplicitPathPlanFixture(t, {
     issueNumber: 74,
@@ -1757,6 +1826,7 @@ test('spec plan keeps failed auto-discovered references out of prompt reference 
 
   assert.match(promptMissing, /`docs\/payment-failed\.md` — read failed \(EIO; auto-discovered\)/);
   assert.match(promptMissing, /`src\/payment-failed\.ts` — read failed \(EIO; auto-discovered\)/);
+  assert.doesNotMatch(promptMissing, /path alias hint/);
   assert.match(promptResult.stderr, /Read failed: docs\/payment-failed\.md \(EIO\)/);
   assert.match(promptResult.stderr, /Read failed: src\/payment-failed\.ts \(EIO\)/);
 });
