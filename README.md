@@ -165,7 +165,7 @@ Key terms used across this project:
 - **Task package**：AI 開工前使用的 structured context，不是 autonomous execution plan。
 - **Implementation evidence**：PR 建立後寫回 source issue 的 structured comment。
 
-完整詞彙請見 [docs/concepts.md](docs/concepts.md)。Classifier、references 與 guardrails 的細節分別見 [docs/classifier.md](docs/classifier.md)、[docs/references.md](docs/references.md)、[docs/guardrails.md](docs/guardrails.md)。Future request input adapter design 見 [docs/input-adapters.md](docs/input-adapters.md)，catalog / protocol vocabulary 見 [docs/catalog-protocol.md](docs/catalog-protocol.md)。
+完整詞彙請見 [docs/concepts.md](docs/concepts.md)。Classifier、references 與 guardrails 的細節分別見 [docs/classifier.md](docs/classifier.md)、[docs/references.md](docs/references.md)、[docs/guardrails.md](docs/guardrails.md)。Future request input adapter design 見 [docs/input-adapters.md](docs/input-adapters.md)，catalog / protocol vocabulary 見 [docs/catalog-protocol.md](docs/catalog-protocol.md)。Repo-local AI workflow contract design 見 [docs/internal-workflow-contract.md](docs/internal-workflow-contract.md)。
 
 ## Configuration
 

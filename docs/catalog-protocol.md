@@ -11,6 +11,7 @@
 - #129 / PR #159：deterministic request-to-context input adapter design，canonical doc 見 [input-adapters.md](input-adapters.md)。
 - #130 / PR #156：source trust / context budget design，canonical doc 見 [source-trust.md](source-trust.md)。
 - 既有 classifier、references、guardrails、task package docs。
+- #147 internal workflow contract design，canonical doc 見 [internal-workflow-contract.md](internal-workflow-contract.md)。它消費本文件 vocabulary 作為 repo-local workflow guardrail checker 的 future design input，不是 product-facing protocol output。
 
 本文件不代表 runtime 已實作，不新增 CLI command / flag，不改 config schema，不新增 dependency，不新增 JSON schema runtime，不改 classifier behavior，不改 task package output，也不建立 custom domains runtime。
 

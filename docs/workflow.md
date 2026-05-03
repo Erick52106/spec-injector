@@ -6,6 +6,8 @@
 
 `spec-injector` 負責產生 deterministic task package。AI implementer 與 human review process 負責實作、驗證與 merge decision。Root `AGENTS.md` 是 AI agent 進入 repo 的第一層規範入口；本文件提供詳細流程。
 
+Internal machine-readable workflow contract 的 design-only vocabulary 見 [internal-workflow-contract.md](internal-workflow-contract.md)。該 contract 只描述 repo-local workflow expectations，不代表 CLI runtime、checker、merge bot 或 PR automation 已實作。
+
 相鄰工具與 roadmap 邊界請見 [docs/positioning.md](positioning.md)。多 agent / Codex / Claude Code / ChatGPT / other agents 的分工與 handoff patterns 請見 [docs/agent-handoff.md](agent-handoff.md)。
 
 ## Worktree-first workflow
