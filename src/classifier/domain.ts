@@ -25,7 +25,7 @@ const DOMAIN_KEYWORDS: Record<string, string[]> = {
   frontend: ['frontend', 'ui', 'component', 'client component', 'server action', 'add-to-cart', 'form action', 'pdp', 'render', 'css', 'style', 'react', 'vue', 'angular', 'svelte', 'button', 'form', 'page', 'layout', 'responsive', 'animation', 'dom', 'html', 'tailwind', 'visual', 'design'],
   backend: ['server', 'service', 'handler', 'controller', 'middleware', 'worker', 'daemon', 'queue', 'job', 'cron', 'scheduler', 'grpc', 'rpc'],
   api: ['api', 'endpoint', 'rest', 'graphql', 'http', 'route', 'swagger', 'openapi', 'webhook', 'request', 'response'],
-  auth: ['auth', 'login', 'logout', 'token', 'jwt', 'oauth', 'session', 'password', 'credential', 'permission', 'role', 'access', 'signup', 'register'],
+  auth: ['auth', 'authentication', 'authorization', 'authorize', 'authorized', 'login', 'logout', 'token', 'jwt', 'oauth', 'session', 'password', 'credential', 'permission', 'role', 'access', 'signup', 'register'],
   database: ['database', 'db', 'sql', 'query', 'queries', 'migration', 'schema', 'table', 'column', 'model', 'data model', 'orm', 'repository layer', 'persistence', 'persisted', 'record storage', 'postgres', 'postgresql', 'mysql', 'sqlite', 'mongo', 'redis', 'index', 'prisma', 'drizzle', 'gorm'],
   infra: ['infra', 'deploy', 'docker', 'kubernetes', 'k8s', 'terraform', 'helm', 'nginx', 'network', 'devops', 'provision', 'cloud', 'vm', 'container'],
   'cloud-storage': ['s3', 'gcs', 'storage', 'bucket', 'upload', 'download', 'blob', 'cdn', 'file upload', 'asset', 'object storage'],
@@ -36,7 +36,7 @@ const DOMAIN_KEYWORDS: Record<string, string[]> = {
   testing: ['.spec.ts', '.spec.tsx', '.spec.js', '.spec.jsx', '.spec.mts', '.spec.mjs', '.spec.cts', '.spec.cjs', '.test.ts', '.test.tsx', '.test.js', '.test.jsx', '.test.mts', '.test.mjs', '.test.cts', '.test.cjs', 'test', 'unit', 'integration', 'e2e', 'mock', 'stub', 'coverage', 'jest', 'vitest', 'playwright', 'cypress', 'assert', 'fixture'],
   docs: ['docs', 'documentation', 'readme', 'guide', 'changelog', 'wiki', 'jsdoc', 'typedoc'],
   ci: ['ci', 'cd', 'pipeline', 'workflow', 'github action', 'jenkins', 'travis', 'circleci', 'build step', 'artifact', 'badge'],
-  tooling: ['lint', 'eslint', 'prettier', 'config', 'setup', 'cli', 'script', 'generator', 'plugin', 'npm', 'yarn', 'pnpm', 'bun'],
+  tooling: ['lint', 'eslint', 'prettier', 'config', 'setup', 'cli', 'script', 'generator', 'plugin', 'package manager', 'npm', 'yarn', 'pnpm', 'bun'],
 };
 
 const MAX_DOMAINS = 5;
@@ -165,6 +165,9 @@ function suppressWeakToolingEvidence(
 
   const hasOnlyWeakToolingSignals = evidence.every((entry) => WEAK_TOOLING_SIGNALS.includes(entry.term));
   if (!hasOnlyWeakToolingSignals) return;
+
+  const hasTitleOrLabelSignal = evidence.some((entry) => entry.source === 'title' || entry.source === 'labels');
+  if (hasTitleOrLabelSignal) return;
 
   delete scores.tooling;
   evidenceByDomain.delete('tooling');

@@ -113,6 +113,25 @@ test('legitimate testing evidence still triggers testing domain', () => {
   ));
 });
 
+test('auth stem wording still triggers auth after boundary matching', () => {
+  const result = classifyDomainsWithEvidence(issue({
+    title: 'Fix authentication authorization flow',
+    body: [
+      'Users can fail authorization after completing the authentication callback.',
+      'Keep session and permission behavior stable.',
+    ].join('\n'),
+    labels: [],
+  }));
+
+  assert.ok(result.domains.includes('auth'), `Expected auth in ${result.domains.join(', ')}`);
+  assert.ok(result.evidence.some((e) =>
+    e.domain === 'auth' && e.term === 'authentication' && e.source === 'title'
+  ));
+  assert.ok(result.evidence.some((e) =>
+    e.domain === 'auth' && e.term === 'authorization' && e.source === 'title'
+  ));
+});
+
 test('legitimate database evidence still triggers database domain', () => {
   const result = classifyDomainsWithEvidence(issue({
     title: 'Add migration SQL schema and table indexes',
@@ -181,6 +200,25 @@ test('pnpm validation and client wording do not alone make a tooling task', () =
   assert.ok(result.domains.includes('frontend'), `Expected frontend in ${result.domains.join(', ')}`);
   assert.ok(!result.domains.includes('tooling'), `Expected tooling to be absent from ${result.domains.join(', ')}`);
   assert.ok(!result.evidence.some((e) => e.domain === 'tooling'), `Expected no tooling evidence, got ${JSON.stringify(result.evidence)}`);
+});
+
+test('package manager maintenance still matches tooling when package manager is the task', () => {
+  const result = classifyDomainsWithEvidence(issue({
+    title: 'Upgrade pnpm package manager version',
+    body: [
+      'Update the package manager config for the repository.',
+      'Keep lockfile behavior stable.',
+    ].join('\n'),
+    labels: [],
+  }));
+
+  assert.ok(result.domains.includes('tooling'), `Expected tooling in ${result.domains.join(', ')}`);
+  assert.ok(result.evidence.some((e) =>
+    e.domain === 'tooling' && e.term === 'pnpm' && e.source === 'title'
+  ));
+  assert.ok(result.evidence.some((e) =>
+    e.domain === 'tooling' && e.term === 'package manager' && e.source === 'title'
+  ));
 });
 
 test('actual tooling issue still matches tooling', () => {
