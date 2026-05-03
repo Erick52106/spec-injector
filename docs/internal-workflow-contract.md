@@ -156,7 +156,7 @@ Future implementation may encode a subset of this shape in a checker-specific fi
 
 Risk tiers help future checkers choose validation and evidence expectations. A PR may match multiple tiers; future consumers should evaluate every matched tier and apply deterministic merge semantics:
 
-1. Required validation: use the stricter, higher-risk validation set; when unsure, take the union and explain why.
+1. Required validation: use the union of required validation from all matched tiers.
 2. Evidence requirement and review requirement: use the union of all matched tier requirements.
 3. Stop-and-report: if any matched tier says stop-and-report, it becomes a stop-and-report trigger.
 4. Human approval: if any matched tier requires human approval before implementation or merge, human approval is required.
@@ -253,6 +253,8 @@ validation_matrix:
   ci-automation:
     required:
       - local equivalent validation where possible
+      - pnpm build
+      - pnpm test
       - CI status before merge
   target-repo-dogfood:
     required:
