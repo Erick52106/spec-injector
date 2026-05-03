@@ -143,6 +143,54 @@ PR 建立後要在 source issue 留 implementation evidence comment，再把 iss
 
 CI 通過後，若 PR checklist 有 CI item，應勾選。AI agent 不自行 merge PR。
 
+## Merge-time review closeout
+
+Merge-time review closeout 發生在 human 已決定可以 merge 之後、真正執行 merge 之前。這不是把 bot review 當 approval，而是確認所有 review 訊號都已被處理、記錄且可追查。
+
+Merge 前必須檢查：
+
+- GitHub review threads / review conversations。
+- CodeRabbit findings。
+- Codex auto review findings。
+- Human review verdict。
+- CI / required checks。
+- PR body 的 issue evidence URL。
+- Source issue implementation evidence comment。
+- Latest commit hash。
+
+每個 actionable finding 必須分類：
+
+- `adopted`：採納並完成修正；列出對應 implementation、commit hash 或 relevant commit，以及 validation。
+- `not adopted`：不採納；留下技術理由，說明為何目前不改。
+- `noise / not applicable`：summary、walkthrough、no actionable finding、誤報或與本 PR scope 無關；說明為何不適用。
+- `needs human review`：需要 human decision、scope decision 或風險判斷；stop-and-report，不 merge。
+
+Conversation resolve 規則：
+
+- Resolve conversation 前必須先留下 written rationale。
+- 採納的 finding 應回覆修正內容與 validation。
+- 不採納的 finding 應回覆技術理由。
+- Noise / not applicable finding 應說明為何不適用。
+- Summary / walkthrough / no actionable finding 可以在 closeout log 中記錄為 `noise / not applicable`，不必硬回覆每一則摘要。
+- 不得無說明 resolve review conversation。
+
+Merge authorization 規則：
+
+- CodeRabbit / Codex auto review 是 auxiliary signals，不是 approval。
+- AI agent 不得把 bot review、summary 或 green checks 當作 merge approval。
+- Merge 需要 explicit human authorization。
+- 若存在 valid blocking finding、unresolved actionable finding 或 `needs human review` finding，必須 stop-and-report，不得 merge。
+
+Merge 後 closeout：
+
+- Linked issue 加上 `status:implemented`。
+- 移除 active status labels，例如 `status:in-review`、`status:ready` 或 `status:blocked`，避免 status conflict。
+- 適用時 close as completed。
+- 保留 issue evidence comment、PR body evidence URL、commit hash 與 merge metadata，讓 closeout 可追查。
+- 不在 per-PR closeout 刪 branch / worktree；cleanup 之後集中 audit，並需 human confirmation。
+
+PR #153 / issue #127 是此流程的成功試跑範例：先分類並處理 CodeRabbit / Codex auto review / GitHub review findings，確認 CI、PR body、issue evidence 與 commit hash，再依 human authorization merge，merge 後完成 linked issue metadata closeout。此例是參考案例，不代表本流程只適用 #153。
+
 ## Validation matrix
 
 不同 change type 的 required validation、recommended validation、quality gates 與 stop-and-report conditions 見 `docs/validation.md`。

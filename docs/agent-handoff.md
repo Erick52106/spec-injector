@@ -86,8 +86,10 @@ Claude Code 優先負責 planning / review 類工作：
 7. Codex 在 source issue 留 implementation evidence comment。
 8. Codex 將 permanent issue evidence comment URL 回填 PR body，並反查 PR body。
 9. Claude Code 或 ChatGPT 可做 read-only review / risk synthesis / PR review。
-10. Human 做 merge decision。
-11. Merge 後進行 metadata closeout；branch / worktree cleanup 需經 audit 與 human confirmation。
+10. Implementation agent 回覆 / 佐證 review findings，並將採納、不採納、noise / not applicable 或 needs human review 的分類留下可追查紀錄。
+11. Human 做 merge decision；review agent findings、CodeRabbit 或 Codex auto review 不等於 approval。
+12. Merge executor 必須在 merge 前執行 `docs/workflow.md` 的 merge-time review closeout。
+13. Merge 後進行 metadata closeout；branch / worktree cleanup 需經 audit 與 human confirmation。
 
 `spec-injector` 只產出 handoff artifact。Branch、commit、PR、evidence comment、review、merge 與 cleanup 是 surrounding workflow，不是 CLI core 自動執行的 runtime behavior。
 
@@ -130,6 +132,8 @@ PR review agent 應優先檢查：
 - 是否沒有 agent orchestrator、daemon、自動分派、merge automation、CLI behavior change、CI change 或 dependency change，除非 source issue 明確授權。
 
 Review agent 不應直接修改 PR 或 push fix，除非 human 明確要求。Review suggestion 需要 implementation agent 或 human 明確接手，不會自動變成 approval。
+
+Review agent 可以提出 findings、風險與 blocking concerns，但不擁有 merge approval。Implementation agent 必須回覆或佐證 review findings；若 finding 需要 human decision，必須 stop-and-report。Human owns merge decision，負責 merge 的 executor 必須先完成 merge-time review closeout，不能把 review summary 或 bot approval 當作 merge authorization。
 
 ## Concurrency rules
 

@@ -62,6 +62,18 @@ Metadata-only 任務可以不用 dedicated worktree，但不得假設 main repo 
 
 PR 必須 ready for review，不要 draft，除非 issue 特別要求。AI agent 不自行 merge PR，也不刪 branch，除非 cleanup audit 已明確要求且 human 確認。
 
+## Merge-time review closeout
+
+Merge 前必須檢查 GitHub review conversations、CodeRabbit findings、Codex auto review findings 與 human review status。
+
+- 每個 actionable finding 必須分類為 adopted、not adopted、noise / not applicable 或 needs human review。
+- 不得在沒有 written reason 的情況下 resolve conversation。
+- 若任何 finding 是 blocking 或 needs human review，不得 merge，必須停下回報。
+- CodeRabbit / Codex auto review 是 auxiliary signals，不是 merge approval。
+- Merge 必須有 explicit human authorization。
+- Merge 後視情況將 linked issues 標成 `status:implemented` 並 close as completed。
+- Per-PR closeout 不刪 branch / worktree；cleanup 之後集中 audit。
+
 ## Evidence and PR body
 
 PR body 必須包含：
