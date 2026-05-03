@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { classifyDomains, classifyDomainsWithEvidence } from '../dist/classifier/domain.js';
+import { config as runConfigCommand } from '../dist/cli/config.js';
 import { renderTemplate } from '../dist/template/renderer.js';
 import { repoRoot, runSpec } from './helpers/cli.ts';
 import {
@@ -34,6 +35,32 @@ import {
 } from './helpers/assertions.ts';
 
 const UNREPLACED_TEMPLATE_PLACEHOLDER_PATTERN = /\{\{\s*[A-Za-z_][A-Za-z0-9_]*\s*\}\}|__[A-Z][A-Z0-9_]*__/;
+
+async function captureConsoleOutput(fn: () => Promise<void>): Promise<{ stdout: string; stderr: string }> {
+  const originalLog = console.log;
+  const originalError = console.error;
+  const stdout: string[] = [];
+  const stderr: string[] = [];
+
+  console.log = (...args: unknown[]) => {
+    stdout.push(args.join(' '));
+  };
+  console.error = (...args: unknown[]) => {
+    stderr.push(args.join(' '));
+  };
+
+  try {
+    await fn();
+  } finally {
+    console.log = originalLog;
+    console.error = originalError;
+  }
+
+  return {
+    stdout: stdout.length > 0 ? `${stdout.join('\n')}\n` : '',
+    stderr: stderr.length > 0 ? `${stderr.join('\n')}\n` : '',
+  };
+}
 
 async function createReadFailureEnv(
   t: { after(fn: () => void | Promise<void>): void },
@@ -757,6 +784,28 @@ test('spec config list/add/remove always-read manages config entries idempotentl
   const duplicateRemove = await runSpec(['config', 'remove', 'always-read', 'docs/security.md', '--repo', repoDir]);
   assert.equal(duplicateRemove.code, 0, duplicateRemove.stderr);
   assert.match(duplicateRemove.stdout, /does not include: docs\/security\.md/);
+});
+
+test('config command handler lists always-read entries without direct process exit', async (t) => {
+  const repoDir = await createTempRepo(t);
+  await runSpec(['init', '--repo', repoDir]);
+
+  const result = await captureConsoleOutput(async () => {
+    await runConfigCommand('list', undefined, undefined, { repo: repoDir });
+  });
+
+  assert.equal(result.stderr, '');
+  assert.match(result.stdout, /No always_read files configured\./);
+});
+
+test('config command handler throws catchable errors for invalid arguments', async (t) => {
+  const repoDir = await createTempRepo(t);
+  await runSpec(['init', '--repo', repoDir]);
+
+  await assert.rejects(
+    runConfigCommand('add', 'always-read', undefined, { repo: repoDir }),
+    /Missing path\. Usage: spec config add always-read <path> --repo <repo>/
+  );
 });
 
 test('spec config suggest always-read scans fixed and scoring candidates with stable grouped output', async (t) => {
