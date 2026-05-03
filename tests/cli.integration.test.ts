@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { classifyDomains, classifyDomainsWithEvidence } from '../dist/classifier/domain.js';
+import { renderTemplate } from '../dist/template/renderer.js';
 import { repoRoot, runSpec } from './helpers/cli.ts';
 import {
   createExplicitPathPlanFixture,
@@ -31,6 +32,8 @@ import {
   normalizePlanOutput,
   sectionBetween,
 } from './helpers/assertions.ts';
+
+const UNREPLACED_TEMPLATE_PLACEHOLDER_PATTERN = /\{\{\s*[A-Za-z_][A-Za-z0-9_]*\s*\}\}|__[A-Z][A-Z0-9_]*__/;
 
 test('classifier does not treat dashboard transactions endpoint wording as wallet evidence', () => {
   const domains = classifyDomains({
@@ -769,6 +772,7 @@ test('spec plan dry-run full output uses mocked gh data and keeps task package o
   assert.match(result.stdout, /- `docs\/missing-handbook\.md` — not found/);
   assert.doesNotMatch(result.stdout, /## 8\. Implementation Constraints/);
   assert.doesNotMatch(result.stdout, /Implementation Constraints:\s*\(none\)/);
+  assert.doesNotMatch(result.stdout, UNREPLACED_TEMPLATE_PLACEHOLDER_PATTERN);
   assert.doesNotMatch(result.stdout, /issue-57-task-package\.md/);
   await assertFileMissing(fixture.taskPackagePath);
   assert.deepEqual(await readGhLog(fixture.ghLogPath), [
@@ -881,7 +885,60 @@ test('spec plan dry-run prompt output stays compact and omits long inline docs',
   assert.doesNotMatch(result.stdout, /ALWAYS_READ_LONG_BODY_SENTINEL/);
   assert.doesNotMatch(result.stdout, /DISCOVERED_DOC_LONG_BODY_SENTINEL/);
   assert.doesNotMatch(result.stdout, /SOURCE_SNIPPET_BODY_SENTINEL/);
+  assert.doesNotMatch(result.stdout, UNREPLACED_TEMPLATE_PLACEHOLDER_PATTERN);
   await assertFileMissing(fixture.taskPackagePath);
+});
+
+test('template renderer rejects unreplaced placeholders in full and prompt templates deterministically', () => {
+  const fullTemplate = [
+    '# Broken Task Package',
+    '',
+    '{{issue_title}}',
+    '{{missing_section}}',
+    '__MISSING_TOKEN__',
+  ].join('\n');
+  const promptTemplate = [
+    '# Broken Implementation Plan Prompt',
+    '',
+    '{{issue_title}}',
+    '{{prompt_missing_section}}',
+  ].join('\n');
+  const vars = {
+    issue_title: 'Detect placeholder leakage',
+  };
+
+  assert.throws(
+    () => renderTemplate(fullTemplate, vars),
+    /Template rendering issue: unreplaced placeholder\(s\): __MISSING_TOKEN__, \{\{missing_section\}\}/
+  );
+  assert.throws(
+    () => renderTemplate(fullTemplate, vars),
+    /Template rendering issue: unreplaced placeholder\(s\): __MISSING_TOKEN__, \{\{missing_section\}\}/
+  );
+  assert.throws(
+    () => renderTemplate(promptTemplate, vars),
+    /Template rendering issue: unreplaced placeholder\(s\): \{\{prompt_missing_section\}\}/
+  );
+});
+
+test('template renderer allows common Markdown braces and non-placeholder code syntax', () => {
+  const rendered = renderTemplate([
+    '# {{issue_title}}',
+    '',
+    '{{issue_body}}',
+  ].join('\n'), {
+    issue_title: 'Normal syntax examples',
+    issue_body: [
+      'Use object literals like `{ enabled: true }` in examples.',
+      'Shell commands may include `echo ${HOME}`.',
+      'Paths such as `apps/dashboard/src/providers/__tests__/dataProvider.test.ts` are normal source paths.',
+    ].join('\n'),
+  });
+
+  assert.match(rendered, /Normal syntax examples/);
+  assert.match(rendered, /\{ enabled: true \}/);
+  assert.match(rendered, /\$\{HOME\}/);
+  assert.match(rendered, /__tests__/);
 });
 
 test('spec plan distinguishes built-in preset references from repo always_read references', async (t) => {
