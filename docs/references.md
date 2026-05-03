@@ -6,6 +6,8 @@ References 是 task package 中提供給 AI implementer 的 repo context。它�
 
 Reference collection 是 deterministic context selection，不是 general-purpose RAG system。
 
+Source trust levels、include modes、diagnostics vocabulary 與 context budget policy 的 design vocabulary 見 [docs/source-trust.md](source-trust.md)。本文件描述目前 references behavior；`source-trust.md` 描述後續 #129 / #107 / #147 可共用的 trust-labeled context model。
+
 ## Reference Taxonomy
 
 目前與 intended taxonomy 可分成四類：

@@ -124,9 +124,13 @@ Why it matters: 很多 AI tooling 偏向從 clean spec 或 greenfield lifecycle 
 
 Why it matters: `repo always_read`、`built-in preset`、`issue-mentioned`、`auto-discovered` 的 trust level 不同。把它們清楚標出，能避免 inferred context 被誤讀成 human-approved scope。
 
+Canonical design vocabulary: [docs/source-trust.md](source-trust.md)。
+
 ### Context budget
 
 Why it matters: AI context 不只是 token 成本問題，也是 attention budget 問題。若 `spec-injector` 能清楚定義 full content、summary、reference-only 與 diagnostics 的 include policy，會比 generic prompt collector 更有價值。
+
+Canonical design vocabulary: [docs/source-trust.md](source-trust.md)。
 
 ### Repo-safe no target mutation
 

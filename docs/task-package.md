@@ -6,6 +6,8 @@ Task package 是 AI 開工前使用的 structured context。它把 issue、class
 
 Task package 不是 autonomous execution plan，也不包含 hidden LLM reasoning。
 
+Task package 未來的 source trust / context budget vocabulary 見 [docs/source-trust.md](source-trust.md)。該文件定義 confirmed / hint / diagnostic source、full-include / reference-only / diagnostics-only 等設計語彙，但不代表目前 output 行為已改變。
+
 ## Current Outputs
 
 目前 `spec plan` 支援兩種主要輸出：
