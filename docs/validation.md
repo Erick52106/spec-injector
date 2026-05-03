@@ -300,6 +300,20 @@ A PR is ready for human review only when:
 
 Passing tests alone is not enough if evidence, PR body, scope guard, or CI reporting is missing.
 
+Before merge, review closeout must also confirm:
+
+- PR body includes evidence URL and commit hash.
+- Issue evidence comment exists.
+- CI / required checks pass.
+- CodeRabbit / Codex auto review findings were inspected.
+- GitHub review conversations and human review verdict were inspected.
+- Actionable findings were classified as adopted, not adopted, noise / not applicable, or needs human review.
+- Blocking / needs-human-review findings are not unresolved; if any remain, stop-and-report instead of merging.
+- Conversations are only resolved after written rationale.
+- Human merge authorization exists.
+- Linked issue closeout plan exists.
+- Branch / worktree cleanup is deferred.
+
 ## Stop-and-report Conditions
 
 Stop and report instead of continuing when:
