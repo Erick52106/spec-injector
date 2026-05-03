@@ -190,19 +190,37 @@ function validateDocPath(docPath: string, repoPath: string): void {
 }
 
 function collectExplicitPathCandidates(body: string): string[] {
-  const candidates = new Set<string>();
+  const candidates: Array<{ index: number; path: string }> = [];
 
   for (const match of body.matchAll(/`([^`\n]+)`/g)) {
     const normalized = normalizeExplicitPathCandidate(match[1]);
-    if (normalized) candidates.add(normalized);
+    if (normalized) candidates.push({ index: match.index ?? 0, path: normalized });
   }
 
+  let offset = 0;
   for (const line of body.split('\n')) {
     const normalized = normalizeBulletPathCandidate(line);
-    if (normalized) candidates.add(normalized);
+    if (normalized) {
+      const lineIndex = line.indexOf(normalized);
+      candidates.push({
+        index: offset + (lineIndex >= 0 ? lineIndex : 0),
+        path: normalized,
+      });
+    }
+    offset += line.length + 1;
   }
 
-  return [...candidates];
+  candidates.sort((a, b) => a.index - b.index);
+
+  const deduped: string[] = [];
+  const seen = new Set<string>();
+  for (const candidate of candidates) {
+    if (seen.has(candidate.path)) continue;
+    seen.add(candidate.path);
+    deduped.push(candidate.path);
+  }
+
+  return deduped;
 }
 
 async function collectConfirmedFullPathBasenameCounts(

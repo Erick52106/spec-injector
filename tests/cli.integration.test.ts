@@ -1893,6 +1893,53 @@ test('spec plan de-dupes missing basename diagnostics when the same issue alread
   assert.doesNotMatch(promptResult.stderr, /Not found: variant-section-dynamic\.tsx/);
 });
 
+test('spec plan de-dupes basename diagnostics when a plain bullet full path appears before an inline basename mention', async (t) => {
+  const fixture = await createExplicitPathPlanFixture(t, {
+    issueNumber: 164,
+    title: 'De-dupe mixed-format repeated basename after confirmed full path',
+    bodyLines: [
+      'Confirmed storefront reference as a plain bullet:',
+      '- src/ui/components/pdp/variant-section-dynamic.tsx',
+      '',
+      'Later shorthand inline mention that should not become another missing diagnostic:',
+      'Please keep `variant-section-dynamic.tsx` aligned with the confirmed component path.',
+    ],
+    config: {
+      discovery: {
+        docs: [],
+        source: [],
+        max_docs: 5,
+        max_source_files: 5,
+      },
+    },
+    repoFiles: {
+      'src/ui/components/pdp/variant-section-dynamic.tsx':
+        'export const variantSectionDynamic = "VARIANT_SECTION_DYNAMIC_SENTINEL";\n',
+    },
+  });
+
+  const promptResult = await runSpec(
+    ['plan', fixture.issueUrl, '--repo', fixture.repoDir, '--dry-run', '--format', 'prompt'],
+    { env: fixture.env }
+  );
+  const fullResult = await runSpec(
+    ['plan', fixture.issueUrl, '--repo', fixture.repoDir, '--dry-run'],
+    { env: fixture.env }
+  );
+
+  assert.equal(promptResult.code, 0, promptResult.stderr);
+  assert.equal(fullResult.code, 0, fullResult.stderr);
+
+  const promptIssueSources = sectionBetween(promptResult.stdout, '### Issue-Mentioned Source Files', '### Auto-Discovered Docs');
+  const promptMissing = sectionBetween(promptResult.stdout, '## 5. Missing Files', '## 6. Instructions');
+  const fullMissing = sectionBetween(fullResult.stdout, '## 9. Missing Files', '## 10. Suggested Verification Checklist');
+
+  assert.match(promptIssueSources, /`src\/ui\/components\/pdp\/variant-section-dynamic\.tsx` — issue-mentioned; mentioned in issue/);
+  assert.doesNotMatch(promptMissing, /variant-section-dynamic\.tsx/);
+  assert.doesNotMatch(fullMissing, /variant-section-dynamic\.tsx/);
+  assert.doesNotMatch(promptResult.stderr, /Not found: variant-section-dynamic\.tsx/);
+});
+
 test('spec plan keeps basename-only missing diagnostics when no confirmed full path covers the reference', async (t) => {
   const fixture = await createExplicitPathPlanFixture(t, {
     issueNumber: 164,
@@ -1983,6 +2030,46 @@ test('spec plan preserves ambiguity when a repeated basename is between multiple
   assert.match(promptMissing, /src\/ui\/components\/pdp\/variant-section-dynamic\.tsx/);
   assert.match(promptMissing, /src\/mobile\/components\/pdp\/variant-section-dynamic\.tsx/);
   assert.match(promptResult.stderr, /Not found: variant-section-dynamic\.tsx; path alias hint: ambiguous same basename candidates \(2\): /);
+});
+
+test('spec plan de-dupes an inline basename after an earlier plain bullet full path', async (t) => {
+  const fixture = await createExplicitPathPlanFixture(t, {
+    issueNumber: 164,
+    title: 'De-dupe inline basename after plain bullet full path',
+    bodyLines: [
+      'Confirmed storefront reference as a plain bullet:',
+      '- src/ui/components/pdp/variant-section-dynamic.tsx',
+      '',
+      'Later inline shorthand mention that should not become another missing diagnostic:',
+      'The silent fail is in `variant-section-dynamic.tsx`.',
+    ],
+    config: {
+      discovery: {
+        docs: [],
+        source: [],
+        max_docs: 5,
+        max_source_files: 5,
+      },
+    },
+    repoFiles: {
+      'src/ui/components/pdp/variant-section-dynamic.tsx':
+        'export const variantSectionDynamic = "VARIANT_SECTION_DYNAMIC_SENTINEL";\n',
+    },
+  });
+
+  const promptResult = await runSpec(
+    ['plan', fixture.issueUrl, '--repo', fixture.repoDir, '--dry-run', '--format', 'prompt'],
+    { env: fixture.env }
+  );
+
+  assert.equal(promptResult.code, 0, promptResult.stderr);
+
+  const promptIssueSources = sectionBetween(promptResult.stdout, '### Issue-Mentioned Source Files', '### Auto-Discovered Docs');
+  const promptMissing = sectionBetween(promptResult.stdout, '## 5. Missing Files', '## 6. Instructions');
+
+  assert.match(promptIssueSources, /`src\/ui\/components\/pdp\/variant-section-dynamic\.tsx` — issue-mentioned; mentioned in issue/);
+  assert.doesNotMatch(promptMissing, /variant-section-dynamic\.tsx/);
+  assert.doesNotMatch(promptResult.stderr, /Not found: variant-section-dynamic\.tsx/);
 });
 
 test('spec plan keeps basename ambiguity when another confirmed full path appears later in the issue', async (t) => {
