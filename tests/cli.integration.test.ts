@@ -35,6 +35,41 @@ import {
 
 const UNREPLACED_TEMPLATE_PLACEHOLDER_PATTERN = /\{\{\s*[A-Za-z_][A-Za-z0-9_]*\s*\}\}|__[A-Z][A-Z0-9_]*__/;
 
+async function createReadFailureEnv(
+  t: { after(fn: () => void | Promise<void>): void },
+  baseEnv: NodeJS.ProcessEnv,
+  failures: Array<[string, string]>
+): Promise<NodeJS.ProcessEnv> {
+  const preloadDir = await fs.mkdtemp(path.join(path.dirname(createMissingPath()), 'spec-injector-read-failure-'));
+  t.after(async () => {
+    await fs.rm(preloadDir, { recursive: true, force: true });
+  });
+
+  const preloadPath = path.join(preloadDir, 'read-failure-preload.mjs');
+  await fs.writeFile(preloadPath, [
+    "import fs from 'node:fs';",
+    `const failures = ${JSON.stringify(failures)};`,
+    'const originalReadFile = fs.promises.readFile.bind(fs.promises);',
+    'fs.promises.readFile = async function readFileWithFixtureFailures(filePath, ...args) {',
+    "  const normalized = String(filePath).replaceAll('\\\\', '/');",
+    '  const match = failures.find(([suffix]) => normalized.endsWith(suffix));',
+    '  if (match) {',
+    "    const error = new Error('fixture read failure');",
+    '    error.code = match[1];',
+    '    throw error;',
+    '  }',
+    '  return originalReadFile(filePath, ...args);',
+    '};',
+    '',
+  ].join('\n'), 'utf8');
+
+  const existingNodeOptions = baseEnv.NODE_OPTIONS ?? process.env.NODE_OPTIONS ?? '';
+  return {
+    ...baseEnv,
+    NODE_OPTIONS: [existingNodeOptions, `--import=${preloadPath}`].filter(Boolean).join(' '),
+  };
+}
+
 test('classifier does not treat dashboard transactions endpoint wording as wallet evidence', () => {
   const domains = classifyDomains({
     number: 77,
@@ -1564,6 +1599,57 @@ test('spec plan distinguishes missing files from existing paths that cannot be r
   assert.match(fullResult.stdout, /ISSUE_READABLE_SOURCE_SENTINEL/);
   assert.match(fullResult.stdout, /### docs\/payment-runbook\.md\n\n_source: auto-discovered_/);
   assert.match(fullResult.stdout, /### src\/payment-worker\.ts\n\n_source: auto-discovered_/);
+});
+
+test('spec plan keeps failed auto-discovered references out of prompt reference lists', async (t) => {
+  const fixture = await createExplicitPathPlanFixture(t, {
+    issueNumber: 174,
+    title: 'Payment auto discovery read failure regression',
+    bodyLines: [
+      'Payment work should include readable auto-discovered references only.',
+      'The payment failed doc and source names score by path, but read failures must not be trusted references.',
+    ],
+    config: {
+      discovery: {
+        docs: [],
+        source: ['src'],
+        max_docs: 5,
+        max_source_files: 5,
+      },
+    },
+    repoFiles: {
+      'docs/payment-readable.md': '# Payment Readable\n\nREADABLE_AUTO_DOC_SENTINEL payment\n',
+      'docs/payment-failed.md': '# Payment Failed\n\nFAILED_AUTO_DOC_SENTINEL payment\n',
+      'src/payment-readable.ts': 'export const readablePayment = "READABLE_AUTO_SOURCE_SENTINEL payment";\n',
+      'src/payment-failed.ts': 'export const failedPayment = "FAILED_AUTO_SOURCE_SENTINEL payment";\n',
+    },
+  });
+  const env = await createReadFailureEnv(t, fixture.env, [
+    ['docs/payment-failed.md', 'EIO'],
+    ['src/payment-failed.ts', 'EIO'],
+  ]);
+
+  const promptResult = await runSpec(
+    ['plan', fixture.issueUrl, '--repo', fixture.repoDir, '--dry-run', '--format', 'prompt'],
+    { env }
+  );
+
+  assert.equal(promptResult.code, 0, promptResult.stderr);
+  assertNoRawStackTrace(promptResult);
+
+  const promptAutoDocs = sectionBetween(promptResult.stdout, '### Auto-Discovered Docs', '### Rule-Matched Docs');
+  const promptAutoSources = sectionBetween(promptResult.stdout, '### Auto-Discovered Source Files', '## 5. Missing Files');
+  const promptMissing = sectionBetween(promptResult.stdout, '## 5. Missing Files', '## 6. Instructions');
+
+  assert.match(promptAutoDocs, /`docs\/payment-readable\.md` — auto-discovered/);
+  assert.doesNotMatch(promptAutoDocs, /docs\/payment-failed\.md/);
+  assert.match(promptAutoSources, /`src\/payment-readable\.ts` — auto-discovered/);
+  assert.doesNotMatch(promptAutoSources, /src\/payment-failed\.ts/);
+
+  assert.match(promptMissing, /`docs\/payment-failed\.md` — read failed \(EIO; auto-discovered\)/);
+  assert.match(promptMissing, /`src\/payment-failed\.ts` — read failed \(EIO; auto-discovered\)/);
+  assert.match(promptResult.stderr, /Read failed: docs\/payment-failed\.md \(EIO\)/);
+  assert.match(promptResult.stderr, /Read failed: src\/payment-failed\.ts \(EIO\)/);
 });
 
 test('spec plan ignores API and route paths when extracting file references', async (t) => {

@@ -233,7 +233,7 @@ function buildTemplateVars(
     prompt_always_files: renderPathList(alwaysDocs.filter((d) => d.found)),
     prompt_issue_docs: renderPathList(issueDocs),
     prompt_issue_sources: renderPathList(issueSources),
-    prompt_discovered_docs: renderPathList(discoveredDocs),
+    prompt_discovered_docs: renderPathList(discoveredDocs.filter((d) => d.found)),
     prompt_rule_docs: renderPathList(discoveryDocs.filter((d) => d.found)),
     prompt_discovered_sources: renderPathList(discoveredSources.filter((d) => d.found)),
     prompt_implementation_constraints: renderImplementationConstraints(matchedGuardrails),
