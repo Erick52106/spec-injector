@@ -184,7 +184,7 @@ Global rules:
 
 - `git diff --check` is baseline for file-changing PRs.
 - Markdown sanity check is required for docs changes.
-- `pnpm build` is required for runtime, workflow-docs, and any PR where repo baseline confidence matters.
+- `pnpm build` is required exactly where `validation_matrix.*.required` lists it; for `docs-only`, it remains recommended unless the source issue or reviewer makes it required.
 - `pnpm test` is required for runtime, workflow-docs, classifier/reference/template behavior, config/schema, and generally recommended for docs-only when cheap.
 - `pnpm lint` should run only if the script exists.
 - `pnpm typecheck` should run only if the script exists.
