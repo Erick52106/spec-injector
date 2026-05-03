@@ -154,7 +154,14 @@ Future implementation may encode a subset of this shape in a checker-specific fi
 
 ## Changed-file Risk Tiers
 
-Risk tiers help future checkers choose validation and evidence expectations. A PR may match multiple tiers; the stricter required validation set wins.
+Risk tiers help future checkers choose validation and evidence expectations. A PR may match multiple tiers; future consumers should evaluate every matched tier and apply deterministic merge semantics:
+
+1. Required validation: use the stricter, higher-risk validation set; when unsure, take the union and explain why.
+2. Evidence requirement and review requirement: use the union of all matched tier requirements.
+3. Stop-and-report: if any matched tier says stop-and-report, it becomes a stop-and-report trigger.
+4. Human approval: if any matched tier requires human approval before implementation or merge, human approval is required.
+
+Example: a PR touching `docs/validation.md` and `.github/workflows/ci.yml` matches `workflow-docs` and `ci-automation`; it must satisfy workflow-docs evidence/review requirements, CI automation review requirements, local validation where possible, and CI status before merge.
 
 | Tier | Description | Examples | Required validation | Evidence requirement | Review requirement | Stop-and-report | Human approval |
 | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -208,12 +215,26 @@ validation_matrix:
       - pnpm build
       - pnpm test
       - instruction consistency review
+  tests-only:
+    required:
+      - pnpm build
+      - pnpm test
+      - targeted test command
+      - git diff --check
   runtime-low-risk:
     required:
       - git diff --check
       - pnpm build
       - pnpm test
       - targeted regression
+  runtime-high-risk:
+    required:
+      - git diff --check
+      - pnpm build
+      - pnpm test
+      - targeted regression
+      - CLI smoke checks, when command behavior changes
+      - snapshot/output review, when output changes
   classifier-references-template-behavior:
     required:
       - git diff --check
@@ -222,10 +243,23 @@ validation_matrix:
       - targeted output regression
       - mocked gh tests, when GitHub output is relevant
       - snapshot or ordered-output evidence, when output changes
+  config-schema:
+    required:
+      - git diff --check
+      - pnpm build
+      - pnpm test
+      - targeted config validation
+      - docs update
   ci-automation:
     required:
       - local equivalent validation where possible
       - CI status before merge
+  target-repo-dogfood:
+    required:
+      - target repo clean check
+      - report-only output
+      - no target repo implementation
+      - relevant spec plan command, only when scoped
   merge-metadata-closeout:
     required:
       - gh issue view
@@ -434,7 +468,7 @@ Future consumers should wait for #147 vocabulary to stabilize and then split int
 - Future [workflow.md](workflow.md) / [validation.md](validation.md) sync: keep prose rules and contract vocabulary aligned.
 - `CLAUDE.md` may remain a thin adapter to `AGENTS.md`; if it references this contract later, it should point rather than duplicate.
 
-#147 itself does not implement any checker. It only designs shared contract vocabulary.
+\#147 itself does not implement any checker. It only designs shared contract vocabulary.
 
 ## Internal-only Vs Public Boundary
 
