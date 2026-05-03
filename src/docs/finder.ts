@@ -116,6 +116,7 @@ export async function extractExplicitIssueFileReferences(
   const docs: DocSection[] = [];
   const sources: DocSection[] = [];
   const missing: DocSection[] = [];
+  const confirmedBasenameCounts = new Map<string, number>();
   let repoPathAliasCandidates: string[] | null = null;
 
   for (const filePath of candidates) {
@@ -126,6 +127,10 @@ export async function extractExplicitIssueFileReferences(
     const readResult = await safeReadFile(absolute);
 
     if (readResult.status !== 'ok') {
+      if (isCoveredBySingleConfirmedFullPathBasename(filePath, confirmedBasenameCounts)) {
+        continue;
+      }
+
       missing.push({
         filePath,
         content: '',
@@ -157,6 +162,8 @@ export async function extractExplicitIssueFileReferences(
     } else {
       sources.push(section);
     }
+
+    recordConfirmedFullPathBasename(filePath, confirmedBasenameCounts);
   }
 
   return { docs, sources, missing };
@@ -188,6 +195,28 @@ function collectExplicitPathCandidates(body: string): string[] {
   }
 
   return [...candidates];
+}
+
+function isCoveredBySingleConfirmedFullPathBasename(
+  filePath: string,
+  confirmedBasenameCounts: Map<string, number>
+): boolean {
+  if (isFullRepoRelativePath(filePath)) return false;
+  const basename = path.posix.basename(filePath).toLowerCase();
+  return confirmedBasenameCounts.get(basename) === 1;
+}
+
+function recordConfirmedFullPathBasename(
+  filePath: string,
+  confirmedBasenameCounts: Map<string, number>
+): void {
+  if (!isFullRepoRelativePath(filePath)) return;
+  const basename = path.posix.basename(filePath).toLowerCase();
+  confirmedBasenameCounts.set(basename, (confirmedBasenameCounts.get(basename) ?? 0) + 1);
+}
+
+function isFullRepoRelativePath(filePath: string): boolean {
+  return filePath.includes('/');
 }
 
 function normalizeBulletPathCandidate(line: string): string | null {

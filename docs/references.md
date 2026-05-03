@@ -64,6 +64,8 @@ Issue-mentioned references 會在 prompt output 與 full task package 中獨立�
 
 若 issue-mentioned path 不存在，spec-injector 會用 deterministic repo path matching 產生保守的 path alias hint。這些 hints 只出現在 Missing Files / diagnostics，並會標示 `not a confirmed issue reference`；hinted path 不會被提升成 issue-mentioned reference，也不會混進 normal references list。
 
+若同一個 issue 已經明確提到且成功讀到某個 full repo-relative path，後續再次提到同 basename 的 bare filename 時，不會再產生獨立 Missing Files diagnostic；若同 basename 對應多個 confirmed full paths，仍保留 ambiguity / missing diagnostic，避免 unsafe assignment。
+
 目前 path alias hint 只使用可解釋的 basename match：
 
 - 若只有一個 same-basename candidate，顯示 `possible moved path`。
