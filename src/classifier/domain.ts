@@ -33,7 +33,7 @@ const DOMAIN_KEYWORDS: Record<string, string[]> = {
   'smart-contract': ['smart contract', 'contract address', 'solidity', 'abi', 'evm', 'vyper', 'bytecode', 'deploy contract'],
   wallet: ['wallet', 'connect wallet', 'wallet address', 'private key', 'public key', 'address', 'signature', 'signing', 'transaction hash', 'tx hash', 'token transfer', 'on-chain', 'send', 'receive', 'balance', 'seed phrase', 'mnemonic'],
   i18n: ['i18n', 'l10n', 'locale', 'translation', 'lang', 'language', 'localize', 'multilang'],
-  testing: ['test', 'spec', 'unit', 'integration', 'e2e', 'mock', 'stub', 'coverage', 'jest', 'vitest', 'playwright', 'cypress', 'assert', 'fixture'],
+  testing: ['.spec.ts', '.spec.tsx', '.spec.js', '.spec.jsx', '.spec.mts', '.spec.mjs', '.spec.cts', '.spec.cjs', '.test.ts', '.test.tsx', '.test.js', '.test.jsx', '.test.mts', '.test.mjs', '.test.cts', '.test.cjs', 'test', 'unit', 'integration', 'e2e', 'mock', 'stub', 'coverage', 'jest', 'vitest', 'playwright', 'cypress', 'assert', 'fixture'],
   docs: ['docs', 'documentation', 'readme', 'guide', 'changelog', 'wiki', 'jsdoc', 'typedoc'],
   ci: ['ci', 'cd', 'pipeline', 'workflow', 'github action', 'jenkins', 'travis', 'circleci', 'build step', 'artifact', 'badge'],
   tooling: ['lint', 'eslint', 'prettier', 'config', 'setup', 'cli', 'script', 'generator', 'plugin', 'npm', 'yarn', 'pnpm', 'bun'],

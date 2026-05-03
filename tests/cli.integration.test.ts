@@ -317,6 +317,115 @@ test('classifier reports deterministic rejected reason for generic API contract 
   }]);
 });
 
+test('classifier ignores generic product spec wording for testing domain', () => {
+  const result = classifyDomainsWithEvidence({
+    number: 73,
+    title: 'Product spec for OpenAPI specification planning',
+    body: [
+      'Write the product spec and API specification for the issue-to-context compiler.',
+      'Keep the design spec focused on deterministic API docs and route behavior.',
+      'This is documentation and API planning work only.',
+    ].join('\n'),
+    labels: ['api', 'docs'],
+    url: 'https://github.com/Erick52106/spec-injector/issues/73',
+    state: 'open',
+  });
+
+  assert.ok(result.domains.includes('api'), `Expected api in ${result.domains.join(', ')}`);
+  assert.ok(result.domains.includes('docs'), `Expected docs in ${result.domains.join(', ')}`);
+  assert.ok(!result.domains.includes('testing'), `Expected testing to be absent from ${result.domains.join(', ')}`);
+  assert.ok(!result.evidence.some((e) => e.domain === 'testing'), `Expected no testing evidence, got ${JSON.stringify(result.evidence)}`);
+  assert.ok(!result.rejected.some((r) => r.domain !== 'wallet' && r.domain !== 'smart-contract'));
+});
+
+test('classifier ignores spec-injector project name and spec plan wording for testing domain', () => {
+  const result = classifyDomainsWithEvidence({
+    number: 73,
+    title: 'Spec-injector spec plan compiler wording',
+    body: [
+      'The deterministic spec compiler should preserve spec plan wording in docs.',
+      'The issue-to-context compiler spec should not imply quality infrastructure work.',
+      'Avoid changing prompt output, task packages, or runtime config.',
+    ].join('\n'),
+    labels: ['tooling', 'docs'],
+    url: 'https://github.com/Erick52106/spec-injector/issues/73',
+    state: 'open',
+  });
+
+  assert.ok(result.domains.includes('tooling'), `Expected tooling in ${result.domains.join(', ')}`);
+  assert.ok(result.domains.includes('docs'), `Expected docs in ${result.domains.join(', ')}`);
+  assert.ok(!result.domains.includes('testing'), `Expected testing to be absent from ${result.domains.join(', ')}`);
+  assert.ok(!result.evidence.some((e) => e.domain === 'testing'), `Expected no testing evidence, got ${JSON.stringify(result.evidence)}`);
+});
+
+test('classifier keeps testing domain for legitimate testing evidence', () => {
+  const result = classifyDomainsWithEvidence({
+    number: 73,
+    title: 'Add regression test coverage for classifier helpers',
+    body: [
+      'Add unit test and integration test cases for the deterministic classifier.',
+      'Use node --test with a test helper and fixture data so the behavior stays offline.',
+      'Keep pytest and jest wording classified as testing evidence when issues mention those runners.',
+    ].join('\n'),
+    labels: ['bug'],
+    url: 'https://github.com/Erick52106/spec-injector/issues/73',
+    state: 'open',
+  });
+
+  assert.ok(result.domains.includes('testing'), `Expected testing in ${result.domains.join(', ')}`);
+  assert.ok(result.evidence.some((e) =>
+    e.domain === 'testing' && e.term === 'test' && e.source === 'title'
+  ));
+  assert.ok(result.evidence.some((e) =>
+    e.domain === 'testing' && e.term === 'fixture' && e.source === 'body'
+  ));
+});
+
+test('classifier keeps testing domain for spec file patterns', () => {
+  const result = classifyDomainsWithEvidence({
+    number: 73,
+    title: 'Classifier file pattern routing',
+    body: [
+      'Classify src/classifier/domain.spec.ts as a file pattern signal.',
+      'Keep src/classifier/domain.test.ts aligned with the same path handling.',
+    ].join('\n'),
+    labels: ['bug'],
+    url: 'https://github.com/Erick52106/spec-injector/issues/73',
+    state: 'open',
+  });
+
+  assert.ok(result.domains.includes('testing'), `Expected testing in ${result.domains.join(', ')}`);
+  assert.ok(result.evidence.some((e) =>
+    e.domain === 'testing' && e.term === '.spec.ts' && e.source === 'body'
+  ));
+  assert.ok(result.evidence.some((e) =>
+    e.domain === 'testing' && e.term === '.test.ts' && e.source === 'body'
+  ));
+});
+
+test('classifier stays deterministic when generic spec wording is rejected as testing evidence', () => {
+  const issue = {
+    number: 73,
+    title: 'Roadmap spec for API specification docs',
+    body: [
+      'Draft the spec-injector roadmap spec and OpenAPI spec notes.',
+      'Keep the compiler wording deterministic without adding runtime domains.',
+    ].join('\n'),
+    labels: ['api', 'docs'],
+    url: 'https://github.com/Erick52106/spec-injector/issues/73',
+    state: 'open' as const,
+  };
+
+  const first = classifyDomainsWithEvidence(issue);
+  const second = classifyDomainsWithEvidence(issue);
+
+  assert.deepEqual(first, second);
+  assert.ok(!first.domains.includes('testing'), `Expected testing to be absent from ${first.domains.join(', ')}`);
+  assert.ok(!first.evidence.some((e) => e.domain === 'testing'), `Expected no testing evidence, got ${JSON.stringify(first.evidence)}`);
+  assert.ok(!first.rejected.some((r) => r.domain === 'testing'), `Expected no testing rejected reason, got ${JSON.stringify(first.rejected)}`);
+  assert.ok(!first.rejected.some((r) => r.domain !== 'wallet' && r.domain !== 'smart-contract'));
+});
+
 test('classifier evidence result is deterministic across repeated calls', () => {
   const issue = {
     number: 91,
