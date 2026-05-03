@@ -116,6 +116,7 @@ export async function extractExplicitIssueFileReferences(
   const docs: DocSection[] = [];
   const sources: DocSection[] = [];
   const missing: DocSection[] = [];
+  let repoPathAliasCandidates: string[] | null = null;
 
   for (const filePath of candidates) {
     validateDocPath(filePath, repoPath);
@@ -133,6 +134,12 @@ export async function extractExplicitIssueFileReferences(
         readStatus: readResult.status,
         readErrorCode: readResult.code,
         reasons: [ISSUE_MENTIONED_REASON],
+        pathAliasHints: readResult.status === 'missing'
+          ? findPathAliasHints(
+              filePath,
+              repoPathAliasCandidates ??= collectPathAliasCandidatePaths(repoPath)
+            )
+          : undefined,
       });
       continue;
     }
@@ -291,6 +298,7 @@ function scorePath(keywords: string[], filePath: string): number {
 
 const SOURCE_EXTENSIONS = new Set(['.ts', '.tsx', '.js', '.jsx', '.py', '.go', '.rs', '.java', '.sol', '.rb']);
 const SKIP_DIRS = new Set(['node_modules', '.git', 'dist', 'build', '.cache', 'vendor', 'coverage']);
+const ALIAS_HINT_SKIP_DIRS = new Set([...SKIP_DIRS, '.spec-injector']);
 
 export async function discoverSourceFiles(
   issue: Issue,
@@ -370,6 +378,69 @@ function walkSource(dir: string, repoPath: string, results: string[]): void {
       results.push(path.relative(repoPath, full));
     }
   }
+}
+
+function collectPathAliasCandidatePaths(repoPath: string): string[] {
+  const results: string[] = [];
+  walkPathAliasCandidates(repoPath, repoPath, results);
+  results.sort(comparePath);
+  return results;
+}
+
+function walkPathAliasCandidates(dir: string, repoPath: string, results: string[]): void {
+  const entries = fs.readdirSync(dir, { withFileTypes: true }).sort((a, b) => comparePath(a.name, b.name));
+  for (const entry of entries) {
+    if (ALIAS_HINT_SKIP_DIRS.has(entry.name)) continue;
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      walkPathAliasCandidates(full, repoPath, results);
+      continue;
+    }
+    if (!entry.isFile()) continue;
+
+    const relativePath = normalizeRepoPath(path.relative(repoPath, full));
+    if (isAliasHintCandidatePath(relativePath)) results.push(relativePath);
+  }
+}
+
+function isAliasHintCandidatePath(filePath: string): boolean {
+  const basename = path.posix.basename(filePath);
+  return EXPLICIT_FILE_EXTENSIONS.has(path.posix.extname(filePath)) || EXPLICIT_ROOT_FILES.has(basename);
+}
+
+function findPathAliasHints(filePath: string, candidatePaths: string[]): DocSection['pathAliasHints'] {
+  const normalizedFilePath = normalizeRepoPath(filePath);
+  const basename = path.posix.basename(normalizedFilePath).toLowerCase();
+  const sameBasenameCandidates = candidatePaths.filter((candidatePath) =>
+    candidatePath !== normalizedFilePath &&
+    path.posix.basename(candidatePath).toLowerCase() === basename
+  );
+
+  if (sameBasenameCandidates.length === 0) return undefined;
+
+  if (sameBasenameCandidates.length === 1) {
+    return [{
+      kind: 'possible-moved-path',
+      reason: 'same basename',
+      candidatePaths: sameBasenameCandidates,
+      candidateCount: 1,
+    }];
+  }
+
+  return [{
+    kind: 'ambiguous-same-basename-candidates',
+    reason: 'same basename',
+    candidatePaths: sameBasenameCandidates.slice(0, 3),
+    candidateCount: sameBasenameCandidates.length,
+  }];
+}
+
+function normalizeRepoPath(filePath: string): string {
+  return filePath.split(path.sep).join('/');
+}
+
+function comparePath(a: string, b: string): number {
+  return a < b ? -1 : a > b ? 1 : 0;
 }
 
 function scoreSrc(keywords: string[], filePath: string, content: string): number {

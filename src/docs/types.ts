@@ -16,4 +16,12 @@ export interface DocSection {
   readStatus?: 'missing' | 'unreadable' | 'read-error';
   readErrorCode?: string;
   reasons?: string[];
+  pathAliasHints?: PathAliasHint[];
+}
+
+export interface PathAliasHint {
+  kind: 'possible-moved-path' | 'ambiguous-same-basename-candidates';
+  reason: 'same basename';
+  candidatePaths: string[];
+  candidateCount: number;
 }
