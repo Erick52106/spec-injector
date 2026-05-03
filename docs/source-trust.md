@@ -14,7 +14,7 @@
 - 哪些 evidence 可以支援 validation hints。
 - 哪些 output 不應給 AI 錯誤信任訊號。
 
-本文件是 #129 input adapters、#107 catalog / protocol、#147 internal workflow contract 的設計基礎。它不是 runtime implementation，不改現有 task package / prompt output，不是 hidden LLM、RAG、semantic search 或 vector DB design。
+本文件是 #129 input adapters、#107 catalog / protocol、#147 internal workflow contract 的設計基礎。#129 的 canonical input adapter proposal 見 [docs/input-adapters.md](input-adapters.md)。它不是 runtime implementation，不改現有 task package / prompt output，不是 hidden LLM、RAG、semantic search 或 vector DB design。
 
 ## Source Categories
 
@@ -209,7 +209,7 @@ These are existing supports, not proof that the full trust / budget model is imp
 
 ## Relationship To Future Issues
 
-- #129 input adapters must attach trust labels before raw request, markdown brief, PR note, dogfood report, or AI-generated partial plan enters context compilation.
+- #129 input adapters must attach trust labels before raw request, markdown brief, PR note, dogfood report, or AI-generated partial plan enters context compilation; see [docs/input-adapters.md](input-adapters.md) for the design-only adapter model.
 - #107 catalog / protocol should encode source category, trust level, include mode, diagnostic vocabulary, and compatibility rules.
 - #147 internal workflow contract may consume source trust metadata for repo workflow checks, but source trust remains product/compiler design, not a harness platform.
 - #151 second dogfood should measure whether trust labels, diagnostics, alias hints, and budget fallback help real brownfield planning.
