@@ -17,6 +17,8 @@
 
 它不是 marketing page，不是 competitor attack，也不宣稱 `spec-injector` 全面優於其他工具。它是一份 decision record：判斷哪些 issue 是 moat-building，哪些只是 hygiene / polish，哪些方向需要先停下討論。
 
+Internal workflow contract design 見 [internal-workflow-contract.md](internal-workflow-contract.md)。該 contract 是 repo-local workflow discipline，不是 product-facing harness platform 或 hosted control plane。
+
 ## Product Thesis
 
 `spec-injector` is a deterministic request-to-context compiler for AI coding agents.
