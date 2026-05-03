@@ -9,6 +9,7 @@
 核心提醒：相鄰工具可以啟發 artifact discipline、workflow clarity、review handoff 與產品呈現，但不應把 `spec-injector` 推向 another Spec Kit、Spec Kitty lite，或 generic agent workflow platform。
 
 產品護城河、non-moat risk register、do-not-build list 與 roadmap ordering 的 source of truth 見 [docs/product-moat.md](product-moat.md)。
+Source trust taxonomy、include modes 與 context budget vocabulary 見 [docs/source-trust.md](source-trust.md)。
 
 ## spec-injector positioning
 
