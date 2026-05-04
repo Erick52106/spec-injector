@@ -44,11 +44,11 @@ test(
     }
 
     try {
-      await runCommand('gh', ['auth', 'status'], repoRoot);
+      await runCommand('gh', ['auth', 'status', '--active', '--hostname', 'github.com'], repoRoot);
     } catch (error) {
       assert.fail(
-        'Optional gh smoke test precondition failed: gh auth status is not usable.\n' +
-          'Please run `gh auth login` before `pnpm test:gh` to authenticate against GitHub.\n' +
+        'Optional gh smoke test precondition failed: gh auth status --active --hostname github.com is not usable.\n' +
+          'Please run `gh auth login --hostname github.com` before `pnpm test:gh`, or run `gh auth status --active --hostname github.com` to verify active GitHub auth.\n' +
           `Error: ${error instanceof Error ? error.message : String(error)}`
       );
     }
