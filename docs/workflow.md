@@ -172,7 +172,9 @@ PR body 必須包含：
 
 PR 建立後要在 source issue 留 implementation evidence comment，再把 issue evidence comment URL 回填 PR body。
 
-回填後必須用 `gh pr view` 或等價方式反查 PR body，確認：
+write action 後不得只看 exit code。PR body、issue evidence comment、review rationale comment / closeout comment 等 GitHub mutation 都必須立即 readback verify。
+
+PR body 寫入後，必須立即用 `gh pr view <pr-number> --json body,headRefOid`（或等價方式）反查，確認：
 
 - PR body 非空
 - 包含 `Closes #<issue-number>`
@@ -180,6 +182,25 @@ PR 建立後要在 source issue 留 implementation evidence comment，再把 iss
 - 包含 commit hash
 - 包含 validation 結果
 - 包含 scope guard / non-goals confirmation
+
+Issue evidence comment 新增或更新後，必須用 `gh issue view` / `gh api` 等 readback 方式確認 comment URL 與內容存在；若無法讀回，視為 mismatch 並 stop-and-report 或修正後重試。
+
+Review rationale comment / closeout comment 若作為 merge evidence，也必須能 readback，或在 final report 中提供明確的 URL 與 readback 狀態；若使用 comment 作 evidence，final report 不得只寫「已補齊」。
+
+若 readback 發現以下情況，需 stop-and-report 或先修正後重新 verify 再繼續：
+
+- PR body 未更新
+- issue comment 不存在
+- evidence URL 缺失
+- HEAD hash 過期（與 `gh pr view <pr-number> --json headRefOid` 不一致）
+- comment / body 內容不符
+- write command exit code 成功但 artifact 實際未變更
+
+Final report 中，驗證結果須明確寫出：
+
+- 已 readback verified
+- 無法 readback 的原因
+- 或 readback mismatch 的處理結果
 
 CI 通過後，若 PR checklist 有 CI item，應勾選。AI agent 不自行 merge PR。
 
@@ -237,9 +258,12 @@ Merge 前必須檢查：
 - Codex auto review findings。
 - Human review verdict。
 - CI / required checks。
-- PR body 的 issue evidence URL。
+- PR body 的 issue evidence URL（readback verified）。
 - Source issue implementation evidence comment。
 - Latest commit hash。
+- Source issue implementation evidence comment readback verified（URL 存在且內容可讀）。
+- Review rationale / closeout comment（若有作為 evidence）readback verified 或 final report 註明無法 readback 的原因。
+- PR head hash 已比對 `gh pr view <pr-number> --json headRefOid`。
 
 每個 actionable finding 必須分類：
 
