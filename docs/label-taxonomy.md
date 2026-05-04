@@ -74,6 +74,8 @@ Type labels describe the kind of work, not the product area.
 
 Each issue should have one type label or one GitHub default equivalent. A design issue may use `type:design`; a feature issue may use `enhancement`; a docs deliverable may use `documentation`.
 
+Existing snapshot type labels `type:chore`, `type:ci`, and `type:refactor` remain accepted but are not redefined by this docs-only proposal.
+
 ### Area Labels
 
 Area labels describe problem domain. They should not describe PR output format alone.
