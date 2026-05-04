@@ -1222,6 +1222,55 @@ test('spec evidence-check fails on stale PR body commit hash and expected HEAD m
   assertNoGhMutationCommands(ghLog);
 });
 
+test('spec evidence-check fails when issue evidence comment body is empty', async (t) => {
+  const fixture = await createEvidenceCheckFixture(t, {
+    issueComments: [{
+      url: 'https://github.com/Erick52106/spec-injector/issues/109#issuecomment-1090001',
+      body: '',
+    }],
+  });
+
+  const result = await runSpec([
+    'evidence-check',
+    '--pr', String(fixture.prNumber),
+    '--repo', fixture.repo,
+  ], { env: fixture.env });
+
+  assert.notEqual(result.code, 0);
+  assert.match(result.stdout, /Evidence check summary:\s+FAIL/i);
+  assert.match(result.stdout, /issue evidence comment is incomplete or stale/i);
+  assert.match(result.stdout, /PR URL, branch, commit hash \/ HEAD, validation summary/i);
+  const ghLog = (await readGhLog(fixture.ghLogPath)).join('\n');
+  assertNoGhMutationCommands(ghLog);
+});
+
+test('spec evidence-check fails when issue evidence comment lacks required fields', async (t) => {
+  const fixture = await createEvidenceCheckFixture(t, {
+    issueComments: [{
+      url: 'https://github.com/Erick52106/spec-injector/issues/109#issuecomment-1090001',
+      body: [
+        '## Implementation evidence',
+        '- PR URL: https://github.com/Erick52106/spec-injector/pull/1091',
+        '- Tests / validation:',
+        '- `pnpm test` ✅',
+      ].join('\n'),
+    }],
+  });
+
+  const result = await runSpec([
+    'evidence-check',
+    '--pr', String(fixture.prNumber),
+    '--repo', fixture.repo,
+  ], { env: fixture.env });
+
+  assert.notEqual(result.code, 0);
+  assert.match(result.stdout, /Evidence check summary:\s+FAIL/i);
+  assert.match(result.stdout, /issue evidence comment is incomplete or stale/i);
+  assert.match(result.stdout, /branch, commit hash \/ HEAD/i);
+  const ghLog = (await readGhLog(fixture.ghLogPath)).join('\n');
+  assertNoGhMutationCommands(ghLog);
+});
+
 test('spec evidence-check warns for vague validation evidence and draft PRs', async (t) => {
   const fixture = await createEvidenceCheckFixture(t, {
     isDraft: true,
@@ -1265,6 +1314,69 @@ test('spec evidence-check warns for vague validation evidence and draft PRs', as
   assertNoGhMutationCommands(ghLog);
 });
 
+test('spec evidence-check keeps empty successful checks distinct from checks read failures', async (t) => {
+  const fixture = await createEvidenceCheckFixture(t, {
+    checks: [],
+  });
+
+  const result = await runSpec([
+    'evidence-check',
+    '--pr', String(fixture.prNumber),
+    '--repo', fixture.repo,
+  ], { env: fixture.env });
+
+  assert.equal(result.code, 0, result.stderr);
+  assert.match(result.stdout, /Evidence check summary:\s+WARNING/i);
+  assert.match(result.stdout, /no checks returned/i);
+  assert.doesNotMatch(result.stdout, /Could not read PR checks/i);
+  const ghLog = (await readGhLog(fixture.ghLogPath)).join('\n');
+  assertNoGhMutationCommands(ghLog);
+});
+
+test('spec evidence-check fails when checks command cannot be read', async (t) => {
+  const fixture = await createEvidenceCheckFixture(t, {
+    checksCommand: {
+      exitCode: 1,
+      stderr: 'checks API unavailable',
+    },
+  });
+
+  const result = await runSpec([
+    'evidence-check',
+    '--pr', String(fixture.prNumber),
+    '--repo', fixture.repo,
+  ], { env: fixture.env });
+
+  assert.notEqual(result.code, 0);
+  assert.match(result.stdout, /Evidence check summary:\s+FAIL/i);
+  assert.match(result.stdout, /Could not read PR checks/i);
+  assert.doesNotMatch(result.stdout, /no checks returned/i);
+  const ghLog = (await readGhLog(fixture.ghLogPath)).join('\n');
+  assertNoGhMutationCommands(ghLog);
+});
+
+test('spec evidence-check fails when checks command returns malformed JSON', async (t) => {
+  const fixture = await createEvidenceCheckFixture(t, {
+    checksCommand: {
+      stdout: '{not-json',
+    },
+  });
+
+  const result = await runSpec([
+    'evidence-check',
+    '--pr', String(fixture.prNumber),
+    '--repo', fixture.repo,
+  ], { env: fixture.env });
+
+  assert.notEqual(result.code, 0);
+  assert.match(result.stdout, /Evidence check summary:\s+FAIL/i);
+  assert.match(result.stdout, /Could not read PR checks/i);
+  assert.match(result.stdout, /Unexpected JSON output/i);
+  assert.doesNotMatch(result.stdout, /no checks returned/i);
+  const ghLog = (await readGhLog(fixture.ghLogPath)).join('\n');
+  assertNoGhMutationCommands(ghLog);
+});
+
 test('spec evidence-check fails failing CI and warns on pending checks', async (t) => {
   const fixture = await createEvidenceCheckFixture(t, {
     checks: [
@@ -1291,6 +1403,42 @@ test('spec evidence-check requires review finding assessment when review finding
   const fixture = await createEvidenceCheckFixture(t, {
     reviews: [
       { author: { login: 'coderabbitai' }, state: 'COMMENTED', body: 'Potential stale evidence finding.' },
+    ],
+    prBody: [
+      'Closes #109',
+      '## Summary',
+      'ok',
+      '## Scope',
+      'ok',
+      '## Non-goals',
+      'ok',
+      '## Validation',
+      '- `git diff --check` ✅',
+      '- `pnpm build` ✅',
+      '- `pnpm test` ✅',
+      '## Implementation Evidence',
+      '- Issue evidence comment URL: https://github.com/Erick52106/spec-injector/issues/109#issuecomment-1090001',
+      '- Latest HEAD: 1234567890abcdef1234567890abcdef12345678',
+    ].join('\n'),
+  });
+
+  const result = await runSpec([
+    'evidence-check',
+    '--pr', String(fixture.prNumber),
+    '--repo', fixture.repo,
+  ], { env: fixture.env });
+
+  assert.notEqual(result.code, 0);
+  assert.match(result.stdout, /Evidence check summary:\s+NEEDS-HUMAN-REVIEW/i);
+  assert.match(result.stdout, /review findings need assessment/i);
+  const ghLog = (await readGhLog(fixture.ghLogPath)).join('\n');
+  assertNoGhMutationCommands(ghLog);
+});
+
+test('spec evidence-check treats approved actionable review body as needing assessment', async (t) => {
+  const fixture = await createEvidenceCheckFixture(t, {
+    reviews: [
+      { author: { login: 'reviewer' }, state: 'APPROVED', body: 'Approved, but fix stale HEAD before merge.' },
     ],
     prBody: [
       'Closes #109',
@@ -1355,6 +1503,63 @@ test('spec evidence-check ignores non-actionable approved review text without re
   assert.equal(result.code, 0, result.stderr);
   assert.match(result.stdout, /Evidence check summary:\s+PASS/i);
   assert.doesNotMatch(result.stdout, /review findings need assessment/i);
+  const ghLog = (await readGhLog(fixture.ghLogPath)).join('\n');
+  assertNoGhMutationCommands(ghLog);
+});
+
+test('spec evidence-check ignores commented summary-only bot wrapper without requiring assessment', async (t) => {
+  const fixture = await createEvidenceCheckFixture(t, {
+    reviews: [
+      { author: { login: 'coderabbitai' }, state: 'COMMENTED', body: 'Walkthrough summary only. No actionable comments.' },
+    ],
+    prBody: [
+      'Closes #109',
+      '## Summary',
+      'ok',
+      '## Scope',
+      'ok',
+      '## Non-goals',
+      'ok',
+      '## Validation',
+      '- `git diff --check` ✅',
+      '- `pnpm build` ✅',
+      '- `pnpm test` ✅',
+      '## Implementation Evidence',
+      '- Issue evidence comment URL: https://github.com/Erick52106/spec-injector/issues/109#issuecomment-1090001',
+      '- Latest HEAD: 1234567890abcdef1234567890abcdef12345678',
+    ].join('\n'),
+  });
+
+  const result = await runSpec([
+    'evidence-check',
+    '--pr', String(fixture.prNumber),
+    '--repo', fixture.repo,
+  ], { env: fixture.env });
+
+  assert.equal(result.code, 0, result.stderr);
+  assert.match(result.stdout, /Evidence check summary:\s+PASS/i);
+  assert.doesNotMatch(result.stdout, /review findings need assessment/i);
+  assert.doesNotMatch(result.stdout, /review finding assessment vocabulary found/i);
+  const ghLog = (await readGhLog(fixture.ghLogPath)).join('\n');
+  assertNoGhMutationCommands(ghLog);
+});
+
+test('spec evidence-check accepts actionable review body when assessment vocabulary exists', async (t) => {
+  const fixture = await createEvidenceCheckFixture(t, {
+    reviews: [
+      { author: { login: 'coderabbitai' }, state: 'COMMENTED', body: 'Potential issue: fix stale evidence before merge.' },
+    ],
+  });
+
+  const result = await runSpec([
+    'evidence-check',
+    '--pr', String(fixture.prNumber),
+    '--repo', fixture.repo,
+  ], { env: fixture.env });
+
+  assert.equal(result.code, 0, result.stderr);
+  assert.match(result.stdout, /Evidence check summary:\s+PASS/i);
+  assert.match(result.stdout, /review finding assessment vocabulary found/i);
   const ghLog = (await readGhLog(fixture.ghLogPath)).join('\n');
   assertNoGhMutationCommands(ghLog);
 });

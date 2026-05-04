@@ -48,7 +48,8 @@ const SINGLE_EVIDENCE_URL_PATTERN = /^https:\/\/github\.com\/([^/\s]+)\/([^/\s]+
 const REVIEW_ASSESSMENT_PATTERN = /\b(?:adopted|not adopted|optional polish|noise \/ not applicable|needs human review)\b/i;
 const EXACT_VALIDATION_COMMAND_PATTERN = /`?(?:git diff --check|pnpm build|pnpm test|pnpm lint|pnpm typecheck|node --test(?:\s+[^`\n]+)?|tsc(?:\s+[^`\n]+)?|npm test)`?/i;
 const ACTIONABLE_REVIEW_PATTERN = /\b(?:actionable comments|inline comments|potential issue|bug|fail(?:s|ure)?|stale|missing|incorrect|wrong|fix|change|update|replace|avoid|require|should|must|nit)\b/i;
-const NON_ACTIONABLE_REVIEW_PATTERN = /\b(?:lgtm|looks good(?: to me)?|approved|no actionable|summary|walkthrough|automated review suggestions|about codex in github|review in progress|currently processing|release notes|finishing touches)\b/i;
+const PURE_NON_ACTIONABLE_REVIEW_PATTERN = /^(?:lgtm|looks good(?: to me)?|approved)$/i;
+const EXPLICIT_NO_ACTIONABLE_REVIEW_PATTERN = /\bno actionable(?: comments?| findings?)\b/i;
 
 export async function evidenceCheck(opts: EvidenceCheckOptions): Promise<void> {
   try {
@@ -78,7 +79,7 @@ export async function evidenceCheck(opts: EvidenceCheckOptions): Promise<void> {
         'number,url,comments',
       ], 'Could not read linked issue comments.')
       : null;
-    const checks = readJson<CheckPayload[]>([
+    const checksRead = readJsonResult<CheckPayload[]>([
       'gh',
       'pr',
       'checks',
@@ -87,7 +88,7 @@ export async function evidenceCheck(opts: EvidenceCheckOptions): Promise<void> {
       context.repo,
       '--json',
       'name,state,bucket,link',
-    ], 'Could not read PR checks.', []);
+    ], 'Could not read PR checks.');
 
     const report = buildReport({
       pr,
@@ -98,7 +99,8 @@ export async function evidenceCheck(opts: EvidenceCheckOptions): Promise<void> {
       evidenceUrl,
       expectedEvidenceUrl: opts.evidenceUrl,
       expectedHead: opts.expectedHead,
-      checks,
+      checks: checksRead.value ?? [],
+      checksReadError: checksRead.error,
     });
 
     printReport(report);
@@ -138,6 +140,7 @@ function buildReport(input: {
   expectedEvidenceUrl?: string;
   expectedHead?: string;
   checks: CheckPayload[];
+  checksReadError?: string;
 }): { overall: Severity; checks: EvidenceCheck[] } {
   const checks: EvidenceCheck[] = [];
   const latestHead = input.pr.headRefOid ?? '';
@@ -223,8 +226,8 @@ function buildReport(input: {
   }
 
   const prUrl = input.pr.url ?? '';
-  if (evidenceComment?.body) {
-    const evidenceBody = evidenceComment.body;
+  if (evidenceComment) {
+    const evidenceBody = evidenceComment.body ?? '';
     const missing = [
       [prUrl, 'PR URL'],
       [input.pr.headRefName ?? '', 'branch'],
@@ -316,7 +319,7 @@ function buildReport(input: {
     ));
   }
 
-  checkCi(input.checks).forEach((check) => checks.push(check));
+  checkCi(input.checks, input.checksReadError).forEach((check) => checks.push(check));
 
   return {
     overall: summarizeOverall(checks),
@@ -341,7 +344,16 @@ function checkRequiredSections(body: string): EvidenceCheck[] {
   });
 }
 
-function checkCi(checks: CheckPayload[]): EvidenceCheck[] {
+function checkCi(checks: CheckPayload[], checksReadError?: string): EvidenceCheck[] {
+  if (checksReadError) {
+    return [fail(
+      'CI / checks',
+      checksReadError,
+      'could not read CI checks summary',
+      'Stop and re-read PR checks manually; do not treat missing check data as merge-ready evidence.'
+    )];
+  }
+
   if (checks.length === 0) {
     return [warning(
       'CI / checks',
@@ -403,10 +415,8 @@ function parseIssueOption(issueOption: string | undefined): number | null {
 function isActionableReview(review: { body?: string; state?: string }): boolean {
   const body = (review.body ?? '').trim();
   if (body.length === 0) return false;
-  if ((review.state ?? '').toUpperCase() === 'APPROVED') return false;
-  if (NON_ACTIONABLE_REVIEW_PATTERN.test(body) && !/\b(?:actionable comments|inline comments|potential issue)\b/i.test(body)) {
-    return false;
-  }
+  if (PURE_NON_ACTIONABLE_REVIEW_PATTERN.test(body)) return false;
+  if (EXPLICIT_NO_ACTIONABLE_REVIEW_PATTERN.test(body)) return false;
   return ACTIONABLE_REVIEW_PATTERN.test(body);
 }
 
@@ -458,6 +468,19 @@ function readJson<T>(argv: string[], errorMessage: string, fallback?: T): T {
       return fallback;
     }
     throw new Error(`${errorMessage} Unexpected JSON output.`);
+  }
+}
+
+function readJsonResult<T>(argv: string[], errorMessage: string): { value?: T; error?: string } {
+  const result = run(argv);
+  if (result.exitCode !== 0) {
+    return { error: `${errorMessage} ${result.stderr.trim() || result.stdout.trim()}`.trim() };
+  }
+
+  try {
+    return { value: JSON.parse(result.stdout) as T };
+  } catch {
+    return { error: `${errorMessage} Unexpected JSON output.` };
   }
 }
 

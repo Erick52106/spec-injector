@@ -48,6 +48,7 @@ type EvidenceCheckFixtureOptions = {
   expectedPrRef?: string;
   isDraft?: boolean;
   checks?: Array<{ name: string; state?: string; conclusion?: string; bucket?: string }>;
+  checksCommand?: { exitCode?: number; stdout?: string; stderr?: string };
   reviews?: Array<{ author?: { login?: string }; body?: string; state?: string; submittedAt?: string }>;
 };
 
@@ -276,6 +277,7 @@ export async function createEvidenceCheckFixture(
     checks: options.checks ?? [
       { name: 'build', state: 'COMPLETED', conclusion: 'SUCCESS', bucket: 'pass' },
     ],
+    checksCommand: options.checksCommand,
     expectedPrRef: options.expectedPrRef ?? String(prNumber),
   });
 
@@ -464,6 +466,7 @@ async function createFakeEvidenceGh(
     pr: Record<string, unknown>;
     issue: Record<string, unknown>;
     checks: Array<Record<string, unknown>>;
+    checksCommand?: { exitCode?: number; stdout?: string; stderr?: string };
     expectedPrRef: string;
   }
 ): Promise<{
@@ -521,6 +524,15 @@ if (args[0] === 'pr' && args[1] === 'checks') {
   if (args[2] !== payload.expectedPrRef) {
     console.error('Unexpected checks PR ref: ' + args[2]);
     process.exit(1);
+  }
+  if (payload.checksCommand) {
+    if (payload.checksCommand.stdout !== undefined) {
+      process.stdout.write(payload.checksCommand.stdout);
+    }
+    if (payload.checksCommand.stderr !== undefined) {
+      process.stderr.write(payload.checksCommand.stderr);
+    }
+    process.exit(payload.checksCommand.exitCode ?? 0);
   }
   process.stdout.write(JSON.stringify(payload.checks));
   process.exit(0);
