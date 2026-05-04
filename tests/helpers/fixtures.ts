@@ -23,6 +23,14 @@ type PlanFixture = {
   taskPackagePath: string;
 };
 
+type PreflightFixture = {
+  mainRepoDir: string;
+  worktreeDir: string;
+  branchName: string;
+  env: NodeJS.ProcessEnv;
+  gitLogPath: string;
+};
+
 type ExplicitPathPlanFixtureOptions = {
   issueNumber?: number;
   title: string;
@@ -127,6 +135,50 @@ export async function createSpecPlanFixture(t: TestLifecycle): Promise<PlanFixtu
     ghLogPath: fakeGh.logPath,
     issueUrl: issue.url,
     taskPackagePath: path.join(repoDir, '.spec-injector', 'out', 'issue-57-task-package.md'),
+  };
+}
+
+export async function createPreflightFixture(
+  t: TestLifecycle,
+  options: {
+    branchName?: string;
+    worktreeName?: string;
+    withUpstream?: boolean;
+  } = {}
+): Promise<PreflightFixture> {
+  const branchName = options.branchName ?? 'feat/worktree-preflight-checker-108';
+  const worktreeName = options.worktreeName ?? 'feat-worktree-preflight-checker-108';
+  const mainRepoDir = await createTempRepo(t, 'spec-injector-preflight-main-');
+  const worktreeParentDir = await createTempRepo(t, 'spec-injector-preflight-worktrees-');
+  const worktreeDir = path.join(worktreeParentDir, worktreeName);
+
+  await writeRepoFiles(mainRepoDir, {
+    'README.md': '# Preflight Fixture\n',
+  });
+
+  await runCommand('git', ['init', '--initial-branch=main'], mainRepoDir);
+  await runCommand('git', ['config', 'user.email', 'spec-injector@example.test'], mainRepoDir);
+  await runCommand('git', ['config', 'user.name', 'Spec Injector Test'], mainRepoDir);
+  await runCommand('git', ['add', '.'], mainRepoDir);
+  await runCommand('git', ['commit', '-m', 'Initial fixture commit'], mainRepoDir);
+
+  if (options.withUpstream ?? true) {
+    const remoteDir = await createTempRepo(t, 'spec-injector-preflight-remote-');
+    await runCommand('git', ['init', '--bare', remoteDir], mainRepoDir);
+    await runCommand('git', ['remote', 'add', 'origin', remoteDir], mainRepoDir);
+    await runCommand('git', ['push', '--set-upstream', 'origin', 'main'], mainRepoDir);
+  }
+
+  await runCommand('git', ['worktree', 'add', '-b', branchName, worktreeDir, 'main'], mainRepoDir);
+
+  const gitSpy = await createGitSpyEnv(t, process.env);
+
+  return {
+    mainRepoDir,
+    worktreeDir,
+    branchName,
+    env: gitSpy.env,
+    gitLogPath: gitSpy.logPath,
   };
 }
 
@@ -313,6 +365,39 @@ export async function createFailingGitEnv(t: TestLifecycle, baseEnv: NodeJS.Proc
   return {
     ...baseEnv,
     PATH: `${binDir}${path.delimiter}${baseEnv.PATH ?? process.env.PATH ?? ''}`,
+  };
+}
+
+async function createGitSpyEnv(t: TestLifecycle, baseEnv: NodeJS.ProcessEnv): Promise<{
+  env: NodeJS.ProcessEnv;
+  logPath: string;
+}> {
+  const binDir = await fs.mkdtemp(path.join(os.tmpdir(), 'spec-injector-git-spy-'));
+  t.after(async () => {
+    await fs.rm(binDir, { recursive: true, force: true });
+  });
+
+  const realGitPath = (await runCommand('which', ['git'], process.cwd())).stdout.trim();
+  const logPath = path.join(binDir, 'git.log');
+  const gitPath = path.join(binDir, 'git');
+
+  await fs.writeFile(logPath, '', 'utf8');
+  await fs.writeFile(gitPath, [
+    '#!/bin/sh',
+    'printf "%s\\n" "$*" >> "$FAKE_GIT_LOG"',
+    'exec "$FAKE_GIT_REAL" "$@"',
+    '',
+  ].join('\n'), 'utf8');
+  await fs.chmod(gitPath, 0o755);
+
+  return {
+    env: {
+      ...baseEnv,
+      PATH: `${binDir}${path.delimiter}${baseEnv.PATH ?? process.env.PATH ?? ''}`,
+      FAKE_GIT_LOG: logPath,
+      FAKE_GIT_REAL: realGitPath,
+    },
+    logPath,
   };
 }
 

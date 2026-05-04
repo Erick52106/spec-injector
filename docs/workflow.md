@@ -46,6 +46,25 @@ git status
 
 Worktree 狀態必須 clean 才能實作。之後的 edit / test / commit / push / PR 都在該 worktree 內完成。
 
+若本地已安裝 repo-local CLI，可在 dedicated worktree 內先執行 human-readable preflight：
+
+```bash
+spec preflight \
+  --repo "$PWD" \
+  --expected-branch <branch-name> \
+  --expected-worktree-root ~/.config/superpowers/worktrees/spec-injector
+```
+
+`spec preflight` 是 repo-local workflow guardrail。它只做 deterministic read-only checks，report `pass` / `warning` / `fail` / `needs-human-review` 類結果，不自動 `stash`、`clean`、`reset`、`checkout` 或修復任何狀態。若 main repo dirty、current worktree dirty、current checkout 其實是 main worktree、或 branch / worktree expectation 不符，應 stop-and-report，再由 human / implementer 決定下一步。
+
+若同時需要 read-only target repo safety 提醒，可加上：
+
+```bash
+spec preflight --repo "$PWD" --target-repo <target-repo-path>
+```
+
+此檢查只回報 target repo 狀態與 safety reminder，不得修改 target repo、不得建立 target repo `.spec-injector/`、不得在 target repo 建 branch / commit / PR。
+
 ## Worktree naming
 
 建議命名：

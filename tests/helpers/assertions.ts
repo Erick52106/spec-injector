@@ -29,6 +29,11 @@ export function assertNoCleanupCommands(value: string): void {
   assert.doesNotMatch(value, /\breset\b/i);
 }
 
+export function assertNoGitMutationCommands(value: string): void {
+  assertNoCleanupCommands(value);
+  assert.doesNotMatch(value, /\bcheckout\b/i);
+}
+
 export function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
