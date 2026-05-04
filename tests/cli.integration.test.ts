@@ -700,6 +700,25 @@ test('spec plan/config/clean help describe AI-facing usage and safety constraint
   assert.match(labelAuditHelp.stdout, /does not create, rename, delete, or mutate/i);
 });
 
+test('spec label-audit forwards --limit to gh issue and pr list', async (t) => {
+  const fixture = await createLabelAuditFixture(t, {
+    issues: [],
+    prs: [],
+  });
+
+  const result = await runSpec([
+    'label-audit',
+    '--repo', fixture.repo,
+    '--limit', '25',
+  ], { env: fixture.env });
+
+  assert.equal(result.code, 0, result.stderr);
+  const ghLog = (await readGhLog(fixture.ghLogPath)).join('\n');
+  assert.match(ghLog, /issue list[\s\S]*--limit 25/);
+  assert.match(ghLog, /pr list[\s\S]*--limit 25/);
+  assertNoGhMutationCommands(ghLog);
+});
+
 test('spec label-audit passes for open issues with accepted type, area, status, layer, and milestone metadata', async (t) => {
   const fixture = await createLabelAuditFixture(t, {
     issues: [{
@@ -729,6 +748,70 @@ test('spec label-audit passes for open issues with accepted type, area, status, 
   assert.match(result.stdout, /issue #110 has status metadata/i);
   assert.match(result.stdout, /issue #110 milestone matches layer label/i);
   assert.equal(result.stderr, '');
+  const ghLog = (await readGhLog(fixture.ghLogPath)).join('\n');
+  assertNoGhMutationCommands(ghLog);
+});
+
+test('spec label-audit reports multiple type labels as needs human review', async (t) => {
+  const fixture = await createLabelAuditFixture(t, {
+    issues: [{
+      number: 213,
+      title: 'conflicting type labels',
+      url: 'https://github.com/Erick52106/spec-injector/issues/213',
+      state: 'OPEN',
+      labels: [
+        { name: 'bug' },
+        { name: 'enhancement' },
+        { name: 'area:workflow' },
+        { name: 'status:ready' },
+        { name: 'layer2 : Workflow Guardrails' },
+      ],
+      milestone: { title: 'Layer 2 — Workflow Guardrails' },
+    }],
+  });
+
+  const result = await runSpec([
+    'label-audit',
+    '--repo', fixture.repo,
+  ], { env: fixture.env });
+
+  assert.notEqual(result.code, 0);
+  assert.match(result.stdout, /Label audit summary:\s+NEEDS-HUMAN-REVIEW/i);
+  assert.match(result.stdout, /issue #213 has multiple type labels/i);
+  assertNoRawStackTrace(result);
+  const ghLog = (await readGhLog(fixture.ghLogPath)).join('\n');
+  assertNoGhMutationCommands(ghLog);
+});
+
+test('spec label-audit reports more than three area labels as needs human review', async (t) => {
+  const fixture = await createLabelAuditFixture(t, {
+    issues: [{
+      number: 214,
+      title: 'too many area labels',
+      url: 'https://github.com/Erick52106/spec-injector/issues/214',
+      state: 'OPEN',
+      labels: [
+        { name: 'enhancement' },
+        { name: 'area:workflow' },
+        { name: 'area:docs' },
+        { name: 'area:cli' },
+        { name: 'area:tooling' },
+        { name: 'status:ready' },
+        { name: 'layer2 : Workflow Guardrails' },
+      ],
+      milestone: { title: 'Layer 2 — Workflow Guardrails' },
+    }],
+  });
+
+  const result = await runSpec([
+    'label-audit',
+    '--repo', fixture.repo,
+  ], { env: fixture.env });
+
+  assert.notEqual(result.code, 0);
+  assert.match(result.stdout, /Label audit summary:\s+NEEDS-HUMAN-REVIEW/i);
+  assert.match(result.stdout, /issue #214 has too many area labels/i);
+  assertNoRawStackTrace(result);
   const ghLog = (await readGhLog(fixture.ghLogPath)).join('\n');
   assertNoGhMutationCommands(ghLog);
 });
@@ -1006,6 +1089,77 @@ test('spec label-audit warns when an open ready issue has a non-draft PR but is 
   assertNoGhMutationCommands(ghLog);
 });
 
+test('spec label-audit warns when a PR has a layer label but no milestone', async (t) => {
+  const fixture = await createLabelAuditFixture(t, {
+    prs: [{
+      number: 312,
+      title: 'workflow PR without milestone',
+      url: 'https://github.com/Erick52106/spec-injector/pull/312',
+      labels: [{ name: 'layer2 : Workflow Guardrails' }],
+      milestone: null,
+      closingIssuesReferences: [],
+      isDraft: false,
+    }],
+  });
+
+  const result = await runSpec([
+    'label-audit',
+    '--repo', fixture.repo,
+  ], { env: fixture.env });
+
+  assert.equal(result.code, 0, result.stderr);
+  assert.match(result.stdout, /Label audit summary:\s+WARNING/i);
+  assert.match(result.stdout, /PR #312 is missing a roadmap milestone/i);
+  const ghLog = (await readGhLog(fixture.ghLogPath)).join('\n');
+  assertNoGhMutationCommands(ghLog);
+});
+
+test('spec label-audit warns when a layer label has no configured milestone mapping', async (t) => {
+  const fixture = await createLabelAuditFixture(t, {
+    issues: [{
+      number: 215,
+      title: 'unmapped layer milestone issue',
+      url: 'https://github.com/Erick52106/spec-injector/issues/215',
+      state: 'OPEN',
+      labels: [
+        { name: 'enhancement' },
+        { name: 'area:workflow' },
+        { name: 'status:ready' },
+        { name: 'layer2 : Workflow Guardrails' },
+      ],
+      milestone: { title: 'Layer 2 — Workflow Guardrails' },
+    }],
+  });
+  const repoDir = await createTempRepo(t, 'spec-injector-label-audit-taxonomy-');
+  await writeRepoFiles(repoDir, {
+    'docs/label-taxonomy.md': [
+      '# Minimal taxonomy',
+      '',
+      '- Type labels: `type:chore`, `type:ci`, `type:design`, `type:refactor`, `type:test`.',
+      '- Area labels: `area:workflow`, `area:docs`, `area:cli`, `area:tooling`.',
+      '- Status labels: `status:blocked`, `status:implemented`, `status:in-review`, `status:needs-design`, `status:ready`.',
+      '- Layer labels: `layer1 : Core Compiler`, `layer2 : Workflow Guardrails`.',
+      '- GitHub default / equivalent labels: `bug`, `documentation`, `enhancement`.',
+    ].join('\n'),
+    'docs/workflow.md': [
+      '# Workflow',
+      '',
+      '- `Layer 1 — Core Compiler` / `layer1 : Core Compiler`: core compiler.',
+    ].join('\n'),
+  });
+
+  const result = await runSpec([
+    'label-audit',
+    '--repo', fixture.repo,
+  ], { env: fixture.env, cwd: repoDir });
+
+  assert.equal(result.code, 0, result.stderr);
+  assert.match(result.stdout, /Label audit summary:\s+WARNING/i);
+  assert.match(result.stdout, /issue #215 layer label has no configured roadmap milestone mapping/i);
+  const ghLog = (await readGhLog(fixture.ghLogPath)).join('\n');
+  assertNoGhMutationCommands(ghLog);
+});
+
 test('spec label-audit reports malformed gh output as needs human review without a raw stack trace', async (t) => {
   const fixture = await createLabelAuditFixture(t, {
     issueListCommand: {
@@ -1048,6 +1202,41 @@ test('spec label-audit reports missing gh fields as needs human review without a
   assert.notEqual(result.code, 0);
   assert.match(result.stdout, /Label audit summary:\s+NEEDS-HUMAN-REVIEW/i);
   assert.match(result.stdout, /gh issue list output is missing required fields for issue #212/i);
+  assertNoRawStackTrace(result);
+  const ghLog = (await readGhLog(fixture.ghLogPath)).join('\n');
+  assertNoGhMutationCommands(ghLog);
+});
+
+test('spec label-audit reports missing taxonomy markers as needs human review without a raw stack trace', async (t) => {
+  const fixture = await createLabelAuditFixture(t, {
+    issues: [],
+    prs: [],
+  });
+  const repoDir = await createTempRepo(t, 'spec-injector-label-audit-malformed-taxonomy-');
+  await writeRepoFiles(repoDir, {
+    'docs/label-taxonomy.md': [
+      '# Broken taxonomy',
+      '',
+      '- Area labels: `area:workflow`.',
+      '- Status labels: `status:ready`.',
+      '- Layer labels: `layer2 : Workflow Guardrails`.',
+      '- GitHub default / equivalent labels: `enhancement`.',
+    ].join('\n'),
+    'docs/workflow.md': [
+      '# Workflow',
+      '',
+      '- `Layer 2 — Workflow Guardrails` / `layer2 : Workflow Guardrails`: workflow guardrails.',
+    ].join('\n'),
+  });
+
+  const result = await runSpec([
+    'label-audit',
+    '--repo', fixture.repo,
+  ], { env: fixture.env, cwd: repoDir });
+
+  assert.notEqual(result.code, 0);
+  assert.match(result.stdout, /Label audit summary:\s+NEEDS-HUMAN-REVIEW/i);
+  assert.match(result.stdout, /could not parse accepted taxonomy markers/i);
   assertNoRawStackTrace(result);
   const ghLog = (await readGhLog(fixture.ghLogPath)).join('\n');
   assertNoGhMutationCommands(ghLog);

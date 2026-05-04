@@ -86,7 +86,11 @@ function buildLabelAuditReport(
   opts: LabelAuditOptions,
   repoRoot: string
 ): { overall: Severity; checks: LabelAuditCheck[] } {
-  const taxonomy = loadAcceptedTaxonomy(repoRoot);
+  const taxonomyRead = loadAcceptedTaxonomy(repoRoot);
+  if ('error' in taxonomyRead) {
+    return singleNeedsHumanReviewReport(taxonomyRead.error);
+  }
+  const taxonomy = taxonomyRead.value;
   const limit = parseLimit(opts.limit);
   const checks: LabelAuditCheck[] = [];
 
@@ -172,20 +176,34 @@ function auditIssue(
   const unknownLabels = issue.labels.filter((label) => !taxonomy.acceptedLabels.has(label));
   const linkedReviewPrs = openReviewPrsByIssue.get(issue.number) ?? [];
 
+  if (typeLabels.length > 1) {
+    checks.push(needsHumanReview(
+      `issue #${issue.number} has multiple type labels`,
+      typeLabels.join(', ')
+    ));
+  }
+
+  if (areaLabels.length > 3) {
+    checks.push(needsHumanReview(
+      `issue #${issue.number} has too many area labels`,
+      areaLabels.join(', ')
+    ));
+  }
+
   if (issue.state === 'OPEN') {
-    if (typeLabels.length > 0) {
+    if (typeLabels.length === 1) {
       checks.push(pass(
         `issue #${issue.number} has type metadata`,
         typeLabels.join(', ')
       ));
-    } else {
+    } else if (typeLabels.length === 0) {
       checks.push(warning(
         `issue #${issue.number} is missing a type or GitHub default equivalent label`,
         'Open issues should keep one type/equivalent label for deterministic audit output.'
       ));
     }
 
-    if (areaLabels.length > 0) {
+    if (areaLabels.length > 0 && areaLabels.length <= 3) {
       checks.push(pass(
         `issue #${issue.number} has area metadata`,
         areaLabels.join(', ')
@@ -259,12 +277,17 @@ function auditIssue(
         `issue #${issue.number} is missing a roadmap milestone`,
         `Layer label ${layerLabels[0]} has no matching milestone assigned.`
       ));
+    } else if (!expectedMilestone) {
+      checks.push(warning(
+        `issue #${issue.number} layer label has no configured roadmap milestone mapping`,
+        `${layerLabels[0]} is missing from workflow milestone mapping.`
+      ));
     } else if (expectedMilestone && issue.milestone !== expectedMilestone) {
       checks.push(warning(
         `issue #${issue.number} milestone does not match layer label`,
         `Layer ${layerLabels[0]} normally maps to milestone ${expectedMilestone}, found ${issue.milestone}.`
       ));
-    } else if (issue.milestone) {
+    } else if (issue.milestone === expectedMilestone) {
       checks.push(pass(
         `issue #${issue.number} milestone matches layer label`,
         `${issue.milestone} / ${layerLabels[0]}`
@@ -325,12 +348,27 @@ function auditPullRequest(pr: NormalizedPullRequest, taxonomy: Taxonomy): LabelA
       `PR #${pr.number} has multiple layer labels`,
       layerLabels.join(', ')
     ));
-  } else if (layerLabels.length === 1 && pr.milestone) {
+  } else if (layerLabels.length === 1) {
     const expectedMilestone = taxonomy.layerToMilestone.get(layerLabels[0]);
-    if (expectedMilestone && pr.milestone !== expectedMilestone) {
+    if (!pr.milestone) {
+      checks.push(warning(
+        `PR #${pr.number} is missing a roadmap milestone`,
+        `Layer label ${layerLabels[0]} has no matching milestone assigned.`
+      ));
+    } else if (!expectedMilestone) {
+      checks.push(warning(
+        `PR #${pr.number} layer label has no configured roadmap milestone mapping`,
+        `${layerLabels[0]} is missing from workflow milestone mapping.`
+      ));
+    } else if (pr.milestone !== expectedMilestone) {
       checks.push(warning(
         `PR #${pr.number} milestone does not match layer label`,
         `Layer ${layerLabels[0]} normally maps to milestone ${expectedMilestone}, found ${pr.milestone}.`
+      ));
+    } else {
+      checks.push(pass(
+        `PR #${pr.number} milestone matches layer label`,
+        `${pr.milestone} / ${layerLabels[0]}`
       ));
     }
   }
@@ -448,42 +486,74 @@ function normalizeLabelNames(labels: Array<{ name?: string }>): string[] {
     .filter((label): label is string => Boolean(label)))];
 }
 
-function loadAcceptedTaxonomy(repoRoot: string): Taxonomy {
+function loadAcceptedTaxonomy(repoRoot: string): { value: Taxonomy } | { error: string } {
   const labelTaxonomyPath = path.join(repoRoot, 'docs', 'label-taxonomy.md');
   const workflowPath = path.join(repoRoot, 'docs', 'workflow.md');
   const labelTaxonomy = fs.readFileSync(labelTaxonomyPath, 'utf8');
   const workflow = fs.readFileSync(workflowPath, 'utf8');
 
-  const typeLabels = new Set(extractBacktickedLabels(labelTaxonomy, /^- Type labels:/m));
-  const areaLabels = new Set(extractBacktickedLabels(labelTaxonomy, /^- Area labels:/m));
-  const statusLabels = new Set(extractBacktickedLabels(labelTaxonomy, /^- Status labels:/m));
-  const layerLabels = new Set(extractBacktickedLabels(labelTaxonomy, /^- Layer labels:/m));
-  const defaultEquivalentLabels = new Set(extractBacktickedLabels(labelTaxonomy, /^- GitHub default \/ equivalent labels:/m));
+  const typeLabels = extractBacktickedLabels(labelTaxonomy, /^- Type labels:/m, 'Type labels');
+  const areaLabels = extractBacktickedLabels(labelTaxonomy, /^- Area labels:/m, 'Area labels');
+  const statusLabels = extractBacktickedLabels(labelTaxonomy, /^- Status labels:/m, 'Status labels');
+  const layerLabels = extractBacktickedLabels(labelTaxonomy, /^- Layer labels:/m, 'Layer labels');
+  const defaultEquivalentLabels = extractBacktickedLabels(
+    labelTaxonomy,
+    /^- GitHub default \/ equivalent labels:/m,
+    'GitHub default / equivalent labels'
+  );
+  if ('error' in typeLabels) {
+    return { error: `could not parse accepted taxonomy markers: ${typeLabels.error}` };
+  }
+  if ('error' in areaLabels) {
+    return { error: `could not parse accepted taxonomy markers: ${areaLabels.error}` };
+  }
+  if ('error' in statusLabels) {
+    return { error: `could not parse accepted taxonomy markers: ${statusLabels.error}` };
+  }
+  if ('error' in layerLabels) {
+    return { error: `could not parse accepted taxonomy markers: ${layerLabels.error}` };
+  }
+  if ('error' in defaultEquivalentLabels) {
+    return { error: `could not parse accepted taxonomy markers: ${defaultEquivalentLabels.error}` };
+  }
   const layerToMilestone = extractLayerMilestoneMap(workflow);
+  if (layerToMilestone.size === 0) {
+    return { error: 'could not parse workflow layer-to-milestone mapping' };
+  }
 
-  return {
+  return { value: {
     acceptedLabels: new Set([
-      ...typeLabels,
-      ...areaLabels,
-      ...statusLabels,
-      ...layerLabels,
-      ...defaultEquivalentLabels,
+      ...typeLabels.value,
+      ...areaLabels.value,
+      ...statusLabels.value,
+      ...layerLabels.value,
+      ...defaultEquivalentLabels.value,
     ]),
     typeOrEquivalentLabels: new Set([
-      ...typeLabels,
-      ...defaultEquivalentLabels,
+      ...typeLabels.value,
+      ...defaultEquivalentLabels.value,
     ]),
-    areaLabels,
-    statusLabels,
-    layerLabels,
+    areaLabels: new Set(areaLabels.value),
+    statusLabels: new Set(statusLabels.value),
+    layerLabels: new Set(layerLabels.value),
     layerToMilestone,
-  };
+  } };
 }
 
-function extractBacktickedLabels(value: string, marker: RegExp): string[] {
+function extractBacktickedLabels(
+  value: string,
+  marker: RegExp,
+  markerName: string
+): { value: string[] } | { error: string } {
   const line = value.split('\n').find((candidate) => marker.test(candidate));
-  if (!line) return [];
-  return [...line.matchAll(/`([^`]+)`/g)].map((match) => match[1]);
+  if (!line) {
+    return { error: `missing marker line for ${markerName}` };
+  }
+  const labels = [...line.matchAll(/`([^`]+)`/g)].map((match) => match[1]);
+  if (labels.length === 0) {
+    return { error: `marker line for ${markerName} does not contain any backticked labels` };
+  }
+  return { value: labels };
 }
 
 function extractLayerMilestoneMap(workflow: string): Map<string, string> {

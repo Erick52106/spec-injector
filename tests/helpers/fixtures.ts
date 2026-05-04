@@ -648,8 +648,24 @@ function requireRepo() {
   }
 }
 
+function requireJsonFields(expectedFields, commandLabel) {
+  const jsonFlagIndex = args.indexOf('--json');
+  if (jsonFlagIndex === -1) {
+    console.error('Missing --json for ' + commandLabel + ': ' + args.join(' '));
+    process.exit(1);
+  }
+  const actualFields = new Set(String(args[jsonFlagIndex + 1] ?? '').split(',').map((value) => value.trim()).filter(Boolean));
+  for (const field of expectedFields) {
+    if (!actualFields.has(field)) {
+      console.error('Missing ' + commandLabel + ' json field "' + field + '": ' + args.join(' '));
+      process.exit(1);
+    }
+  }
+}
+
 if (args[0] === 'issue' && args[1] === 'list') {
   requireRepo();
+  requireJsonFields(['number', 'title', 'url', 'state', 'stateReason', 'labels', 'milestone'], 'issue list');
   if (payload.issueListCommand) {
     if (payload.issueListCommand.stdout !== undefined) {
       process.stdout.write(payload.issueListCommand.stdout);
@@ -665,6 +681,7 @@ if (args[0] === 'issue' && args[1] === 'list') {
 
 if (args[0] === 'pr' && args[1] === 'list') {
   requireRepo();
+  requireJsonFields(['number', 'title', 'url', 'labels', 'milestone', 'closingIssuesReferences', 'isDraft'], 'pr list');
   if (payload.prListCommand) {
     if (payload.prListCommand.stdout !== undefined) {
       process.stdout.write(payload.prListCommand.stdout);
