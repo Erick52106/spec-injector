@@ -6,7 +6,7 @@
 
 目前已有第一個 narrow consumer：repo-local、human-readable 的 `spec preflight` checker。它只實作 #108 所需的 bounded preflight subset，用來檢查 main repo / worktree / branch / target repo safety guardrails；它不把本文件變成 runtime schema、JSON output protocol、hosted control plane 或 remediation automation。
 
-它的第一用途是維持 `spec-injector` 專案本身的 AI-assisted development workflow consistency，讓未來 #108 / #109 / #110 這類 repo-local workflow guardrail checkers 有共同規格來源。
+它的第一用途是維持 `spec-injector` 專案本身的 AI-assisted development workflow consistency，讓未來 #108 / #109 / #110 這類 repo-local workflow guardrail checkers 有共同規格來源。#110 label / milestone audit checker 應等 [label-taxonomy.md](label-taxonomy.md) 的 #150 taxonomy proposal 被接受後，再消費 accepted taxonomy；它不應在 taxonomy 未穩前自行發明 labels 或自動修改 metadata。
 
 Dogfood finding、review blocker、CI failure、target repo safety near miss 與 evidence freshness gap 如何進入 follow-up issue / regression / closeout loop，見 [harness-gap-loop.md](harness-gap-loop.md)。該 loop 使用本文件的 risk-tier、validation、evidence 與 review vocabulary，但不新增 runtime contract。
 
@@ -469,7 +469,7 @@ Future consumers should wait for #147 vocabulary to stabilize and then split int
 
 - #108 preflight checker: consume worktree, branch, main freshness, dirty-state, and stop-and-report vocabulary.
 - #109 PR / evidence / HEAD consistency checker: consume PR body, issue evidence, validation, latest HEAD, CI, and backfill vocabulary.
-- #110 label / milestone audit checker: consume metadata expectations, current taxonomy, warning / stop-and-report behavior, and #150 relationship.
+- #110 label / milestone audit checker: consume metadata expectations, accepted [label-taxonomy.md](label-taxonomy.md) rules, warning / stop-and-report behavior, and #150 relationship.
 - #151 second brownfield dogfood checklist: consume target repo / dogfood safety and source trust vocabulary.
 - #148 harness gap loop policy: consume risk-tier、validation、evidence、review finding assessment vocabulary，定義 finding-to-follow-up discipline。
 - Future [workflow.md](workflow.md) / [validation.md](validation.md) sync: keep prose rules and contract vocabulary aligned.

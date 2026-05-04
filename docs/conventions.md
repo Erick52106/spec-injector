@@ -6,6 +6,8 @@ This document defines how spec-injector uses issues, pull requests, labels, and 
 
 ## Labels
 
+Canonical taxonomy proposal、visual hierarchy、combination rules、migration staging 與 #110 checker dependency 見 [label-taxonomy.md](label-taxonomy.md)。本節保留現行 label conventions，直到 taxonomy proposal 被 human accepted 並另行批准 label / metadata migration。
+
 ### GitHub default labels
 
 spec-injector keeps the GitHub default labels as-is. They should not be deleted or renamed.
