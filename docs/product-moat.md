@@ -17,7 +17,7 @@
 
 它不是 marketing page，不是 competitor attack，也不宣稱 `spec-injector` 全面優於其他工具。它是一份 decision record：判斷哪些 issue 是 moat-building，哪些只是 hygiene / polish，哪些方向需要先停下討論。
 
-Internal workflow contract design 見 [internal-workflow-contract.md](internal-workflow-contract.md)。該 contract 是 repo-local workflow discipline，不是 product-facing harness platform 或 hosted control plane。
+Internal workflow contract design 見 [internal-workflow-contract.md](internal-workflow-contract.md)。Label taxonomy proposal 見 [label-taxonomy.md](label-taxonomy.md)。這些 docs 是 repo-local workflow discipline，不是 product-facing harness platform、hosted control plane 或 roadmap dashboard。
 
 ## Product Thesis
 
@@ -193,6 +193,8 @@ Why it matters: Task package 是 human、Codex、Claude Code、reviewer 之間�
 ### Label colors / taxonomy cleanup
 
 有用但非 moat：一致 labels 讓 repo 好維護，但它不解決 request-to-context、source trust 或 context budget 的核心問題。
+
+Taxonomy cleanup 應先經過 [label-taxonomy.md](label-taxonomy.md) 的 docs-only proposal 與 human approval。不要把 `area:control-plane` 做成正式 taxonomy 主軸；repo-local checker / evidence / closeout 工作應優先使用 workflow guardrails 語彙。
 
 ### README visuals / showcase
 
