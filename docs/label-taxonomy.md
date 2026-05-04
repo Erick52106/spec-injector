@@ -31,7 +31,7 @@ Open issue distribution observed during this proposal:
 | Status | All 11 open issues carry `status:needs-design`, useful for backlog safety but too coarse for future checker behavior if left as the only active state. |
 | Roadmap layers | Layer 2 has 5 open issues, Layer 4 has 5 open issues, Layer 3 has 1 open issue, Layer 1 has 0 open issues. |
 
-#108 `spec preflight` and #109 `spec evidence-check` are merged / closed completed. #110 remains open and should wait for this taxonomy to be accepted.
+Issue `#108` (`spec preflight`) and Issue `#109` (`spec evidence-check`) are merged / closed completed. Issue `#110` remains open and should wait for this taxonomy to be accepted.
 
 ## Problem Statement
 
@@ -356,9 +356,9 @@ Safety / rollback:
 
 ## Relationship To #110
 
-#110 should not implement until #150 taxonomy is accepted.
+Issue `#110` should not implement until Issue `#150` taxonomy is accepted.
 
-#110 should:
+Issue `#110` should:
 
 - Audit against accepted taxonomy.
 - Use issue / PR labels, milestones, layer labels, and status labels as read-only input.
@@ -366,7 +366,7 @@ Safety / rollback:
 - Classify output as pass / warning / needs human review / fail where appropriate.
 - Use mocked `gh` output and offline fixtures for tests.
 
-#110 should not:
+Issue `#110` should not:
 
 - Invent labels.
 - Create labels.
