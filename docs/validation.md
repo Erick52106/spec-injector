@@ -327,7 +327,7 @@ Passing tests alone is not enough if evidence, PR body, scope guard, or CI repor
 Before merge, review closeout must also confirm:
 
 - PR body includes evidence URL and commit hash.
- - Issue evidence comment exists.
+- Issue evidence comment exists.
 - Issue evidence comment readback verified（URL/內容可取得）。
 - Review rationale / closeout comment readback verified when used as evidence.
 - CI / required checks pass.
