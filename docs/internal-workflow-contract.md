@@ -4,6 +4,8 @@
 
 本文件是 #147 的 design-only proposal，定義 `spec-injector` repo 自身使用的 internal machine-readable workflow contract vocabulary。
 
+目前已有第一個 narrow consumer：repo-local、human-readable 的 `spec preflight` checker。它只實作 #108 所需的 bounded preflight subset，用來檢查 main repo / worktree / branch / target repo safety guardrails；它不把本文件變成 runtime schema、JSON output protocol、hosted control plane 或 remediation automation。
+
 它的第一用途是維持 `spec-injector` 專案本身的 AI-assisted development workflow consistency，讓未來 #108 / #109 / #110 這類 repo-local workflow guardrail checkers 有共同規格來源。
 
 Dogfood finding、review blocker、CI failure、target repo safety near miss 與 evidence freshness gap 如何進入 follow-up issue / regression / closeout loop，見 [harness-gap-loop.md](harness-gap-loop.md)。該 loop 使用本文件的 risk-tier、validation、evidence 與 review vocabulary，但不新增 runtime contract。

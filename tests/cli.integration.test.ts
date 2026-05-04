@@ -5,12 +5,13 @@ import path from 'node:path';
 import { classifyDomains, classifyDomainsWithEvidence } from '../dist/classifier/domain.js';
 import { config as runConfigCommand } from '../dist/cli/config.js';
 import { renderTemplate } from '../dist/template/renderer.js';
-import { repoRoot, runSpec } from './helpers/cli.ts';
+import { repoRoot, runCommand, runSpec } from './helpers/cli.ts';
 import {
   createExplicitPathPlanFixture,
   createExternalConfigPlanFixture,
   createFailingGitEnv,
   createMissingPath,
+  createPreflightFixture,
   createSpecPlanFixture,
   createTempRepo,
   initCleanGitRepo,
@@ -25,6 +26,7 @@ import {
   assertDirtyWarning,
   assertFileExists,
   assertFileMissing,
+  assertNoGitMutationCommands,
   assertNoCleanupCommands,
   assertNoRawStackTrace,
   assertOrderedSubstrings,
@@ -94,6 +96,45 @@ async function createReadFailureEnv(
   return {
     ...baseEnv,
     NODE_OPTIONS: [existingNodeOptions, `--import=${preloadPath}`].filter(Boolean).join(' '),
+  };
+}
+
+async function createStatusFailingGitEnv(
+  t: { after(fn: () => void | Promise<void>): void },
+  baseEnv: NodeJS.ProcessEnv,
+  failCwd: string
+): Promise<{ env: NodeJS.ProcessEnv; logPath: string }> {
+  const binDir = await fs.mkdtemp(path.join(path.dirname(createMissingPath()), 'spec-injector-status-failing-git-'));
+  t.after(async () => {
+    await fs.rm(binDir, { recursive: true, force: true });
+  });
+
+  const realGitPath = (await runCommand('which', ['git'], repoRoot)).stdout.trim();
+  const logPath = path.join(binDir, 'git.log');
+  const gitPath = path.join(binDir, 'git');
+
+  await fs.writeFile(logPath, '', 'utf8');
+  await fs.writeFile(gitPath, [
+    '#!/bin/sh',
+    'printf "%s\\n" "$*" >> "$FAKE_GIT_LOG"',
+    'if [ "$PWD" = "$FAKE_GIT_FAIL_CWD" ] && [ "$1" = "status" ]; then',
+    '  echo "simulated git status failure" >&2',
+    '  exit 2',
+    'fi',
+    'exec "$FAKE_GIT_REAL" "$@"',
+    '',
+  ].join('\n'), 'utf8');
+  await fs.chmod(gitPath, 0o755);
+
+  return {
+    env: {
+      ...baseEnv,
+      PATH: `${binDir}${path.delimiter}${baseEnv.PATH ?? process.env.PATH ?? ''}`,
+      FAKE_GIT_FAIL_CWD: await fs.realpath(failCwd),
+      FAKE_GIT_LOG: logPath,
+      FAKE_GIT_REAL: realGitPath,
+    },
+    logPath,
   };
 }
 
@@ -630,6 +671,217 @@ test('spec plan/config/clean help describe AI-facing usage and safety constraint
   assert.match(cleanHelp.stdout, /does not remove .*config\.json/i);
   assert.match(cleanHelp.stdout, /unrelated files/i);
   assert.match(cleanHelp.stdout, /--issue <number>/);
+
+  const preflightHelp = await runSpec(['preflight', '--help']);
+  assert.equal(preflightHelp.code, 0, preflightHelp.stderr);
+  assert.match(preflightHelp.stdout, /isolated worktree task execution/i);
+  assert.match(preflightHelp.stdout, /expected branch/i);
+  assert.match(preflightHelp.stdout, /expected worktree root/i);
+  assert.match(preflightHelp.stdout, /target repo/i);
+  assert.match(preflightHelp.stdout, /does not auto-fix/i);
+});
+
+test('spec preflight passes for a clean dedicated worktree and avoids mutating git state', async (t) => {
+  const fixture = await createPreflightFixture(t);
+
+  const result = await runSpec([
+    'preflight',
+    '--repo', fixture.worktreeDir,
+    '--expected-branch', fixture.branchName,
+    '--expected-worktree-root', path.dirname(fixture.worktreeDir),
+  ], { env: fixture.env });
+
+  assert.equal(result.code, 0, result.stderr);
+  assert.match(result.stdout, /Preflight summary:\s+PASS/i);
+  assert.match(result.stdout, /main repo worktree is clean/i);
+  assert.match(result.stdout, /main repo is up to date with origin\/main/i);
+  assert.match(result.stdout, /current worktree is dedicated/i);
+  assert.match(result.stdout, /current worktree is clean/i);
+  assert.match(result.stdout, new RegExp(escapeRegExp(fixture.branchName)));
+  assert.equal(result.stderr, '');
+
+  const gitLog = (await readGhLog(fixture.gitLogPath)).join('\n');
+  assertNoGitMutationCommands(gitLog);
+});
+
+test('spec preflight reports the actual main upstream ref in sync summaries', async (t) => {
+  const fixture = await createPreflightFixture(t);
+  await runCommand('git', ['remote', 'rename', 'origin', 'upstream'], fixture.mainRepoDir);
+
+  const result = await runSpec([
+    'preflight',
+    '--repo', fixture.worktreeDir,
+    '--expected-branch', fixture.branchName,
+  ], { env: fixture.env });
+
+  assert.equal(result.code, 0, result.stderr);
+  assert.match(result.stdout, /main repo is up to date with upstream\/main/i);
+  assert.doesNotMatch(result.stdout, /main repo is up to date with origin\/main/i);
+  const gitLog = (await readGhLog(fixture.gitLogPath)).join('\n');
+  assertNoGitMutationCommands(gitLog);
+});
+
+test('spec preflight fails when the main repo worktree is not on main even if its upstream is current', async (t) => {
+  const fixture = await createPreflightFixture(t);
+  await runCommand('git', ['checkout', '-b', 'main-worktree-feature'], fixture.mainRepoDir);
+  await runCommand('git', ['push', '--set-upstream', 'origin', 'main-worktree-feature'], fixture.mainRepoDir);
+
+  const result = await runSpec([
+    'preflight',
+    '--repo', fixture.worktreeDir,
+    '--expected-branch', fixture.branchName,
+  ], { env: fixture.env });
+
+  assert.notEqual(result.code, 0);
+  assert.match(result.stdout, /Preflight summary:\s+FAIL/i);
+  assert.match(result.stdout, /main repo worktree is not on main/i);
+  assert.match(result.stdout, /found main-worktree-feature/i);
+  assertNoRawStackTrace(result);
+  const gitLog = (await readGhLog(fixture.gitLogPath)).join('\n');
+  assertNoGitMutationCommands(gitLog);
+});
+
+test('spec preflight fails when implementation runs from the main worktree', async (t) => {
+  const fixture = await createPreflightFixture(t);
+
+  const result = await runSpec([
+    'preflight',
+    '--repo', fixture.mainRepoDir,
+    '--expected-branch', 'main',
+  ], { env: fixture.env });
+
+  assert.notEqual(result.code, 0);
+  assert.match(result.stdout, /Preflight summary:\s+FAIL/i);
+  assert.match(result.stdout, /current checkout is the main repo worktree/i);
+  assert.match(result.stdout, /implementation must run from a dedicated worktree/i);
+  assertNoRawStackTrace(result);
+  const gitLog = (await readGhLog(fixture.gitLogPath)).join('\n');
+  assertNoGitMutationCommands(gitLog);
+});
+
+test('spec preflight fails when the main repo worktree is dirty', async (t) => {
+  const fixture = await createPreflightFixture(t);
+  await fs.writeFile(path.join(fixture.mainRepoDir, 'main-dirty.txt'), 'dirty main\n', 'utf8');
+
+  const result = await runSpec([
+    'preflight',
+    '--repo', fixture.worktreeDir,
+    '--expected-branch', fixture.branchName,
+  ], { env: fixture.env });
+
+  assert.notEqual(result.code, 0);
+  assert.match(result.stdout, /Preflight summary:\s+FAIL/i);
+  assert.match(result.stdout, /main repo worktree is dirty/i);
+  assert.match(result.stdout, /stop and report/i);
+  assertNoRawStackTrace(result);
+  const gitLog = (await readGhLog(fixture.gitLogPath)).join('\n');
+  assertNoGitMutationCommands(gitLog);
+});
+
+test('spec preflight fails when current branch does not match the expected branch', async (t) => {
+  const fixture = await createPreflightFixture(t);
+
+  const result = await runSpec([
+    'preflight',
+    '--repo', fixture.worktreeDir,
+    '--expected-branch', 'feat/some-other-branch',
+  ], { env: fixture.env });
+
+  assert.notEqual(result.code, 0);
+  assert.match(result.stdout, /Preflight summary:\s+FAIL/i);
+  assert.match(result.stdout, /current branch does not match expected branch/i);
+  assert.match(result.stdout, /feat\/some-other-branch/i);
+  assert.match(result.stdout, new RegExp(escapeRegExp(fixture.branchName)));
+  assertNoRawStackTrace(result);
+  const gitLog = (await readGhLog(fixture.gitLogPath)).join('\n');
+  assertNoGitMutationCommands(gitLog);
+});
+
+test('spec preflight fails when the dedicated worktree is dirty', async (t) => {
+  const fixture = await createPreflightFixture(t);
+  await fs.writeFile(path.join(fixture.worktreeDir, 'worktree-dirty.txt'), 'dirty worktree\n', 'utf8');
+
+  const result = await runSpec([
+    'preflight',
+    '--repo', fixture.worktreeDir,
+    '--expected-branch', fixture.branchName,
+  ], { env: fixture.env });
+
+  assert.notEqual(result.code, 0);
+  assert.match(result.stdout, /Preflight summary:\s+FAIL/i);
+  assert.match(result.stdout, /current worktree is dirty/i);
+  assert.match(result.stdout, /do not auto-stash, clean, or reset/i);
+  assertNoRawStackTrace(result);
+  const gitLog = (await readGhLog(fixture.gitLogPath)).join('\n');
+  assertNoGitMutationCommands(gitLog);
+});
+
+test('spec preflight warns when the main repo has no upstream configured', async (t) => {
+  const fixture = await createPreflightFixture(t, { withUpstream: false });
+
+  const result = await runSpec([
+    'preflight',
+    '--repo', fixture.worktreeDir,
+    '--expected-branch', fixture.branchName,
+  ], { env: fixture.env });
+
+  assert.equal(result.code, 0, result.stderr);
+  assert.match(result.stdout, /Preflight summary:\s+WARNING/i);
+  assert.match(result.stdout, /main repo has no upstream configured/i);
+  assert.match(result.stdout, /needs human review/i);
+  const gitLog = (await readGhLog(fixture.gitLogPath)).join('\n');
+  assertNoGitMutationCommands(gitLog);
+});
+
+test('spec preflight exits non-zero when a check needs human review', async (t) => {
+  const fixture = await createPreflightFixture(t);
+  const targetRepoDir = await createTempRepo(t, 'spec-injector-target-status-failure-');
+  await writeRepoFiles(targetRepoDir, {
+    'README.md': '# Target Status Failure Fixture\n',
+  });
+  await initCleanGitRepo(targetRepoDir);
+  const gitSpy = await createStatusFailingGitEnv(t, fixture.env, targetRepoDir);
+
+  const result = await runSpec([
+    'preflight',
+    '--repo', fixture.worktreeDir,
+    '--expected-branch', fixture.branchName,
+    '--target-repo', targetRepoDir,
+  ], { env: gitSpy.env });
+
+  assert.notEqual(result.code, 0);
+  assert.match(result.stdout, /Preflight summary:\s+NEEDS-HUMAN-REVIEW/i);
+  assert.match(result.stdout, /unable to determine target repo worktree state/i);
+  assertNoRawStackTrace(result);
+  const gitLog = (await readGhLog(gitSpy.logPath)).join('\n');
+  assertNoGitMutationCommands(gitLog);
+  await assertFileMissing(path.join(targetRepoDir, '.spec-injector'));
+});
+
+test('spec preflight warns when the target repo is dirty and keeps the boundary read-only', async (t) => {
+  const fixture = await createPreflightFixture(t);
+  const targetRepoDir = await createTempRepo(t, 'spec-injector-target-repo-');
+  await writeRepoFiles(targetRepoDir, {
+    'README.md': '# Target Repo Fixture\n',
+  });
+  await initCleanGitRepo(targetRepoDir);
+  await fs.writeFile(path.join(targetRepoDir, 'dirty-target.txt'), 'target repo dirty\n', 'utf8');
+
+  const result = await runSpec([
+    'preflight',
+    '--repo', fixture.worktreeDir,
+    '--expected-branch', fixture.branchName,
+    '--target-repo', targetRepoDir,
+  ], { env: fixture.env });
+
+  assert.equal(result.code, 0, result.stderr);
+  assert.match(result.stdout, /Preflight summary:\s+WARNING/i);
+  assert.match(result.stdout, /target repo is dirty/i);
+  assert.match(result.stdout, /read-only only unless explicitly authorized/i);
+  assert.match(result.stdout, /do not create or modify .*\.spec-injector/i);
+  const gitLog = (await readGhLog(fixture.gitLogPath)).join('\n');
+  assertNoGitMutationCommands(gitLog);
+  await assertFileMissing(path.join(targetRepoDir, '.spec-injector'));
 });
 
 test('spec init scaffolds config files with default discovery settings', async (t) => {

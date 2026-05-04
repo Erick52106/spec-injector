@@ -130,6 +130,7 @@ Required:
 - `pnpm build`
 - `pnpm test`
 - CLI smoke checks, such as `node bin/spec.js --help` or relevant command help.
+- For workflow guardrail commands such as `spec preflight`, review human-readable pass / warning / fail wording and confirm the command does not auto-fix git or target repo state.
 
 Required review checks:
 
@@ -137,6 +138,7 @@ Required review checks:
 - Exit code, stderr, and stdout behavior are documented when changed.
 - New command or flag exists only when explicitly scoped by the issue.
 - Runtime behavior remains deterministic and inspectable.
+- Workflow guardrail commands remain repo-local safety tooling, not hosted control plane, daemon, merge bot, or remediation loop.
 
 ### 7. Tooling / package manager / Node changes
 

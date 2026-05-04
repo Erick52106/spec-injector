@@ -114,6 +114,36 @@ Safety:
     await clean(opts);
   });
 
+// preflight subcommand
+program
+  .command('preflight')
+  .description('Run repo-local preflight checks for isolated worktree task execution')
+  .option('--repo <path>', 'Path to the current implementation worktree (default: CWD)')
+  .option('--expected-branch <name>', 'Expected current branch name for the dedicated worktree')
+  .option('--expected-worktree-root <path>', 'Expected parent directory for dedicated worktrees')
+  .option('--target-repo <path>', 'Optional target repo path for read-only safety checks')
+  .addHelpText('after', `
+Checks:
+  - main repo clean / synced status
+  - dedicated worktree vs main worktree
+  - current branch and worktree cleanliness
+  - expected branch and expected worktree root / naming
+  - optional target repo read-only safety reminder
+
+Safety:
+  Does not auto-fix, stash, clean, reset, checkout, or mutate target repos.
+  Failing checks should trigger stop-and-report before implementation continues.
+`)
+  .action(async (opts: {
+    repo?: string;
+    expectedBranch?: string;
+    expectedWorktreeRoot?: string;
+    targetRepo?: string;
+  }) => {
+    const { preflight } = await import('./preflight.js');
+    await preflight(opts);
+  });
+
 program.parseAsync(process.argv).catch((err: unknown) => {
   console.error(`✗ ${(err as Error).message}`);
   process.exit(1);

@@ -29,6 +29,37 @@ export function assertNoCleanupCommands(value: string): void {
   assert.doesNotMatch(value, /\breset\b/i);
 }
 
+export function assertNoGitMutationCommands(value: string): void {
+  assertNoCleanupCommands(value);
+  const mutatingSubcommands = new Set([
+    'add',
+    'checkout',
+    'cherry-pick',
+    'commit',
+    'merge',
+    'mv',
+    'push',
+    'rebase',
+    'revert',
+    'rm',
+    'switch',
+  ]);
+
+  const lines = value.split('\n').map((line) => line.trim()).filter(Boolean);
+  for (const line of lines) {
+    const [subcommand, nestedSubcommand] = line.split(/\s+/);
+    assert.ok(
+      !mutatingSubcommands.has(subcommand?.toLowerCase() ?? ''),
+      `Unexpected mutating git command: ${line}`
+    );
+    assert.notEqual(
+      `${subcommand ?? ''} ${nestedSubcommand ?? ''}`.toLowerCase(),
+      'worktree add',
+      `Unexpected mutating git command: ${line}`
+    );
+  }
+}
+
 export function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
