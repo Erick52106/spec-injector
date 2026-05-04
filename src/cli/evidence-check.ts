@@ -65,7 +65,7 @@ export async function evidenceCheck(opts: EvidenceCheckOptions): Promise<void> {
     ], 'Could not read PR metadata.');
     const body = pr.body ?? '';
     const linkedIssue = parseLinkedIssue(body);
-    const evidenceUrl = opts.evidenceUrl ?? findEvidenceUrl(body);
+    const evidenceUrl = findEvidenceUrl(body);
     const issue = linkedIssue
       ? readJson<IssuePayload>([
         'gh',

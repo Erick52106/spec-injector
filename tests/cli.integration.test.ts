@@ -946,6 +946,76 @@ test('spec evidence-check fails when the PR body is missing the issue evidence U
   assertNoGhMutationCommands(ghLog);
 });
 
+test('spec evidence-check fails when --evidence-url is provided but PR body omits evidence URL', async (t) => {
+  const fixture = await createEvidenceCheckFixture(t, {
+    prBody: [
+      'Closes #109',
+      '## Summary',
+      'ok',
+      '## Scope',
+      'ok',
+      '## Non-goals',
+      'ok',
+      '## Validation',
+      '- `git diff --check` ✅',
+      '- `pnpm build` ✅',
+      '- `pnpm test` ✅',
+      '## Implementation Evidence',
+      '- Latest HEAD: 1234567890abcdef1234567890abcdef12345678',
+    ].join('\n'),
+  });
+
+  const result = await runSpec([
+    'evidence-check',
+    '--pr', String(fixture.prNumber),
+    '--repo', fixture.repo,
+    '--evidence-url', fixture.evidenceUrl,
+  ], { env: fixture.env });
+
+  assert.notEqual(result.code, 0);
+  assert.match(result.stdout, /Evidence check summary:\s+FAIL/i);
+  assert.match(result.stdout, /issue evidence URL is missing/i);
+  assertNoRawStackTrace(result);
+  const ghLog = (await readGhLog(fixture.ghLogPath)).join('\n');
+  assertNoGhMutationCommands(ghLog);
+});
+
+test('spec evidence-check fails when PR body evidence URL differs from --evidence-url', async (t) => {
+  const fixture = await createEvidenceCheckFixture(t);
+
+  const result = await runSpec([
+    'evidence-check',
+    '--pr', String(fixture.prNumber),
+    '--repo', fixture.repo,
+    '--evidence-url', 'https://github.com/Erick52106/spec-injector/issues/109#issuecomment-9999999',
+  ], { env: fixture.env });
+
+  assert.notEqual(result.code, 0);
+  assert.match(result.stdout, /Evidence check summary:\s+FAIL/i);
+  assert.match(result.stdout, /evidence URL does not match --evidence-url/i);
+  assertNoRawStackTrace(result);
+  const ghLog = (await readGhLog(fixture.ghLogPath)).join('\n');
+  assertNoGhMutationCommands(ghLog);
+});
+
+test('spec evidence-check accepts --evidence-url when it matches the PR body evidence URL', async (t) => {
+  const fixture = await createEvidenceCheckFixture(t);
+
+  const result = await runSpec([
+    'evidence-check',
+    '--pr', String(fixture.prNumber),
+    '--repo', fixture.repo,
+    '--evidence-url', fixture.evidenceUrl,
+  ], { env: fixture.env });
+
+  assert.equal(result.code, 0, result.stderr);
+  assert.match(result.stdout, /Evidence check summary:\s+PASS/i);
+  assert.match(result.stdout, /evidence URL points to linked issue/i);
+  assert.equal(result.stderr, '');
+  const ghLog = (await readGhLog(fixture.ghLogPath)).join('\n');
+  assertNoGhMutationCommands(ghLog);
+});
+
 test('spec evidence-check does not let --issue satisfy a missing PR body closing reference', async (t) => {
   const fixture = await createEvidenceCheckFixture(t, {
     prBody: [
