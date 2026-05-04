@@ -2,9 +2,9 @@
 
 ## Purpose
 
-This document is a docs-only taxonomy proposal for Issue `#150`. It defines the `spec-injector` GitHub issue / PR label taxonomy, visual hierarchy, label usage rules, migration staging, and prerequisite rules that a future Issue `#110` label / milestone audit checker should consume.
+This document is a docs-only taxonomy proposal for Issue `#150`. It defines the `spec-injector` GitHub issue / PR label taxonomy, visual hierarchy, label usage rules, migration staging, and prerequisite rules that Issue `#110` now consumes via the read-only `spec label-audit` checker.
 
-This proposal does not modify GitHub labels, change label colors, rename / delete labels, mass-edit issues, migrate milestones, or implement the Issue `#110` checker.
+This proposal does not modify GitHub labels, change label colors, rename / delete labels, mass-edit issues, or migrate milestones. `spec label-audit` consumes these rules as report-only input; it still does not mutate metadata.
 
 `spec-injector` remains a deterministic request-to-context compiler for AI coding agents. The label taxonomy should support repo-local deterministic workflow, source trust, context compilation, and review evidence rather than repositioning the project as a GitHub Projects dashboard, hosted control plane, remediation bot, or roadmap platform.
 
@@ -31,7 +31,7 @@ Open issue distribution observed during this proposal:
 | Status | All 11 open issues carry `status:needs-design`, useful for backlog safety but too coarse for future checker behavior if left as the only active state. |
 | Roadmap layers | Layer 2 has 5 open issues, Layer 4 has 5 open issues, Layer 3 has 1 open issue, Layer 1 has 0 open issues. |
 
-Issue `#108` (`spec preflight`) and Issue `#109` (`spec evidence-check`) are merged and closed as completed. Issue `#110` remains open and should wait for this taxonomy to be accepted.
+Issue `#108` (`spec preflight`) and Issue `#109` (`spec evidence-check`) are merged and closed as completed. Issue `#110` now consumes this accepted taxonomy as a read-only audit checker.
 
 ## Problem Statement
 
@@ -360,7 +360,7 @@ Safety / rollback:
 
 ## Relationship To #110
 
-Issue `#110` should not implement until Issue `#150` taxonomy is accepted.
+Issue `#110` implemented only after Issue `#150` taxonomy was accepted, and should remain read-only.
 
 Issue `#110` should:
 

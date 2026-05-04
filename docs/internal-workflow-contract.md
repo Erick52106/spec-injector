@@ -4,9 +4,9 @@
 
 本文件是 #147 的 design-only proposal，定義 `spec-injector` repo 自身使用的 internal machine-readable workflow contract vocabulary。
 
-目前已有第一個 narrow consumer：repo-local、human-readable 的 `spec preflight` checker。它只實作 #108 所需的 bounded preflight subset，用來檢查 main repo / worktree / branch / target repo safety guardrails；它不把本文件變成 runtime schema、JSON output protocol、hosted control plane 或 remediation automation。
+目前已有多個 narrow consumers：repo-local、human-readable 的 `spec preflight`、`spec evidence-check` 與 `spec label-audit`。它們各自只實作 bounded workflow guardrail subset，用來檢查 worktree safety、PR evidence consistency 與 label / milestone metadata audit；它們不把本文件變成 runtime schema、JSON output protocol、hosted control plane 或 remediation automation。
 
-它的第一用途是維持 `spec-injector` 專案本身的 AI-assisted development workflow consistency，讓未來 #108 / #109 / #110 這類 repo-local workflow guardrail checkers 有共同規格來源。#110 label / milestone audit checker 應等 [label-taxonomy.md](label-taxonomy.md) 的 #150 taxonomy proposal 被接受後，再消費 accepted taxonomy；它不應在 taxonomy 未穩前自行發明 labels 或自動修改 metadata。
+它的第一用途是維持 `spec-injector` 專案本身的 AI-assisted development workflow consistency，讓 #108 / #109 / #110 這類 repo-local workflow guardrail checkers 有共同規格來源。#110 label / milestone audit checker 已在 [label-taxonomy.md](label-taxonomy.md) 的 #150 taxonomy proposal 被接受後，以 read-only guardrail 方式消費 accepted taxonomy；它不應自行發明 labels 或自動修改 metadata。
 
 Dogfood finding、review blocker、CI failure、target repo safety near miss 與 evidence freshness gap 如何進入 follow-up issue / regression / closeout loop，見 [harness-gap-loop.md](harness-gap-loop.md)。該 loop 使用本文件的 risk-tier、validation、evidence 與 review vocabulary，但不新增 runtime contract。
 
