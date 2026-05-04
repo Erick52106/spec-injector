@@ -915,6 +915,70 @@ test('spec evidence-check passes for complete PR and issue evidence without muta
   assertNoGhMutationCommands(ghLog);
 });
 
+test('spec evidence-check accepts a full PR URL when --repo matches the encoded repository', async (t) => {
+  const fixture = await createEvidenceCheckFixture(t);
+
+  const result = await runSpec([
+    'evidence-check',
+    '--pr', `https://github.com/${fixture.repo}/pull/${fixture.prNumber}`,
+    '--repo', fixture.repo,
+    '--expected-head', fixture.headSha,
+  ], { env: fixture.env });
+
+  assert.equal(result.code, 0, result.stderr);
+  assert.match(result.stdout, /Evidence check summary:\s+PASS/i);
+  assert.equal(result.stderr, '');
+  const ghLog = (await readGhLog(fixture.ghLogPath)).join('\n');
+  assertNoGhMutationCommands(ghLog);
+});
+
+test('spec evidence-check accepts a full PR URL without requiring --repo', async (t) => {
+  const fixture = await createEvidenceCheckFixture(t);
+
+  const result = await runSpec([
+    'evidence-check',
+    '--pr', `https://github.com/${fixture.repo}/pull/${fixture.prNumber}`,
+    '--expected-head', fixture.headSha,
+  ], { env: fixture.env });
+
+  assert.equal(result.code, 0, result.stderr);
+  assert.match(result.stdout, /Evidence check summary:\s+PASS/i);
+  assert.equal(result.stderr, '');
+  const ghLog = (await readGhLog(fixture.ghLogPath)).join('\n');
+  assertNoGhMutationCommands(ghLog);
+});
+
+test('spec evidence-check fails when --repo conflicts with the repository encoded in a PR URL', async (t) => {
+  const fixture = await createEvidenceCheckFixture(t);
+
+  const result = await runSpec([
+    'evidence-check',
+    '--pr', `https://github.com/${fixture.repo}/pull/${fixture.prNumber}`,
+    '--repo', 'owner-b/repo-b',
+  ], { env: fixture.env });
+
+  assert.notEqual(result.code, 0);
+  assert.match(result.stderr, /--repo must match the repository encoded in --pr/i);
+  assertNoRawStackTrace(result);
+  const ghLog = (await readGhLog(fixture.ghLogPath)).join('\n');
+  assertNoGhMutationCommands(ghLog);
+});
+
+test('spec evidence-check still requires --repo when --pr is not a GitHub PR URL', async (t) => {
+  const fixture = await createEvidenceCheckFixture(t);
+
+  const result = await runSpec([
+    'evidence-check',
+    '--pr', String(fixture.prNumber),
+  ], { env: fixture.env });
+
+  assert.notEqual(result.code, 0);
+  assert.match(result.stderr, /--repo is required when --pr is not a GitHub PR URL/i);
+  assertNoRawStackTrace(result);
+  const ghLog = (await readGhLog(fixture.ghLogPath)).join('\n');
+  assertNoGhMutationCommands(ghLog);
+});
+
 test('spec evidence-check fails when the PR body is missing the issue evidence URL', async (t) => {
   const fixture = await createEvidenceCheckFixture(t, {
     prBody: [

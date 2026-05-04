@@ -114,7 +114,11 @@ export async function evidenceCheck(opts: EvidenceCheckOptions): Promise<void> {
 
 function resolveContext(opts: EvidenceCheckOptions): { prRef: string; repo: string } {
   const prUrlMatch = opts.pr.match(/^https:\/\/github\.com\/([^/]+\/[^/]+)\/pull\/(\d+)/);
-  const repo = opts.repo ?? prUrlMatch?.[1];
+  const urlRepo = prUrlMatch?.[1];
+  if (opts.repo && urlRepo && opts.repo !== urlRepo) {
+    throw new Error('--repo must match the repository encoded in --pr.');
+  }
+  const repo = urlRepo ?? opts.repo;
   const prRef = prUrlMatch?.[2] ?? opts.pr;
 
   if (!repo) {
