@@ -47,10 +47,18 @@ Required:
 
 - `git diff --check`
 - Markdown sanity check, including code fence parity and heading sanity.
+- `gh pr view` / `gh issue view` readback for any GitHub evidence write actions involved in the workflow change.
 
 Recommended:
 
 - `pnpm test` when cheap, or when docs include commands, output examples, workflow examples, or user-visible behavior claims.
+
+Required review checks for evidence writes:
+
+- PR body / evidence comment 寫入後，立即 readback verify，不得只看 write command exit code。
+- 驗證 `PR body` 包含 `Closes #<issue-number>`、evidence URL、commit hash、validation 結果。
+- 驗證 issue evidence comment URL 與 comment 內容可在 issue readback 中找到。
+- 有使用 review rationale / closeout comment 作為 evidence 時，需有可讀的 URL 或 final report readback 註記。
 
 Review checks:
 
@@ -262,7 +270,9 @@ PR body must include:
 
 PR body 應以繁體中文為主。若 PR body 主要使用英文，reviewer 應確認該英文限於 commands、raw output、technical terms、file paths、external API names 或短而精準的英文片段，而不是整份 PR body 的預設語言。
 
-After backfill, use `gh pr view` or equivalent to confirm the PR body is non-empty and contains the evidence URL and commit hash.
+After backfill, use `gh pr view <pr-number> --json body,headRefOid` or equivalent to confirm the PR body is non-empty and contains the evidence URL and commit hash. `headRefOid` must match the PR head being reported.
+
+Readback mismatch（如 write 後 artifact 未更新、內容不符、URL 缺失、HEAD 過期）為 stop-and-report 條件，必須先修正後才能進入 merge-time closeout。
 
 Repo-local PR / evidence consistency check 可在 source issue implementation evidence comment 已存在、且 PR body 已 backfill 後執行 `spec evidence-check`。此 checker deterministic 且 read-only：missing linked issue、missing evidence URL、evidence URL 指到錯 issue、stale PR body HEAD、expected HEAD mismatch、vague validation evidence、draft state、failing / pending checks、或 missing review finding assessment 都可能回報 warning / fail / needs-human-review。它不得 auto-edit PR、issue comments、labels、review threads、merge state 或 issue state。
 
@@ -284,6 +294,8 @@ Issue evidence 應以繁體中文為主；commands、file paths、raw output、r
 
 Issue evidence should be posted after the PR exists, then its permanent comment URL should be backfilled into the PR body.
 
+Issue evidence write 後必須 readback verify，確認 comment URL、comment 內容與 evidence URL 一致。若 readback 失敗，需先修正後重試或在 final report 停止並標明原因。
+
 ## Merge-readiness Quality Gates
 
 A PR is ready for human review only when:
@@ -298,11 +310,13 @@ A PR is ready for human review only when:
 - Source issue evidence comment 以繁體中文為主，技術內容可保留英文。
 - PR body is backfilled with issue evidence URL.
 - PR body includes commit hash.
+- PR head hash readback verified.
 - Linked issue and PR have a roadmap milestone and one primary layer label when high-confidence classification is possible.
 - PR 在 high-confidence classification 可行時，有合理 area / type labels。
 - PR metadata 與 linked issue 一致；若不一致，PR body 或 final report 說明 scoped exception。
 - If milestone / layer label is missing and the current PR does not scope metadata updates, PR body, final report, or review notes mark a follow-up.
 - `gh pr view` confirms PR body is non-empty and contains evidence URL and commit hash.
+- `gh pr view <pr-number> --json headRefOid` 需驗證 head hash 與 PR body / issue evidence 記錄一致。
 - CI checks are reported.
 - Scope guard confirms non-goals.
 - Skipped validation, if any, has an explicit reason.
@@ -314,6 +328,8 @@ Before merge, review closeout must also confirm:
 
 - PR body includes evidence URL and commit hash.
 - Issue evidence comment exists.
+- Issue evidence comment readback verified（URL/內容可取得）。
+- Review rationale / closeout comment readback verified when used as evidence.
 - CI / required checks pass.
 - CodeRabbit / Codex auto review findings were inspected.
 - Automated review findings have been inspected.
