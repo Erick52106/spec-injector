@@ -378,8 +378,9 @@ function scorePath(keywords: string[], filePath: string): number {
 
 // --- source discovery ---
 
-const SOURCE_EXTENSIONS = new Set(['.ts', '.tsx', '.js', '.jsx', '.py', '.go', '.rs', '.java', '.sol', '.rb']);
+const SOURCE_EXTENSIONS = new Set(['.ts', '.tsx', '.js', '.jsx', '.py', '.go', '.rs', '.java', '.sol', '.rb', '.graphql']);
 const SKIP_DIRS = new Set(['node_modules', '.git', 'dist', 'build', '.cache', 'vendor', 'coverage']);
+const GENERATED_SOURCE_DIRS = new Set(['generated', '__generated__']);
 const ALIAS_HINT_SKIP_DIRS = new Set([...SKIP_DIRS, '.spec-injector']);
 
 export async function discoverSourceFiles(
@@ -392,6 +393,7 @@ export async function discoverSourceFiles(
 
   const keywords = tokenize(`${issue.title} ${issue.body}`);
   if (keywords.length === 0) return [];
+  const sourceSignals = detectSourceDiscoverySignals(issue);
 
   const candidates: string[] = [];
   for (const srcPath of sourcePaths) {
@@ -419,7 +421,7 @@ export async function discoverSourceFiles(
       }
       continue;
     }
-    const score = scoreSrc(keywords, relPath, readResult.content);
+    const score = scoreSrc(keywords, relPath, readResult.content, sourceSignals);
     if (score > 0) scored.push({ filePath: relPath, score, content: readResult.content.slice(0, 500), found: true });
   }
 
@@ -455,11 +457,20 @@ function walkSource(dir: string, repoPath: string, results: string[]): void {
     if (SKIP_DIRS.has(entry.name)) continue;
     const full = path.join(dir, entry.name);
     if (entry.isDirectory()) {
+      if (GENERATED_SOURCE_DIRS.has(entry.name.toLowerCase())) continue;
       walkSource(full, repoPath, results);
     } else if (entry.isFile() && SOURCE_EXTENSIONS.has(path.extname(entry.name))) {
-      results.push(path.relative(repoPath, full));
+      const relPath = normalizeRepoPath(path.relative(repoPath, full));
+      if (isGeneratedSourcePath(relPath)) continue;
+      results.push(relPath);
     }
   }
+}
+
+function isGeneratedSourcePath(filePath: string): boolean {
+  const segments = filePath.toLowerCase().split('/');
+  if (segments.some((segment) => GENERATED_SOURCE_DIRS.has(segment))) return true;
+  return path.posix.basename(filePath).toLowerCase().includes('.generated.');
 }
 
 function collectPathAliasCandidatePaths(repoPath: string): string[] {
@@ -525,7 +536,29 @@ function comparePath(a: string, b: string): number {
   return a < b ? -1 : a > b ? 1 : 0;
 }
 
-function scoreSrc(keywords: string[], filePath: string, content: string): number {
+type SourceDiscoverySignals = {
+  checkoutLineMutation: boolean;
+  addToCartFlow: boolean;
+  serverAction: boolean;
+  graphqlMutation: boolean;
+};
+
+function detectSourceDiscoverySignals(issue: Issue): SourceDiscoverySignals {
+  const text = `${issue.title} ${issue.body}`.toLowerCase();
+  return {
+    checkoutLineMutation: /\bcheckout\s*lines?\s*add\b|\bcheckoutlinesadd\b|\bcheckout[-_\s]*line\b/.test(text),
+    addToCartFlow: /\badd[-_\s]*to[-_\s]*cart\b|\bcart\b/.test(text),
+    serverAction: /\bserver[-_\s]*action\b|\bform[-_\s]*action\b/.test(text),
+    graphqlMutation: /\bgraphql\b|\bmutation\b|\bcheckoutlinesadd\b/.test(text),
+  };
+}
+
+function scoreSrc(
+  keywords: string[],
+  filePath: string,
+  content: string,
+  signals: SourceDiscoverySignals
+): number {
   const pathLower = filePath.toLowerCase();
   const baseLower = path.basename(filePath).toLowerCase();
   const sample = content.slice(0, 2000).toLowerCase();
@@ -535,5 +568,49 @@ function scoreSrc(keywords: string[], filePath: string, content: string): number
     if (baseLower.includes(kw)) score += 2;
     if (sample.includes(kw)) score += 1;
   }
+  score += scoreCheckoutRelatedSource(pathLower, baseLower, sample, signals);
+  return score;
+}
+
+function scoreCheckoutRelatedSource(
+  pathLower: string,
+  baseLower: string,
+  sample: string,
+  signals: SourceDiscoverySignals
+): number {
+  if (!signals.addToCartFlow && !signals.checkoutLineMutation && !signals.serverAction && !signals.graphqlMutation) {
+    return 0;
+  }
+
+  let score = 0;
+  const pathHasCheckout = pathLower.includes('checkout');
+  const pathHasGraphql = pathLower.includes('graphql');
+  const pathHasCart = pathLower.includes('cart');
+  const pathHasLine = pathLower.includes('line');
+  const pathHasMutation = pathLower.includes('mutation') || baseLower.endsWith('.graphql');
+  const sampleHasCheckoutLineMutation = sample.includes('checkoutlinesadd') || sample.includes('checkout lines add');
+  const sampleHasGraphqlMutation = sample.includes('graphql') || sample.includes('mutation');
+
+  if (signals.checkoutLineMutation) {
+    if (pathHasCheckout && pathHasLine) score += 8;
+    if (pathHasCheckout) score += 5;
+    if (sampleHasCheckoutLineMutation) score += 6;
+  }
+
+  if (signals.graphqlMutation) {
+    if (pathHasGraphql && pathHasMutation) score += 8;
+    if (pathHasGraphql) score += 5;
+    if (sampleHasGraphqlMutation) score += 3;
+  }
+
+  if (signals.addToCartFlow) {
+    if (pathHasCart) score += 4;
+    if (pathHasCheckout) score += 3;
+  }
+
+  if (signals.serverAction) {
+    if (pathHasCheckout || pathHasGraphql) score += 2;
+  }
+
   return score;
 }
