@@ -205,10 +205,7 @@ function buildTemplateVars(
   issueSources: DocSection[],
   discoveredSources: DocSection[]
 ): TemplateVars {
-  const checklist = issue.body
-    .split('\n')
-    .filter((l) => l.trim().startsWith('- [ ]'))
-    .join('\n') || '(none found)';
+  const checklist = extractIssueChecklist(issue.body);
 
   const missingList = missingDocs.length > 0
     ? missingDocs.map((d) => `- \`${d.filePath}\` — ${renderReadIssueLabel(d)}${renderReadIssueMetadataSuffix(d)}`).join('\n')
@@ -247,6 +244,45 @@ function buildTemplateVars(
     repo_path: repoPath,
     generated_at: new Date().toISOString(),
   };
+}
+
+function extractIssueChecklist(body: string): string {
+  const lines = body.split('\n');
+  const extracted: string[] = [];
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const parentMatch = lines[index]?.match(/^([ \t]*)- \[ \] .+/);
+    if (!parentMatch) continue;
+
+    const parentIndent = parentMatch[1]?.length ?? 0;
+    extracted.push(lines[index].replace(/[ \t]+$/u, ''));
+
+    let nestedIndex = index + 1;
+    while (nestedIndex < lines.length) {
+      const line = lines[nestedIndex] ?? '';
+      if (line.trim().length === 0) {
+        nestedIndex += 1;
+        continue;
+      }
+
+      const indentation = line.match(/^[ \t]*/u)?.[0].length ?? 0;
+      if (indentation <= parentIndent) break;
+
+      if (isNestedChecklistSubcase(line)) {
+        extracted.push(line.replace(/[ \t]+$/u, ''));
+      }
+
+      nestedIndex += 1;
+    }
+
+    index = nestedIndex - 1;
+  }
+
+  return extracted.join('\n') || '(none found)';
+}
+
+function isNestedChecklistSubcase(line: string): boolean {
+  return /^[ \t]+(?:-|\*|\d+\.) (?!\[ \] ).+/u.test(line);
 }
 
 function renderReadIssueLabel(doc: DocSection): string {
