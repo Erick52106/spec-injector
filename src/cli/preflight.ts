@@ -32,7 +32,7 @@ export async function preflight(opts: PreflightOptions): Promise<void> {
     const report = buildPreflightReport(repoPath, opts);
     printReport(report);
 
-    if (report.overall === 'fail') {
+    if (report.overall === 'fail' || report.overall === 'needs-human-review') {
       process.exit(1);
     }
   } catch (err) {
@@ -53,6 +53,7 @@ function buildPreflightReport(repoPath: string, opts: PreflightOptions): {
   const mainRepoPath = canonicalizePath(
     requireGitString(getMainWorktreePath(repoPath), 'Could not determine main repo worktree path.')
   );
+  const mainBranch = requireGitString(getCurrentBranch(mainRepoPath), 'Could not determine main repo branch.');
 
   const mainState = getWorktreeState(mainRepoPath);
   if (mainState.kind === 'clean') {
@@ -65,12 +66,21 @@ function buildPreflightReport(repoPath: string, opts: PreflightOptions): {
     checks.push(needsHumanReview('unable to determine main repo worktree state', mainState.message));
   }
 
+  if (mainBranch === 'main') {
+    checks.push(pass('main repo worktree is on main', mainBranch));
+  } else {
+    checks.push(fail(
+      'main repo worktree is not on main',
+      `Expected main but found ${mainBranch}. Stop and report; do not auto-checkout.`
+    ));
+  }
+
   const upstreamState = getUpstreamState(mainRepoPath);
   if (upstreamState.kind === 'up-to-date') {
-    checks.push(pass('main repo is up to date with origin/main', upstreamState.upstream));
+    checks.push(pass(`main repo is up to date with ${upstreamState.upstream}`, upstreamState.upstream));
   } else if (upstreamState.kind === 'diverged') {
     checks.push(fail(
-      'main repo is not up to date with origin/main',
+      `main repo is not up to date with ${upstreamState.upstream}`,
       `${upstreamState.upstream} ahead=${upstreamState.ahead}, behind=${upstreamState.behind}.`
     ));
   } else if (upstreamState.kind === 'no-upstream') {
