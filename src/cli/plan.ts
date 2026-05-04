@@ -255,6 +255,7 @@ function extractIssueChecklist(body: string): string {
     if (!parentMatch) continue;
 
     const parentIndent = parentMatch[1]?.length ?? 0;
+    if (parentIndent > 0) continue;
     extracted.push(lines[index].replace(/[ \t]+$/u, ''));
 
     let nestedIndex = index + 1;
@@ -282,7 +283,7 @@ function extractIssueChecklist(body: string): string {
 }
 
 function isNestedChecklistSubcase(line: string): boolean {
-  return /^[ \t]+(?:-|\*|\d+\.) (?!\[ \] ).+/u.test(line);
+  return /^[ \t]+(?:-|\*|\d+\.) (?:\[[ xX]\] )?.+/u.test(line);
 }
 
 function renderReadIssueLabel(doc: DocSection): string {
