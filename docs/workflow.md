@@ -65,6 +65,19 @@ spec preflight --repo "$PWD" --target-repo <target-repo-path>
 
 此檢查只回報 target repo 狀態與 safety reminder，不得修改 target repo、不得建立 target repo `.spec-injector/`、不得在 target repo 建 branch / commit / PR。
 
+PR 建立、source issue evidence comment 留下、且 PR body 回填 evidence URL 後，可執行 repo-local evidence consistency checker：
+
+```bash
+spec evidence-check \
+  --pr <pr-number-or-url> \
+  --repo <owner/name> \
+  --expected-head <latest-head-sha>
+```
+
+`spec evidence-check` 是 read-only workflow guardrail。它只讀取 PR body、source issue comments、latest PR HEAD、review evidence 與 `gh pr checks` summary，report `PASS` / `WARNING` / `FAIL` / `NEEDS-HUMAN-REVIEW` 類結果；它不 auto-fix PR body、不修改 issue comments、不 resolve review threads、不 merge、不 close issue。若 checker 回報 stale HEAD、stale evidence URL、CI failure、或 review finding assessment 缺失，應 stop-and-report，由 human / implementer 決定如何刷新 evidence 或拆 follow-up。
+
+CodeRabbit / Codex auto review findings 只能作為 auxiliary signals。`spec evidence-check` 可提醒 review finding assessment 是否存在，但不代表 approval，也不取代 human merge decision。
+
 ## Worktree naming
 
 建議命名：

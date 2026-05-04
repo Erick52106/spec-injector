@@ -264,6 +264,10 @@ PR body 應以繁體中文為主。若 PR body 主要使用英文，reviewer 應
 
 After backfill, use `gh pr view` or equivalent to confirm the PR body is non-empty and contains the evidence URL and commit hash.
 
+Repo-local PR / evidence consistency check 可在 source issue implementation evidence comment 已存在、且 PR body 已 backfill 後執行 `spec evidence-check`。此 checker deterministic 且 read-only：missing linked issue、missing evidence URL、evidence URL 指到錯 issue、stale PR body HEAD、expected HEAD mismatch、vague validation evidence、draft state、failing / pending checks、或 missing review finding assessment 都可能回報 warning / fail / needs-human-review。它不得 auto-edit PR、issue comments、labels、review threads、merge state 或 issue state。
+
+若 `spec evidence-check` 回報 stale HEAD 或 stale evidence，merge readiness 前必須 stop-and-report。刷新 evidence 仍是 human / implementer workflow step，不是 automatic remediation loop。CodeRabbit / Codex review summaries 仍只是 auxiliary signals；evidence consistency pass 不等於 review approval。
+
 ## Issue Evidence Validation Reporting
 
 The source issue implementation evidence comment must include:

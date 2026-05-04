@@ -31,6 +31,27 @@ type PreflightFixture = {
   gitLogPath: string;
 };
 
+type EvidenceCheckFixture = {
+  env: NodeJS.ProcessEnv;
+  ghLogPath: string;
+  prNumber: number;
+  repo: string;
+  issueNumber: number;
+  headSha: string;
+  evidenceUrl: string;
+};
+
+type EvidenceCheckFixtureOptions = {
+  prBody?: string;
+  issueComments?: Array<{ url: string; body: string }>;
+  headSha?: string;
+  expectedPrRef?: string;
+  isDraft?: boolean;
+  checks?: Array<{ name: string; state?: string; conclusion?: string; bucket?: string }>;
+  checksCommand?: { exitCode?: number; stdout?: string; stderr?: string };
+  reviews?: Array<{ author?: { login?: string }; body?: string; state?: string; submittedAt?: string }>;
+};
+
 type ExplicitPathPlanFixtureOptions = {
   issueNumber?: number;
   title: string;
@@ -179,6 +200,95 @@ export async function createPreflightFixture(
     branchName,
     env: gitSpy.env,
     gitLogPath: gitSpy.logPath,
+  };
+}
+
+export async function createEvidenceCheckFixture(
+  t: TestLifecycle,
+  options: EvidenceCheckFixtureOptions = {}
+): Promise<EvidenceCheckFixture> {
+  const repo = 'Erick52106/spec-injector';
+  const prNumber = 1091;
+  const issueNumber = 109;
+  const headSha = options.headSha ?? '1234567890abcdef1234567890abcdef12345678';
+  const evidenceUrl = `https://github.com/${repo}/issues/${issueNumber}#issuecomment-1090001`;
+  const prUrl = `https://github.com/${repo}/pull/${prNumber}`;
+  const branch = 'feat/pr-evidence-consistency-checker-109';
+  const defaultValidation = [
+    '- `git diff --check` ✅',
+    '- `pnpm build` ✅',
+    '- `pnpm test` ✅',
+  ].join('\n');
+  const prBody = options.prBody ?? [
+    `Closes #${issueNumber}`,
+    '',
+    '## Summary',
+    '- 新增 repo-local evidence checker。',
+    '',
+    '## Scope',
+    '- 只做 read-only consistency check。',
+    '',
+    '## Non-goals',
+    '- 不 auto-fix、不 merge。',
+    '',
+    '## Validation',
+    defaultValidation,
+    '',
+    '## Review finding assessment',
+    '- noise / not applicable: no actionable review findings.',
+    '',
+    '## Implementation Evidence',
+    `- Issue evidence comment URL: ${evidenceUrl}`,
+    `- Latest HEAD: ${headSha}`,
+    '',
+    '## Follow-up notes',
+    '- JSON output 留待後續。',
+  ].join('\n');
+  const issueComments = options.issueComments ?? [{
+    url: evidenceUrl,
+    body: [
+      '## Implementation evidence',
+      `- PR URL: ${prUrl}`,
+      `- Branch: ${branch}`,
+      `- Commit hash / HEAD: ${headSha}`,
+      '- Tests / validation:',
+      defaultValidation,
+      '- Scope / non-goals: read-only checker; no auto-fix.',
+    ].join('\n'),
+  }];
+  const fakeGh = await createFakeEvidenceGh(t, {
+    repo,
+    prNumber,
+    issueNumber,
+    pr: {
+      number: prNumber,
+      url: prUrl,
+      body: prBody,
+      headRefName: branch,
+      headRefOid: headSha,
+      isDraft: options.isDraft ?? false,
+      reviews: options.reviews ?? [],
+    },
+    issue: {
+      number: issueNumber,
+      url: `https://github.com/${repo}/issues/${issueNumber}`,
+      comments: issueComments,
+    },
+    checks: options.checks ?? [
+      { name: 'build', state: 'COMPLETED', conclusion: 'SUCCESS', bucket: 'pass' },
+    ],
+    checksCommand: options.checksCommand,
+    expectedPrRef: options.expectedPrRef ?? String(prNumber),
+  });
+
+  return {
+    env: fakeGh.env,
+    ghLogPath: fakeGh.logPath,
+    prNumber,
+    repo,
+    issueNumber,
+    headSha,
+    evidenceUrl,
   };
 }
 
@@ -342,6 +452,103 @@ process.stdout.write(fs.readFileSync(process.env.FAKE_GH_RESPONSE_FILE, 'utf8'))
       FAKE_GH_LOG: logPath,
       FAKE_GH_EXPECT_REF: '57',
       FAKE_GH_EXPECT_REPO: 'Erick52106/spec-injector',
+    },
+    logPath,
+  };
+}
+
+async function createFakeEvidenceGh(
+  t: TestLifecycle,
+  payload: {
+    repo: string;
+    prNumber: number;
+    issueNumber: number;
+    pr: Record<string, unknown>;
+    issue: Record<string, unknown>;
+    checks: Array<Record<string, unknown>>;
+    checksCommand?: { exitCode?: number; stdout?: string; stderr?: string };
+    expectedPrRef: string;
+  }
+): Promise<{
+  env: NodeJS.ProcessEnv;
+  logPath: string;
+}> {
+  const binDir = await fs.mkdtemp(path.join(os.tmpdir(), 'spec-injector-evidence-gh-'));
+  t.after(async () => {
+    await fs.rm(binDir, { recursive: true, force: true });
+  });
+
+  const payloadPath = path.join(binDir, 'evidence.json');
+  const logPath = path.join(binDir, 'gh.log');
+  const ghPath = path.join(binDir, 'gh');
+
+  await fs.writeFile(payloadPath, JSON.stringify(payload), 'utf8');
+  await fs.writeFile(logPath, '', 'utf8');
+  await fs.writeFile(ghPath, `#!/usr/bin/env node
+import fs from 'node:fs';
+
+const args = process.argv.slice(2);
+fs.appendFileSync(process.env.FAKE_GH_LOG, args.join(' ') + '\\n', 'utf8');
+const payload = JSON.parse(fs.readFileSync(process.env.FAKE_GH_PAYLOAD_FILE, 'utf8'));
+
+function requireRepo() {
+  const repoFlagIndex = args.indexOf('--repo');
+  if (repoFlagIndex === -1 || args[repoFlagIndex + 1] !== payload.repo) {
+    console.error('Unexpected repo flag: ' + args.join(' '));
+    process.exit(1);
+  }
+}
+
+if (args[0] === 'pr' && args[1] === 'view') {
+  requireRepo();
+  if (args[2] !== payload.expectedPrRef) {
+    console.error('Unexpected PR ref: ' + args[2]);
+    process.exit(1);
+  }
+  process.stdout.write(JSON.stringify(payload.pr));
+  process.exit(0);
+}
+
+if (args[0] === 'issue' && args[1] === 'view') {
+  requireRepo();
+  if (args[2] !== String(payload.issueNumber)) {
+    console.error('Unexpected issue ref: ' + args[2]);
+    process.exit(1);
+  }
+  process.stdout.write(JSON.stringify(payload.issue));
+  process.exit(0);
+}
+
+if (args[0] === 'pr' && args[1] === 'checks') {
+  requireRepo();
+  if (args[2] !== payload.expectedPrRef) {
+    console.error('Unexpected checks PR ref: ' + args[2]);
+    process.exit(1);
+  }
+  if (payload.checksCommand) {
+    if (payload.checksCommand.stdout !== undefined) {
+      process.stdout.write(payload.checksCommand.stdout);
+    }
+    if (payload.checksCommand.stderr !== undefined) {
+      process.stderr.write(payload.checksCommand.stderr);
+    }
+    process.exit(payload.checksCommand.exitCode ?? 0);
+  }
+  process.stdout.write(JSON.stringify(payload.checks));
+  process.exit(0);
+}
+
+console.error('Unsupported gh invocation: ' + args.join(' '));
+process.exit(1);
+`, 'utf8');
+  await fs.chmod(ghPath, 0o755);
+
+  return {
+    env: {
+      ...process.env,
+      PATH: `${binDir}${path.delimiter}${process.env.PATH ?? ''}`,
+      FAKE_GH_PAYLOAD_FILE: payloadPath,
+      FAKE_GH_LOG: logPath,
     },
     logPath,
   };

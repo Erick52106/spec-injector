@@ -144,6 +144,36 @@ Safety:
     await preflight(opts);
   });
 
+// evidence-check subcommand
+program
+  .command('evidence-check')
+  .description('Run read-only PR and implementation evidence consistency checks')
+  .requiredOption('--pr <number-or-url>', 'Pull request number or URL to inspect')
+  .option('--repo <owner/name>', 'GitHub repository owner/name; inferred from PR URL when possible')
+  .option('--issue <number>', 'Expected linked source issue number')
+  .option('--expected-head <sha>', 'Expected latest PR head SHA')
+  .option('--evidence-url <url>', 'Expected source issue implementation evidence comment URL')
+  .addHelpText('after', `
+Checks:
+  - PR body linked issue, required sections, evidence URL, and HEAD freshness
+  - source issue evidence comment presence and validation evidence
+  - draft state, review finding assessment, and CI/check summary
+
+Safety:
+  Read-only guardrail. Does not edit PRs, edit/close issues, comment, merge, or resolve review threads.
+  Stale HEAD or stale evidence should trigger stop-and-report before merge readiness.
+`)
+  .action(async (opts: {
+    pr: string;
+    repo?: string;
+    issue?: string;
+    expectedHead?: string;
+    evidenceUrl?: string;
+  }) => {
+    const { evidenceCheck } = await import('./evidence-check.js');
+    await evidenceCheck(opts);
+  });
+
 program.parseAsync(process.argv).catch((err: unknown) => {
   console.error(`✗ ${(err as Error).message}`);
   process.exit(1);
