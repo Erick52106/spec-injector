@@ -42,11 +42,13 @@ type CheckPayload = {
 };
 
 const HASH_PATTERN = /\b[0-9a-f]{7,40}\b/gi;
-const ISSUE_REF_PATTERN = /\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s+#(\d+)\b|#(\d+)/gi;
+const LINKED_ISSUE_PATTERN = /\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s+#(\d+)\b/gi;
 const EVIDENCE_URL_PATTERN = /https:\/\/github\.com\/([^/\s]+)\/([^/\s]+)\/issues\/(\d+)#issuecomment-\d+/gi;
 const SINGLE_EVIDENCE_URL_PATTERN = /^https:\/\/github\.com\/([^/\s]+)\/([^/\s]+)\/issues\/(\d+)#issuecomment-\d+$/i;
 const REVIEW_ASSESSMENT_PATTERN = /\b(?:adopted|not adopted|optional polish|noise \/ not applicable|needs human review)\b/i;
 const EXACT_VALIDATION_COMMAND_PATTERN = /`?(?:git diff --check|pnpm build|pnpm test|pnpm lint|pnpm typecheck|node --test(?:\s+[^`\n]+)?|tsc(?:\s+[^`\n]+)?|npm test)`?/i;
+const ACTIONABLE_REVIEW_PATTERN = /\b(?:actionable comments|inline comments|potential issue|bug|fail(?:s|ure)?|stale|missing|incorrect|wrong|fix|change|update|replace|avoid|require|should|must|nit)\b/i;
+const NON_ACTIONABLE_REVIEW_PATTERN = /\b(?:lgtm|looks good(?: to me)?|approved|no actionable|summary|walkthrough|automated review suggestions|about codex in github|review in progress|currently processing|release notes|finishing touches)\b/i;
 
 export async function evidenceCheck(opts: EvidenceCheckOptions): Promise<void> {
   try {
@@ -62,7 +64,7 @@ export async function evidenceCheck(opts: EvidenceCheckOptions): Promise<void> {
       'number,url,body,headRefName,headRefOid,isDraft,reviews',
     ], 'Could not read PR metadata.');
     const body = pr.body ?? '';
-    const linkedIssue = parseExpectedIssue(opts.issue, body);
+    const linkedIssue = parseLinkedIssue(body);
     const evidenceUrl = opts.evidenceUrl ?? findEvidenceUrl(body);
     const issue = linkedIssue
       ? readJson<IssuePayload>([
@@ -92,7 +94,7 @@ export async function evidenceCheck(opts: EvidenceCheckOptions): Promise<void> {
       issue,
       body,
       linkedIssue,
-      expectedIssue: opts.issue ? Number.parseInt(opts.issue, 10) : null,
+      expectedIssue: parseIssueOption(opts.issue),
       evidenceUrl,
       expectedEvidenceUrl: opts.evidenceUrl,
       expectedHead: opts.expectedHead,
@@ -293,7 +295,7 @@ function buildReport(input: {
     checks.push(pass('Draft state', 'ready for review', 'PR is not draft', 'Continue normal review workflow.'));
   }
 
-  const reviewFindings = input.pr.reviews?.filter((review) => (review.body ?? '').trim().length > 0) ?? [];
+  const reviewFindings = input.pr.reviews?.filter(isActionableReview) ?? [];
   if (reviewFindings.length > 0 && !REVIEW_ASSESSMENT_PATTERN.test(input.body)) {
     checks.push(needsHumanReview(
       'Review finding assessment',
@@ -381,16 +383,27 @@ function checkCi(checks: CheckPayload[]): EvidenceCheck[] {
   return result;
 }
 
-function parseExpectedIssue(issueOption: string | undefined, body: string): number | null {
-  if (issueOption) {
-    const parsed = Number.parseInt(issueOption, 10);
-    return Number.isFinite(parsed) ? parsed : null;
-  }
-
-  const match = [...body.matchAll(ISSUE_REF_PATTERN)]
-    .map((item) => item[1] ?? item[2])
+function parseLinkedIssue(body: string): number | null {
+  const match = [...body.matchAll(LINKED_ISSUE_PATTERN)]
+    .map((item) => item[1])
     .find(Boolean);
   return match ? Number.parseInt(match, 10) : null;
+}
+
+function parseIssueOption(issueOption: string | undefined): number | null {
+  if (!issueOption) return null;
+  const parsed = Number.parseInt(issueOption, 10);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function isActionableReview(review: { body?: string; state?: string }): boolean {
+  const body = (review.body ?? '').trim();
+  if (body.length === 0) return false;
+  if ((review.state ?? '').toUpperCase() === 'APPROVED') return false;
+  if (NON_ACTIONABLE_REVIEW_PATTERN.test(body) && !/\b(?:actionable comments|inline comments|potential issue)\b/i.test(body)) {
+    return false;
+  }
+  return ACTIONABLE_REVIEW_PATTERN.test(body);
 }
 
 function findEvidenceUrl(body: string): string | null {
