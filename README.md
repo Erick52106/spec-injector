@@ -104,6 +104,22 @@ Notes:
 - `spec plan ... --dry-run --format prompt --verbose` is the recommended pre-implementation command for AI planning.
 - For a full generated task package file, omit `--dry-run`; output is written under `.spec-injector/out/`.
 
+## Optional live gh smoke test
+
+`spec plan` 本身會透過真實的 `gh` CLI 讀取 GitHub issue，因此保留一個可選擇性的 live smoke test：
+
+```bash
+pnpm test:gh
+```
+
+此測試刻意是 `opt-in`，不會在 `pnpm test` / CI 中自動執行。它會驗證：
+
+- `gh --version`
+- `gh auth status --active --hostname github.com`
+- `spec plan https://github.com/Erick52106/spec-injector/issues/61 --dry-run --format prompt`
+
+執行結果會要求至少包含基本 prompt sections，確認 issue URL 解析與 `spec plan` 最小 live 讀取鏈路。若環境未安裝 `gh` 或未登入，測試不會作為預設 regressions 阻擋；請先補齊環境後再執行。
+
 Current local install and release details are documented in [docs/release.md](docs/release.md).
 
 ## Example workflow with Codex / Claude Code
