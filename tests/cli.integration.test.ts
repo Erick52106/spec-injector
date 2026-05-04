@@ -2336,3 +2336,191 @@ test('spec plan tachigo-like fixture extracts explicit source files without misc
   assert.doesNotMatch(promptResult.stdout, /Missing Files[\s\S]*\/api\/v1\/dashboard\/settings/);
   assert.match(promptResult.stdout, /sources:\s*5/);
 });
+
+test('spec plan preserves nested verification checklist subcases in prompt and full output', async (t) => {
+  const fixture = await createExplicitPathPlanFixture(t, {
+    issueNumber: 166,
+    title: 'Preserve nested verification checklist subcases',
+    bodyLines: [
+      'Verification checklist:',
+      '- [ ] preserve parent verification item',
+      '  - first nested failure mode',
+      '  - second nested failure mode',
+      '    - deeper implementation note',
+      '- [ ] keep sibling verification item',
+    ],
+  });
+
+  const promptResult = await runSpec(
+    ['plan', fixture.issueUrl, '--repo', fixture.repoDir, '--dry-run', '--format', 'prompt'],
+    { env: fixture.env }
+  );
+  const fullResult = await runSpec(
+    ['plan', fixture.issueUrl, '--repo', fixture.repoDir, '--dry-run'],
+    { env: fixture.env }
+  );
+
+  assert.equal(promptResult.code, 0, promptResult.stderr);
+  assert.equal(fullResult.code, 0, fullResult.stderr);
+
+  const promptChecklist = sectionBetween(promptResult.stdout, 'Suggested verification checklist:', 'Read the referenced files as needed');
+
+  assertOrderedSubstrings(promptChecklist, [
+    '- [ ] preserve parent verification item',
+    '  - first nested failure mode',
+    '  - second nested failure mode',
+    '    - deeper implementation note',
+    '- [ ] keep sibling verification item',
+  ]);
+  assert.match(fullResult.stdout, /## 10\. Suggested Verification Checklist[\s\S]*- \[ \] preserve parent verification item/);
+  assert.match(fullResult.stdout, /## 10\. Suggested Verification Checklist[\s\S]*  - first nested failure mode/);
+  assert.match(fullResult.stdout, /## 10\. Suggested Verification Checklist[\s\S]*  - second nested failure mode/);
+  assert.match(fullResult.stdout, /## 10\. Suggested Verification Checklist[\s\S]*    - deeper implementation note/);
+});
+
+test('spec plan preserves nested checkbox checklist subcases', async (t) => {
+  const fixture = await createExplicitPathPlanFixture(t, {
+    issueNumber: 166,
+    title: 'Preserve nested checkbox verification subcases',
+    bodyLines: [
+      'Verification checklist:',
+      '- [ ] parent verification item',
+      '  - [ ] checkbox subcase one',
+      '  - [ ] checkbox subcase two',
+    ],
+  });
+
+  const promptResult = await runSpec(
+    ['plan', fixture.issueUrl, '--repo', fixture.repoDir, '--dry-run', '--format', 'prompt'],
+    { env: fixture.env }
+  );
+  const fullResult = await runSpec(
+    ['plan', fixture.issueUrl, '--repo', fixture.repoDir, '--dry-run'],
+    { env: fixture.env }
+  );
+
+  assert.equal(promptResult.code, 0, promptResult.stderr);
+  assert.equal(fullResult.code, 0, fullResult.stderr);
+
+  const promptChecklist = sectionBetween(promptResult.stdout, 'Suggested verification checklist:', 'Read the referenced files as needed');
+
+  assertOrderedSubstrings(promptChecklist, [
+    '- [ ] parent verification item',
+    '  - [ ] checkbox subcase one',
+    '  - [ ] checkbox subcase two',
+  ]);
+  assert.match(fullResult.stdout, /## 10\. Suggested Verification Checklist[\s\S]*- \[ \] parent verification item/);
+  assert.match(fullResult.stdout, /## 10\. Suggested Verification Checklist[\s\S]*  - \[ \] checkbox subcase one/);
+  assert.match(fullResult.stdout, /## 10\. Suggested Verification Checklist[\s\S]*  - \[ \] checkbox subcase two/);
+});
+
+test('spec plan preserves mixed nested checkbox and plain bullet checklist subcases', async (t) => {
+  const fixture = await createExplicitPathPlanFixture(t, {
+    issueNumber: 166,
+    title: 'Preserve mixed nested checkbox and bullet subcases',
+    bodyLines: [
+      'Verification checklist:',
+      '- [ ] parent verification item',
+      '  - [ ] checkbox subcase',
+      '  - plain bullet subcase',
+    ],
+  });
+
+  const promptResult = await runSpec(
+    ['plan', fixture.issueUrl, '--repo', fixture.repoDir, '--dry-run', '--format', 'prompt'],
+    { env: fixture.env }
+  );
+
+  assert.equal(promptResult.code, 0, promptResult.stderr);
+
+  const promptChecklist = sectionBetween(promptResult.stdout, 'Suggested verification checklist:', 'Read the referenced files as needed');
+
+  assertOrderedSubstrings(promptChecklist, [
+    '- [ ] parent verification item',
+    '  - [ ] checkbox subcase',
+    '  - plain bullet subcase',
+  ]);
+});
+
+test('spec plan keeps flat verification checklist behavior stable', async (t) => {
+  const fixture = await createExplicitPathPlanFixture(t, {
+    issueNumber: 166,
+    title: 'Keep flat checklist behavior stable',
+    bodyLines: [
+      'Validation checklist:',
+      '- [ ] run build before review',
+      '- [ ] run tests before review',
+    ],
+  });
+
+  const promptResult = await runSpec(
+    ['plan', fixture.issueUrl, '--repo', fixture.repoDir, '--dry-run', '--format', 'prompt'],
+    { env: fixture.env }
+  );
+
+  assert.equal(promptResult.code, 0, promptResult.stderr);
+
+  const promptChecklist = sectionBetween(promptResult.stdout, 'Suggested verification checklist:', 'Read the referenced files as needed');
+
+  assert.match(promptChecklist, /- \[ \] run build before review/);
+  assert.match(promptChecklist, /- \[ \] run tests before review/);
+  assert.doesNotMatch(promptChecklist, /  - /);
+});
+
+test('spec plan does not promote unrelated nested prose bullets into verification checklist', async (t) => {
+  const fixture = await createExplicitPathPlanFixture(t, {
+    issueNumber: 166,
+    title: 'Keep unrelated nested prose bullets out of checklist extraction',
+    bodyLines: [
+      'Planning notes:',
+      '- parent prose bullet that should stay outside verification checklist',
+      '  - nested prose bullet that should stay outside verification checklist',
+      '- [ ] actual verification parent',
+      '  - expected nested verification subcase',
+    ],
+  });
+
+  const promptResult = await runSpec(
+    ['plan', fixture.issueUrl, '--repo', fixture.repoDir, '--dry-run', '--format', 'prompt'],
+    { env: fixture.env }
+  );
+
+  assert.equal(promptResult.code, 0, promptResult.stderr);
+
+  const promptChecklist = sectionBetween(promptResult.stdout, 'Suggested verification checklist:', 'Read the referenced files as needed');
+
+  assert.doesNotMatch(promptChecklist, /parent prose bullet/);
+  assert.doesNotMatch(promptChecklist, /nested prose bullet that should stay outside verification checklist/);
+  assert.match(promptChecklist, /- \[ \] actual verification parent/);
+  assert.match(promptChecklist, /  - expected nested verification subcase/);
+});
+
+test('spec plan preserves dogfood-shaped silent fail checklist subcases', async (t) => {
+  const fixture = await createExplicitPathPlanFixture(t, {
+    issueNumber: 166,
+    title: 'Preserve brownfield dogfood verification subcases',
+    bodyLines: [
+      'Suggested regression coverage:',
+      '- [ ] silent fail / error handling for add-to-cart',
+      '  - checkout creation failure',
+      '  - GraphQL mutation error including `checkoutLinesAdd.errors`',
+      '  - unexpected exception',
+    ],
+  });
+
+  const promptResult = await runSpec(
+    ['plan', fixture.issueUrl, '--repo', fixture.repoDir, '--dry-run', '--format', 'prompt'],
+    { env: fixture.env }
+  );
+
+  assert.equal(promptResult.code, 0, promptResult.stderr);
+
+  const promptChecklist = sectionBetween(promptResult.stdout, 'Suggested verification checklist:', 'Read the referenced files as needed');
+
+  assertOrderedSubstrings(promptChecklist, [
+    '- [ ] silent fail / error handling for add-to-cart',
+    '  - checkout creation failure',
+    '  - GraphQL mutation error including `checkoutLinesAdd.errors`',
+    '  - unexpected exception',
+  ]);
+});

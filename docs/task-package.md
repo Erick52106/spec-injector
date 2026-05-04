@@ -49,6 +49,8 @@ Prompt output 目前包含：
 - Instructions
 - Suggested verification checklist
 
+若 issue body 的 checklist item 底下有 nested subcases，output 應保留 parent checklist item 與 nested bullet hierarchy。這些 subcases 只來自 source issue body，不應由 runtime 推測或擴寫。
+
 Always-Read Files 會標示 reference source，讓 built-in preset references 與 repo `always_read` references 不會被混淆。Prompt output 以 compact path list 顯示 source label；full task package 會在每個 inline reference content 前加入 source metadata。
 
 Issue-mentioned references 會和 auto-discovered references 分開呈現。Issue-mentioned docs/source files 標示為 `issue-mentioned`，auto-discovered docs/source files 標示為 `auto-discovered`，讓 explicit issue signal 與 inferred discovery signal 不會混在同一個 section。
