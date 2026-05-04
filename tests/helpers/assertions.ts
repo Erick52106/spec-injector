@@ -60,6 +60,26 @@ export function assertNoGitMutationCommands(value: string): void {
   }
 }
 
+export function assertNoGhMutationCommands(value: string): void {
+  const lines = value.split('\n').map((line) => line.trim()).filter(Boolean);
+  for (const line of lines) {
+    const [resource, action] = line.split(/\s+/);
+    const command = `${resource ?? ''} ${action ?? ''}`.toLowerCase();
+    assert.ok(![
+      'issue edit',
+      'issue close',
+      'issue comment',
+      'pr edit',
+      'pr merge',
+      'pr comment',
+    ].includes(command), `Unexpected mutating gh command: ${line}`);
+    assert.ok(
+      !(resource?.toLowerCase() === 'api' && /\b(?:PATCH|POST|DELETE)\b/i.test(line)),
+      `Unexpected mutating gh api command: ${line}`
+    );
+  }
+}
+
 export function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
