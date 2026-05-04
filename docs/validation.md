@@ -6,7 +6,7 @@
 
 本文件是 workflow 規範，不是 automated checker。若某張 issue 需要新增 CI、script、runtime behavior、CLI command、config schema 或測試，該 scope 必須由 source issue 明確授權。
 
-Internal machine-readable workflow contract 的 design-only validation vocabulary 見 [internal-workflow-contract.md](internal-workflow-contract.md)。Issue / PR label taxonomy 與 #110 label / milestone audit checker dependency 見 [label-taxonomy.md](label-taxonomy.md)。這些文件可供未來 #108 / #109 / #110 checker 消費，但本文件與這些 design docs 都不代表 checker 已實作。
+Internal machine-readable workflow contract 的 design-only validation vocabulary 見 [internal-workflow-contract.md](internal-workflow-contract.md)。Issue / PR label taxonomy 與 #110 label / milestone audit checker rules 見 [label-taxonomy.md](label-taxonomy.md)。`spec label-audit` 現在已用 human-readable、read-only 形式消費 accepted taxonomy；但這些 docs 仍是 canonical workflow 規範，不授權 metadata mutation，也不把 checker 變成 remediation bot。
 
 ## General Rules
 

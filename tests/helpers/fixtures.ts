@@ -52,6 +52,39 @@ type EvidenceCheckFixtureOptions = {
   reviews?: Array<{ author?: { login?: string }; body?: string; state?: string; submittedAt?: string }>;
 };
 
+type LabelAuditFixture = {
+  env: NodeJS.ProcessEnv;
+  ghLogPath: string;
+  repo: string;
+};
+
+type LabelAuditIssuePayload = {
+  number: number;
+  title: string;
+  url: string;
+  state: string;
+  stateReason?: string;
+  labels?: Array<{ name: string }>;
+  milestone?: { title: string } | null;
+};
+
+type LabelAuditPrPayload = {
+  number: number;
+  title: string;
+  url: string;
+  labels?: Array<{ name: string }>;
+  milestone?: { title: string } | null;
+  closingIssuesReferences?: Array<{ number: number }>;
+  isDraft?: boolean;
+};
+
+type LabelAuditFixtureOptions = {
+  issues?: LabelAuditIssuePayload[];
+  prs?: LabelAuditPrPayload[];
+  issueListCommand?: { exitCode?: number; stdout?: string; stderr?: string };
+  prListCommand?: { exitCode?: number; stdout?: string; stderr?: string };
+};
+
 type ExplicitPathPlanFixtureOptions = {
   issueNumber?: number;
   title: string;
@@ -289,6 +322,28 @@ export async function createEvidenceCheckFixture(
     issueNumber,
     headSha,
     evidenceUrl,
+  };
+}
+
+export async function createLabelAuditFixture(
+  t: TestLifecycle,
+  options: LabelAuditFixtureOptions = {}
+): Promise<LabelAuditFixture> {
+  const repo = 'Erick52106/spec-injector';
+  const issues = options.issues ?? [];
+  const prs = options.prs ?? [];
+  const fakeGh = await createFakeLabelAuditGh(t, {
+    repo,
+    issues,
+    prs,
+    issueListCommand: options.issueListCommand,
+    prListCommand: options.prListCommand,
+  });
+
+  return {
+    env: fakeGh.env,
+    ghLogPath: fakeGh.logPath,
+    repo,
   };
 }
 
@@ -535,6 +590,108 @@ if (args[0] === 'pr' && args[1] === 'checks') {
     process.exit(payload.checksCommand.exitCode ?? 0);
   }
   process.stdout.write(JSON.stringify(payload.checks));
+  process.exit(0);
+}
+
+console.error('Unsupported gh invocation: ' + args.join(' '));
+process.exit(1);
+`, 'utf8');
+  await fs.chmod(ghPath, 0o755);
+
+  return {
+    env: {
+      ...process.env,
+      PATH: `${binDir}${path.delimiter}${process.env.PATH ?? ''}`,
+      FAKE_GH_PAYLOAD_FILE: payloadPath,
+      FAKE_GH_LOG: logPath,
+    },
+    logPath,
+  };
+}
+
+async function createFakeLabelAuditGh(
+  t: TestLifecycle,
+  payload: {
+    repo: string;
+    issues: LabelAuditIssuePayload[];
+    prs: LabelAuditPrPayload[];
+    issueListCommand?: { exitCode?: number; stdout?: string; stderr?: string };
+    prListCommand?: { exitCode?: number; stdout?: string; stderr?: string };
+  }
+): Promise<{
+  env: NodeJS.ProcessEnv;
+  logPath: string;
+}> {
+  const binDir = await fs.mkdtemp(path.join(os.tmpdir(), 'spec-injector-label-audit-gh-'));
+  t.after(async () => {
+    await fs.rm(binDir, { recursive: true, force: true });
+  });
+
+  const payloadPath = path.join(binDir, 'label-audit.json');
+  const logPath = path.join(binDir, 'gh.log');
+  const ghPath = path.join(binDir, 'gh');
+
+  await fs.writeFile(payloadPath, JSON.stringify(payload), 'utf8');
+  await fs.writeFile(logPath, '', 'utf8');
+  await fs.writeFile(ghPath, `#!/usr/bin/env node
+import fs from 'node:fs';
+
+const args = process.argv.slice(2);
+fs.appendFileSync(process.env.FAKE_GH_LOG, args.join(' ') + '\\n', 'utf8');
+const payload = JSON.parse(fs.readFileSync(process.env.FAKE_GH_PAYLOAD_FILE, 'utf8'));
+
+function requireRepo() {
+  const repoFlagIndex = args.indexOf('--repo');
+  if (repoFlagIndex === -1 || args[repoFlagIndex + 1] !== payload.repo) {
+    console.error('Unexpected repo flag: ' + args.join(' '));
+    process.exit(1);
+  }
+}
+
+function requireJsonFields(expectedFields, commandLabel) {
+  const jsonFlagIndex = args.indexOf('--json');
+  if (jsonFlagIndex === -1) {
+    console.error('Missing --json for ' + commandLabel + ': ' + args.join(' '));
+    process.exit(1);
+  }
+  const actualFields = new Set(String(args[jsonFlagIndex + 1] ?? '').split(',').map((value) => value.trim()).filter(Boolean));
+  for (const field of expectedFields) {
+    if (!actualFields.has(field)) {
+      console.error('Missing ' + commandLabel + ' json field "' + field + '": ' + args.join(' '));
+      process.exit(1);
+    }
+  }
+}
+
+if (args[0] === 'issue' && args[1] === 'list') {
+  requireRepo();
+  requireJsonFields(['number', 'title', 'url', 'state', 'stateReason', 'labels', 'milestone'], 'issue list');
+  if (payload.issueListCommand) {
+    if (payload.issueListCommand.stdout !== undefined) {
+      process.stdout.write(payload.issueListCommand.stdout);
+    }
+    if (payload.issueListCommand.stderr !== undefined) {
+      process.stderr.write(payload.issueListCommand.stderr);
+    }
+    process.exit(payload.issueListCommand.exitCode ?? 0);
+  }
+  process.stdout.write(JSON.stringify(payload.issues));
+  process.exit(0);
+}
+
+if (args[0] === 'pr' && args[1] === 'list') {
+  requireRepo();
+  requireJsonFields(['number', 'title', 'url', 'labels', 'milestone', 'closingIssuesReferences', 'isDraft'], 'pr list');
+  if (payload.prListCommand) {
+    if (payload.prListCommand.stdout !== undefined) {
+      process.stdout.write(payload.prListCommand.stdout);
+    }
+    if (payload.prListCommand.stderr !== undefined) {
+      process.stderr.write(payload.prListCommand.stderr);
+    }
+    process.exit(payload.prListCommand.exitCode ?? 0);
+  }
+  process.stdout.write(JSON.stringify(payload.prs));
   process.exit(0);
 }
 

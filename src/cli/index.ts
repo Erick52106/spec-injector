@@ -174,6 +174,31 @@ Safety:
     await evidenceCheck(opts);
   });
 
+// label-audit subcommand
+program
+  .command('label-audit')
+  .description('Run a read-only label and milestone metadata audit for issues and PRs')
+  .requiredOption('--repo <owner/name>', 'GitHub repository owner/name to audit')
+  .option('--limit <number>', 'Maximum number of issues / PRs to fetch per list (default: 200)')
+  .addHelpText('after', `
+Checks:
+  - open issue area / type / status coverage
+  - conflicting status labels and needs-design vs active review PRs
+  - unknown labels outside the accepted taxonomy snapshot
+  - primary layer / roadmap milestone consistency
+
+Safety:
+  Reports only. Does not create, rename, delete, or mutate labels, issues, milestones, or PR metadata.
+  Needs human review means stop-and-report; the checker does not auto-decide remediation.
+`)
+  .action(async (opts: {
+    repo: string;
+    limit?: string;
+  }) => {
+    const { labelAudit } = await import('./label-audit.js');
+    await labelAudit(opts);
+  });
+
 program.parseAsync(process.argv).catch((err: unknown) => {
   console.error(`✗ ${(err as Error).message}`);
   process.exit(1);

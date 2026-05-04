@@ -10,7 +10,9 @@ Internal machine-readable workflow contract 的 design-only vocabulary 見 [inte
 
 Dogfood finding、review blocker、CI failure、evidence freshness gap 與 repeated workflow failure 如何轉成 bounded follow-up issue，見 [harness-gap-loop.md](harness-gap-loop.md)。該 loop 是 repo-local workflow discipline，不是 hosted harness platform 或 remediation automation。
 
-Issue / PR label taxonomy、visual hierarchy、combination rules、migration staging 與 #110 label / milestone audit checker dependency 見 [label-taxonomy.md](label-taxonomy.md)。
+Issue / PR label taxonomy、visual hierarchy、combination rules、migration staging 與 #110 label / milestone audit checker rules 見 [label-taxonomy.md](label-taxonomy.md)。
+
+`spec label-audit` 是 repo-local、human-readable 的 read-only guardrail。它讀取 accepted taxonomy 與 `gh issue list` / `gh pr list` metadata，輸出 `PASS` / `WARNING` / `NEEDS-HUMAN-REVIEW`；它只 report，不建立 labels、不修改 labels、不修改 milestones、不修改 issue / PR metadata。`needs human review` 代表 stop-and-report，不代表 checker 自動替 human 做 metadata 決策。
 
 相鄰工具與 roadmap 邊界請見 [docs/positioning.md](positioning.md)。多 agent / Codex / Claude Code / ChatGPT / other agents 的分工與 handoff patterns 請見 [docs/agent-handoff.md](agent-handoff.md)。
 
