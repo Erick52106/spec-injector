@@ -15,6 +15,7 @@
   "scripts": {
     "build": "tsc",
     "test": "pnpm build && node --test \"tests/**/*.test.ts\"",
+    "test:gh": "SPEC_INJECTOR_RUN_GH_TESTS=1 node --test tests/optional-gh.smoke.test.ts",
     "dev": "tsc --watch",
     "start": "node dist/cli/index.js"
   },
