@@ -2,11 +2,11 @@
 
 ## Purpose
 
-本文件是 #150 的 docs-only taxonomy proposal，定義 `spec-injector` 的 GitHub issue / PR label taxonomy、visual hierarchy、label usage rules、migration staging，以及 future #110 label / milestone audit checker 應該消費的前置規範。
+This document is a docs-only taxonomy proposal for Issue `#150`. It defines the `spec-injector` GitHub issue / PR label taxonomy, visual hierarchy, label usage rules, migration staging, and prerequisite rules that a future Issue `#110` label / milestone audit checker should consume.
 
-這份 proposal 不修改 GitHub labels，不修改 label colors，不 rename / delete labels，不 mass-edit issues，不修改 milestones，也不實作 #110 checker。
+This proposal does not modify GitHub labels, change label colors, rename / delete labels, mass-edit issues, migrate milestones, or implement the Issue `#110` checker.
 
-`spec-injector` 仍是 deterministic request-to-context compiler for AI coding agents。Label taxonomy 應支援 repo-local deterministic workflow、source trust、context compilation 與 review evidence，而不是把專案重新定位成 GitHub Projects dashboard、hosted control plane、remediation bot 或 roadmap platform。
+`spec-injector` remains a deterministic request-to-context compiler for AI coding agents. The label taxonomy should support repo-local deterministic workflow, source trust, context compilation, and review evidence rather than repositioning the project as a GitHub Projects dashboard, hosted control plane, remediation bot, or roadmap platform.
 
 ## Current Snapshot
 
@@ -31,7 +31,7 @@ Open issue distribution observed during this proposal:
 | Status | All 11 open issues carry `status:needs-design`, useful for backlog safety but too coarse for future checker behavior if left as the only active state. |
 | Roadmap layers | Layer 2 has 5 open issues, Layer 4 has 5 open issues, Layer 3 has 1 open issue, Layer 1 has 0 open issues. |
 
-Issue `#108` (`spec preflight`) and Issue `#109` (`spec evidence-check`) are merged / closed completed. Issue `#110` remains open and should wait for this taxonomy to be accepted.
+Issue `#108` (`spec preflight`) and Issue `#109` (`spec evidence-check`) are merged and closed as completed. Issue `#110` remains open and should wait for this taxonomy to be accepted.
 
 ## Problem Statement
 
