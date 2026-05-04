@@ -84,7 +84,7 @@ export async function evidenceCheck(opts: EvidenceCheckOptions): Promise<void> {
       '--repo',
       context.repo,
       '--json',
-      'name,state,conclusion,bucket,link',
+      'name,state,bucket,link',
     ], 'Could not read PR checks.', []);
 
     const report = buildReport({
