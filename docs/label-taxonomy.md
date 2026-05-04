@@ -191,6 +191,8 @@ Do not add priority labels just to rank every issue. Milestones, issue bodies, a
 | `type:dogfood` | Optional candidate | May help dogfood reports and evaluation issues. | Do not replace evidence source links. |
 | `type:metadata` | Optional candidate | May help metadata-only closeout work. | Do not imply metadata mutation is approved. |
 
+Labels that appear in the Current Snapshot but are not explicitly listed in this table are intentionally treated as keep-as-is for this docs-only proposal. Do not create, rename, delete, recolor, or migrate those labels until a later human-approved metadata stage.
+
 ## Label Combination Rules
 
 - Each issue should have one type label or GitHub default equivalent.
