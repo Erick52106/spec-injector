@@ -83,9 +83,12 @@ Auto-discovered references 由 deterministic scan / scoring 產生。
 - docs scan：固定 high-value files 與 `docs/**/*.md`
 - source scan：依 config `discovery.source` 指定的 directories
 - keyword scoring：issue title / body tokens 對 path、filename、file sample 的命中
+- checkout / add-to-cart / GraphQL mutation 類 issue 會使用 deterministic issue wording 與 path/content signals，讓 checkout helper、GraphQL helper 與相關 `.graphql` mutation files 更容易成為 bounded source candidates
 - max limits：`discovery.max_docs` 與 `discovery.max_source_files`
 
 Auto-discovered references 是 context candidates。它們可能有 false positives / false negatives，因此不應被視為完整 dependency graph。
+
+Source auto-discovery 會避免把 generated source output 當作預設 implementation context，例如 `generated/`、`__generated__/` 或 `*.generated.*` paths。若 issue 需要 generated output，應由 human 明確確認；預設 discovery 應優先 surfaced hand-written helper / mutation source，而不是 generated artifacts。
 
 在 `spec plan` output 中，auto-discovered docs/source references 會標示為 `auto-discovered`，並與 issue-mentioned references 分開，避免 inferred context 被誤讀成 issue author 明確指定的檔案。
 

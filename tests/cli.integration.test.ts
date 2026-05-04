@@ -1350,6 +1350,127 @@ test('spec plan separates issue-mentioned references from auto-discovered refere
   assert.equal(countOccurrences(fullFirst.stdout, '### docs/duplicate-ref.md'), 1);
 });
 
+test('spec plan surfaces checkout implementation references for add-to-cart server action issues', async (t) => {
+  const fixture = await createExplicitPathPlanFixture(t, {
+    issueNumber: 165,
+    title: 'Add-to-cart server action should call checkoutLinesAdd mutation',
+    bodyLines: [
+      'Fix the add-to-cart server action for PDP variant selection.',
+      'The server action should create or reuse a checkout line and call the checkoutLinesAdd GraphQL mutation.',
+      'Relevant PDP files:',
+      '- `src/ui/components/pdp/add-to-cart.tsx`',
+      '- `src/ui/components/pdp/variant-section-dynamic.tsx`',
+    ],
+    config: {
+      discovery: {
+        source: ['src'],
+        max_source_files: 5,
+      },
+    },
+    repoFiles: {
+      'src/ui/components/pdp/add-to-cart.tsx': 'export async function addToCart() { return "PDP_ADD_TO_CART_SENTINEL"; }\n',
+      'src/ui/components/pdp/variant-section-dynamic.tsx': 'export const variantSection = "PDP_VARIANT_SENTINEL";\n',
+      'src/lib/checkout.ts': 'export async function addCheckoutLine() { return "CHECKOUT_HELPER_SENTINEL checkoutLinesAdd server action"; }\n',
+      'src/lib/graphql.ts': 'export async function storefrontGraphql() { return "GRAPHQL_HELPER_SENTINEL GraphQL mutation client"; }\n',
+      'src/graphql/CheckoutAddLine.graphql': 'mutation CheckoutAddLine($checkoutId: ID!) { checkoutLinesAdd(checkoutId: $checkoutId) { checkout { id } } }\n',
+      'src/graphql/generated/storefront.ts': 'export const generatedStorefrontTypes = "GENERATED_GRAPHQL_SENTINEL checkoutLinesAdd";\n',
+    },
+  });
+
+  const promptResult = await runSpec(['plan', fixture.issueUrl, '--repo', fixture.repoDir, '--dry-run', '--format', 'prompt'], { env: fixture.env });
+  const fullResult = await runSpec(['plan', fixture.issueUrl, '--repo', fixture.repoDir, '--dry-run'], { env: fixture.env });
+
+  assert.equal(promptResult.code, 0, promptResult.stderr);
+  assert.equal(fullResult.code, 0, fullResult.stderr);
+
+  const promptIssueSources = sectionBetween(promptResult.stdout, '### Issue-Mentioned Source Files', '### Auto-Discovered Docs');
+  const promptAutoSources = sectionBetween(promptResult.stdout, '### Auto-Discovered Source Files', '## 5. Missing Files');
+  assert.match(promptIssueSources, /`src\/ui\/components\/pdp\/add-to-cart\.tsx` — issue-mentioned; mentioned in issue/);
+  assert.match(promptIssueSources, /`src\/ui\/components\/pdp\/variant-section-dynamic\.tsx` — issue-mentioned; mentioned in issue/);
+  assert.match(promptAutoSources, /`src\/lib\/checkout\.ts` — auto-discovered/);
+  assert.match(promptAutoSources, /`src\/lib\/graphql\.ts` — auto-discovered/);
+  assert.match(promptAutoSources, /`src\/graphql\/CheckoutAddLine\.graphql` — auto-discovered/);
+  assert.doesNotMatch(promptAutoSources, /src\/graphql\/generated\/storefront\.ts/);
+
+  const fullAutoSources = sectionBetween(fullResult.stdout, '## 7. Auto-Discovered Source Files', '## 8. Matched Guardrails');
+  assert.match(fullAutoSources, /### src\/lib\/checkout\.ts/);
+  assert.match(fullAutoSources, /CHECKOUT_HELPER_SENTINEL/);
+  assert.match(fullAutoSources, /### src\/lib\/graphql\.ts/);
+  assert.match(fullAutoSources, /GRAPHQL_HELPER_SENTINEL/);
+  assert.match(fullAutoSources, /### src\/graphql\/CheckoutAddLine\.graphql/);
+  assert.doesNotMatch(fullAutoSources, /GENERATED_GRAPHQL_SENTINEL/);
+});
+
+test('spec plan keeps generated GraphQL files out of auto-discovered source output', async (t) => {
+  const fixture = await createExplicitPathPlanFixture(t, {
+    issueNumber: 1665,
+    title: 'Add-to-cart checkoutLinesAdd GraphQL mutation follow-up',
+    bodyLines: [
+      'Use the add-to-cart server action to call checkoutLinesAdd GraphQL mutation.',
+      'Do not rely on generated GraphQL output as implementation context.',
+    ],
+    config: {
+      discovery: {
+        source: ['src'],
+        max_source_files: 5,
+      },
+    },
+    repoFiles: {
+      'src/lib/checkout.ts': 'export const checkoutHelper = "CHECKOUT_HELPER_SENTINEL checkoutLinesAdd";\n',
+      'src/lib/graphql.ts': 'export const graphqlHelper = "GRAPHQL_HELPER_SENTINEL GraphQL mutation";\n',
+      'src/graphql/CheckoutAddLine.graphql': 'mutation CheckoutAddLine { checkoutLinesAdd { checkout { id } } }\n',
+      'src/graphql/generated/storefront.ts': 'export const generatedStorefrontTypes = "GENERATED_GRAPHQL_SENTINEL checkoutLinesAdd mutation";\n',
+      'src/graphql/__generated__/CheckoutAddLine.generated.ts': 'export const generatedCheckoutMutation = "GENERATED_CHECKOUT_LINE_SENTINEL checkoutLinesAdd";\n',
+    },
+  });
+
+  const promptResult = await runSpec(['plan', fixture.issueUrl, '--repo', fixture.repoDir, '--dry-run', '--format', 'prompt'], { env: fixture.env });
+  const fullResult = await runSpec(['plan', fixture.issueUrl, '--repo', fixture.repoDir, '--dry-run'], { env: fixture.env });
+
+  assert.equal(promptResult.code, 0, promptResult.stderr);
+  assert.equal(fullResult.code, 0, fullResult.stderr);
+
+  const promptAutoSources = sectionBetween(promptResult.stdout, '### Auto-Discovered Source Files', '## 5. Missing Files');
+  assert.match(promptAutoSources, /src\/graphql\/CheckoutAddLine\.graphql/);
+  assert.doesNotMatch(promptAutoSources, /src\/graphql\/generated\/storefront\.ts/);
+  assert.doesNotMatch(promptAutoSources, /src\/graphql\/__generated__\/CheckoutAddLine\.generated\.ts/);
+  assert.doesNotMatch(fullResult.stdout, /GENERATED_GRAPHQL_SENTINEL|GENERATED_CHECKOUT_LINE_SENTINEL/);
+});
+
+test('spec plan bounds checkout discovery without broad payment over-inclusion', async (t) => {
+  const fixture = await createExplicitPathPlanFixture(t, {
+    issueNumber: 265,
+    title: 'Add-to-cart server action should add checkout line',
+    bodyLines: [
+      'Fix PDP add-to-cart so the server action adds the selected variant as a checkout line.',
+      'The implementation should call the checkoutLinesAdd GraphQL mutation.',
+    ],
+    config: {
+      discovery: {
+        source: ['src'],
+        max_source_files: 3,
+      },
+    },
+    repoFiles: {
+      'src/lib/checkout.ts': 'export async function checkoutLineHelper() { return "CHECKOUT_HELPER_SENTINEL checkoutLinesAdd"; }\n',
+      'src/lib/graphql.ts': 'export async function graphqlClient() { return "GRAPHQL_HELPER_SENTINEL GraphQL mutation"; }\n',
+      'src/graphql/CheckoutAddLine.graphql': 'mutation CheckoutAddLine { checkoutLinesAdd { checkout { id } } }\n',
+      'src/checkout/payment-step.ts': 'export const paymentStep = "PAYMENT_STEP_SENTINEL checkout payment billing invoice";\n',
+      'src/docs/checkout-payment-notes.ts': 'export const checkoutPaymentNotes = "PAYMENT_NOTES_SENTINEL broad checkout payment docs";\n',
+    },
+  });
+
+  const promptResult = await runSpec(['plan', fixture.issueUrl, '--repo', fixture.repoDir, '--dry-run', '--format', 'prompt'], { env: fixture.env });
+  assert.equal(promptResult.code, 0, promptResult.stderr);
+
+  const promptAutoSources = sectionBetween(promptResult.stdout, '### Auto-Discovered Source Files', '## 5. Missing Files');
+  assert.match(promptAutoSources, /`src\/lib\/checkout\.ts` — auto-discovered/);
+  assert.match(promptAutoSources, /`src\/lib\/graphql\.ts` — auto-discovered/);
+  assert.match(promptAutoSources, /`src\/graphql\/CheckoutAddLine\.graphql` — auto-discovered/);
+  assert.doesNotMatch(promptAutoSources, /src\/checkout\/payment-step\.ts/);
+  assert.doesNotMatch(promptAutoSources, /src\/docs\/checkout-payment-notes\.ts/);
+});
+
 test('spec plan verbose output shows classifier diagnostics without changing rendered prompt', async (t) => {
   const fixture = await createExplicitPathPlanFixture(t, {
     issueNumber: 91,
