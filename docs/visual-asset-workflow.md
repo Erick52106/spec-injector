@@ -286,7 +286,7 @@ If the answer is unclear, stop and treat the asset as needing human review befor
 - #119 README narrative: establishes product narrative that visual assets should support, not replace.
 - #120 full product showcase: should consume this plan before producing full README / product showcase assets.
 - #132 brand architecture: defines `spec-injector` as main product and `Spec Cat` as mascot / companion character; see [brand-architecture.md](brand-architecture.md).
-- #100 companion mascot: should use this plan to keep Spec Cat mascot exploration separate from CLI core.
+- #100 companion mascot: should use this plan to keep Spec Cat mascot exploration separate from CLI core; mascot state, tone, and behavior boundaries are defined in [spec-cat-companion-design.md](spec-cat-companion-design.md).
 - #111 status event schema: future companion visuals should consume [status-event-schema.md](status-event-schema.md) only after schema direction is clear.
 - #112 daemon / runtime evaluation: companion runtime visuals must not appear as current capability before this evaluation is resolved.
 - [product-moat.md](product-moat.md): defines why README visuals / showcase are useful but not moat by themselves.
