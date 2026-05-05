@@ -68,7 +68,7 @@ Diagram notes:
 | Stage | Current role | Supporting docs | Must not imply |
 |---|---|---|---|
 | Input | GitHub issue as source entrypoint and intent | README.md, README.en.md, `docs/workflow.md`, `docs/validation.md` | hosted dashboard, project automation, target repo mutation |
-| Source discovery | discover references from repo docs/config/guardrails | `docs/workflow.md`, `docs/source-trust.md`, `docs/readme-showcase-readiness.md`, `docs/brand-architecture.md`, `docs/readme-showcase-readiness.md` | fuzzy request ingestion, markdown brief adapter as current, hidden planner |
+| Source discovery | discover references from repo docs/config/guardrails | `docs/workflow.md`, `docs/source-trust.md`, `docs/readme-showcase-readiness.md`, `docs/brand-architecture.md` | fuzzy request ingestion, markdown brief adapter as current, hidden planner |
 | Guardrail application | deterministic filtering and evidence policy checks | `docs/source-trust.md`, `docs/validation.md`, `docs/status-runtime-evaluation.md`, `docs/local-status-file-lifecycle.md` | hidden LLM planner, remediation loop, companion runtime |
 | Compilation | deterministic issue-to-context packaging | `docs/source-trust.md`, `docs/workflow.md`, `docs/spec-cat-companion-design.md` (design boundary reference only) | autonomous execution, semantic RAG, vector search |
 | Prompt handoff | bounded task package + compact handoff prompt | `README.md`, `README.en.md`, `docs/workflow.md`, `docs/product-moat.md` | merge bot, auto reviewer replacement |
