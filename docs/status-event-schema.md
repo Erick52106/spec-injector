@@ -480,7 +480,7 @@ Human merge decision remains authoritative. Assistant / Codex reports, validatio
 ## Relationship To Existing Docs / Issues
 
 - #100 companion mascot: should map `Spec Cat` states to this schema only through a separate mascot / companion behavior design record. `Spec Cat` remains a mascot / companion character, not the main product name; see [spec-cat-companion-design.md](spec-cat-companion-design.md).
-- #112 daemon / runtime evaluation: should consume this schema as an input boundary when evaluating whether any local runtime is justified. #112 must still decide whether daemon / runtime exists at all.
+- #112 daemon / runtime evaluation: [status-runtime-evaluation.md](status-runtime-evaluation.md) consumes this schema as an input boundary and records the current no-go recommendation for runtime implementation.
 - #132 brand architecture: defines `spec-injector` as the main product / CLI core and `Spec Cat` as mascot / future companion; see [brand-architecture.md](brand-architecture.md).
 - #133 visual asset workflow: defines future visual / companion asset boundaries and overclaim prevention; see [visual-asset-workflow.md](visual-asset-workflow.md).
 - [workflow.md](workflow.md): defines worktree-first issue / PR / evidence workflow that status events may summarize but cannot replace.

@@ -199,7 +199,7 @@ Status messages should be enough to orient a human without leaking private repo 
 ## Relationship To Existing Docs / Issues
 
 - #111 status event schema: Spec Cat should map to the `idle`, `planning`, `working`, `testing`, `review-needed`, `success`, `warning`, and `error` vocabulary in [status-event-schema.md](status-event-schema.md). That schema remains future-facing observability vocabulary, not current CLI output.
-- #112 daemon / runtime evaluation: Any daemon, watcher, overlay, Tauri app, browser extension, local status file lifecycle, or runtime producer must wait for an explicit #112 go / no-go decision. This record does not implement or authorize #112.
+- #112 daemon / runtime evaluation: [status-runtime-evaluation.md](status-runtime-evaluation.md) records the current no-go recommendation for runtime implementation. Any daemon, watcher, overlay, Tauri app, browser extension, local status file lifecycle, or runtime producer must wait for a separate approved follow-up.
 - #132 brand architecture: [brand-architecture.md](brand-architecture.md) defines `spec-injector` as the main product / CLI core and `Spec Cat` as mascot / future companion. This record consumes that boundary.
 - #133 visual asset workflow: [visual-asset-workflow.md](visual-asset-workflow.md) defines future visual asset workflow, storage, tool fit, and overclaim prevention. This record supplies mascot state and tone input for later visual work, but generates no assets.
 - [workflow.md](workflow.md): Companion state should reinforce the existing source issue, worktree, validation, evidence, PR body, and human review flow rather than replacing it.

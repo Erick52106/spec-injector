@@ -288,7 +288,7 @@ If the answer is unclear, stop and treat the asset as needing human review befor
 - #132 brand architecture: defines `spec-injector` as main product and `Spec Cat` as mascot / companion character; see [brand-architecture.md](brand-architecture.md).
 - #100 companion mascot: should use this plan to keep Spec Cat mascot exploration separate from CLI core; mascot state, tone, and behavior boundaries are defined in [spec-cat-companion-design.md](spec-cat-companion-design.md).
 - #111 status event schema: future companion visuals should consume [status-event-schema.md](status-event-schema.md) only after schema direction is clear.
-- #112 daemon / runtime evaluation: companion runtime visuals must not appear as current capability before this evaluation is resolved.
+- #112 daemon / runtime evaluation: companion runtime visuals must not appear as current capability; current runtime recommendation is documented in [status-runtime-evaluation.md](status-runtime-evaluation.md).
 - [product-moat.md](product-moat.md): defines why README visuals / showcase are useful but not moat by themselves.
 - [source-trust.md](source-trust.md): provides canonical vocabulary for source trust, include modes, diagnostics, and context budget visuals.
 - [workflow.md](workflow.md): provides the issue / PR / evidence workflow that validation and showcase diagrams should respect.
