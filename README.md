@@ -2,27 +2,34 @@ Language: 繁體中文 | [English](README.en.md)
 
 # spec-injector
 
-`spec-injector` 是一個 deterministic issue-to-context compiler。
+`spec-injector` 是一個 deterministic request-to-context compiler for AI coding agents。
 
-它把 GitHub issue、target repo 的 `.spec-injector/config.json`、repo docs、source references 與 guardrails 編譯成 AI coding agent 開工前可直接使用的 task package / prompt。它的目標不是代替人或 AI 寫程式，而是讓 Codex、Claude Code 或其他 implementer 在修改任何檔案前，先取得可檢查、可重複、受 repo 設定約束的工作脈絡。
+它把 GitHub issue、repo docs、source references、source trust direction、guardrails、validation hints 與 target repo 的 `.spec-injector/config.json` 編譯成 AI coding agent 開工前可直接使用的 bounded task package / prompt。GitHub issue 是目前已實作入口；future fuzzy request / markdown brief adapter 仍屬設計方向，不是 hidden LLM planner。
+
+它的目標不是代替人或 AI 寫程式，而是讓 Codex、Claude Code 或其他 implementer 在修改任何檔案前，先取得可檢查、可重複、受 repo 設定約束的工作脈絡。
 
 核心定位：
 
-- issue-scoped：以單一 GitHub issue 作為 scope source of truth
+- request / issue scoped：目前以單一 GitHub issue 作為 scope source of truth，並保留 future request adapter 的 deterministic design boundary
+- brownfield-friendly：面向 existing GitHub issues、既有 repo docs、source references 與 repo-specific workflow rules
 - repo-safe：讀取 target repo context，但不自動修改 target repo code
 - deterministic：相同 issue、repo files 與 config 應產生穩定 output
-- config-driven：使用 repo-local config、always-read references、discovery 與 guardrails
+- source-trust aware：區分 repo instructions、always-read docs、issue-mentioned paths、auto-discovered references 與 diagnostics 的信任來源
+- context-budget aware：輸出 bounded context，而不是把 repo 全部塞進 prompt
 - guardrails-aware：把 detected domains 對應到 repo-defined constraints / reminders
+- evidence-oriented：把 validation hints、issue evidence、PR body backfill 與 review closeout 視為 handoff workflow 的一部分
+- agent-agnostic：輸出 Markdown task package / prompt，供 Codex、Claude Code 或其他 AI coding agent 消費
 - no hidden LLM：不呼叫 hidden LLM、external AI API 或 local model
 
 ## Why this exists
 
 AI coding agent 常見的失誤不是「不會寫程式」，而是開工前沒有足夠清楚的邊界：
 
-- issue body、repo instructions、architecture docs 與 validation rules 分散在不同地方
+- issue body、repo instructions、architecture docs、source references 與 validation rules 分散在不同地方
 - AI 可能先動手再補脈絡，導致 scope creep
 - reviewer 難以追蹤某次實作是否真的遵守 source issue
 - repo-specific guardrails 容易被忘記，例如 database、auth、CI、docs-only work
+- brownfield repo 的 stale path、renamed file、missing doc 或 unreadable source 容易變成隱性假設
 
 `spec-injector` 把這些開工前需要看的資訊整理成一份 structured Markdown output。它讓 implementer 先讀 task package，再產生 implementation plan，經 human approval 後才開始修改檔案。
 
@@ -36,6 +43,8 @@ AI coding agent 常見的失誤不是「不會寫程式」，而是開工前沒�
 - guardrails 來自 target repo config，是 constraints / reminders，不是 approval
 - `spec plan --dry-run` 只輸出到 stdout，不寫入 task package
 - `spec plan` 的 non-dry-run output 只寫入 `.spec-injector/out/issue-<number>-task-package.md`
+- task package 可以揭露 missing files、unreadable files、path alias hints 與 validation checklist，讓 context gaps 可被看見
+- read-only workflow guardrails 可以檢查 label / milestone taxonomy、PR evidence readback 與 optional live `gh` smoke path，但不自動修 metadata 或 merge
 - mutating commands 必須是明確 command 行為，例如 `spec init`、`spec config add/remove always-read`、`spec clean`
 - CLI core 不會自動建立 branch、commit、PR、issue comment 或修改 target repo source code
 
@@ -50,7 +59,8 @@ AI coding agent 常見的失誤不是「不會寫程式」，而是開工前沒�
 3. **Domain Classifier**：用 deterministic keyword scoring 偵測 relevant domains。
 4. **Guardrail Matcher**：用 detected domains 比對 `.spec-injector/config.json` 中的 guardrails。
 5. **Reference Collector**：收集 built-in preset、repo `always_read`、configured docs、issue-mentioned files、auto-discovered docs / source references。
-6. **Task Package Renderer**：輸出 full task package 或 `--format prompt` 的 compact AI planning prompt。
+6. **Diagnostics / Validation Direction**：保留 missing / unreadable / alias hints 與 suggested verification checklist。
+7. **Task Package Renderer**：輸出 full task package 或 `--format prompt` 的 compact AI planning prompt。
 
 ## Pipeline diagram
 
@@ -61,9 +71,21 @@ GitHub Issue
   -> Domain Classifier
   -> Guardrail Matcher
   -> Reference Collector
+  -> Diagnostics / Validation Direction
   -> Task Package Renderer
   -> Markdown task package / prompt for Codex or Claude Code
 ```
+
+## Current capability map
+
+目前 `spec-injector` 的已實作 / 已文件化能力可以用四段理解：
+
+| Stage | What happens | Boundary |
+| --- | --- | --- |
+| Input | 讀取 GitHub issue、repo config、repo docs、issue-mentioned paths 與 configured discovery sources。 | GitHub issue 是目前實作入口；future fuzzy request 仍是 design direction。 |
+| Compile | 用 deterministic parser / classifier / reference collector 組合 guardrails、source references、diagnostics 與 validation hints。 | 不呼叫 hidden LLM，不使用 semantic RAG / vector DB。 |
+| Output | 產生 bounded Markdown task package 或 compact planning prompt，供 AI coding agent 開工前閱讀。 | Output 是 handoff context，不是 autonomous execution plan。 |
+| Verify | Repo workflow docs 規範 validation、implementation evidence comment、PR body evidence URL、HEAD/readback check 與 review closeout。 | Workflow guardrails 是 read-only / human-reviewed discipline，不是 merge bot 或 remediation automation。 |
 
 ## Quickstart
 
@@ -160,10 +182,12 @@ Full task package output is Markdown intended for human and AI review. It can in
 - always-read references
 - auto-discovered documentation
 - auto-discovered source files
+- source reference direction and trust context
 - matched guardrails
 - rule-matched documentation
 - missing files
-- suggested verification checklist
+- unreadable / alias diagnostics where applicable
+- suggested verification checklist and implementation evidence direction
 
 Prompt output with `--format prompt` is shorter and designed for AI planning. It lists relevant references without inlining the full always-read docs, README content, discovered docs, or source snippets.
 
@@ -178,6 +202,9 @@ Key terms used across this project:
 - **Domain classifier**：用 title、labels、body 中的 deterministic signals 選出 relevant domains。
 - **Guardrail**：repo-defined constraint / reminder；提醒風險，但不授權擴 scope。
 - **Reference**：task package 中列出的 docs、source files、built-in preset 或 issue-mentioned files。
+- **Source trust**：標示 context 來源與信任方向，避免 auto-discovered reference 被誤讀成 human-approved scope。
+- **Context budget**：限制 task package / prompt 的內容量與 include mode，讓 output 保持 bounded。
+- **Read diagnostics**：missing、unreadable 或 alias hints 等 context health 訊號。
 - **Task package**：AI 開工前使用的 structured context，不是 autonomous execution plan。
 - **Implementation evidence**：PR 建立後寫回 source issue 的 structured comment。
 
@@ -227,11 +254,19 @@ Important fields:
 - autonomous agent
 - daemon
 - hidden LLM wrapper
+- hosted control-plane platform
+- agent orchestration platform
 - GitHub automation bot
+- GitHub Projects / roadmap dashboard
 - custom domain runtime
+- full SDD lifecycle platform
 - general-purpose RAG system
+- semantic RAG / vector search product
+- hidden LLM planner
 - target repo auto-editing system
 - multi-agent runtime
+- companion runtime in CLI core
+- remediation bot
 - PR / merge automation service
 - stable npm release promise
 
