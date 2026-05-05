@@ -96,7 +96,7 @@
 - #100 companion mascot：應消費本 brand architecture，將 `Spec Cat` 定位為 mascot / companion character，而不是主產品 rename。
 - #111 status event schema：若未來需要 workflow observability vocabulary，應讓 status layer 消費 deterministic compiler / workflow events，不應把 `Spec Cat` 塞進 CLI core semantics。
 - #112 daemon / runtime evaluation：若評估 companion daemon 或 runtime，必須先維持 core boundary；daemon / runtime 不得 retroactively redefine `spec-injector` as companion-first product。
-- #133 visual assets workflow：visual asset work 可以使用 `Spec Cat` 作 mascot direction，但應等 #133 scope 明確，不在本文件產生 logo、image 或 mascot implementation。
+- #133 visual assets workflow：visual asset work 可以使用 `Spec Cat` 作 mascot direction，但應遵守 [visual-asset-workflow.md](visual-asset-workflow.md) 的 tool fit、storage、timing 與 overclaim boundaries；本文件不產生 logo、image 或 mascot implementation。
 - #120 README showcase：future README showcase 應引用本 decision record，使用 `spec-injector` 作 product name，並把 `Spec Cat` 放在 roadmap / companion context。
 
 這些 issues 應消費本 brand architecture；它們都不應強迫立即 product rename。
