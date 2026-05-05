@@ -2,15 +2,17 @@ Language: 繁體中文 | [English](README.en.md)
 
 # spec-injector
 
-`spec-injector` 是一個 deterministic request-to-context compiler for AI coding agents。
+`spec-injector` 目前是一個 deterministic GitHub issue-to-context compiler for AI coding agents。
 
-它把 GitHub issue、repo docs、source references、source trust direction、guardrails、validation hints 與 target repo 的 `.spec-injector/config.json` 編譯成 AI coding agent 開工前可直接使用的 bounded task package / prompt。GitHub issue 是目前已實作入口；future fuzzy request / markdown brief adapter 仍屬設計方向，不是 hidden LLM planner。
+它把 GitHub issue、repo docs、source references、source trust direction、guardrails、validation hints 與 target repo 的 `.spec-injector/config.json` 編譯成 AI coding agent 開工前可直接使用的 bounded task package / prompt。
+
+Broader deterministic request-to-context adapters for fuzzy requests、markdown briefs 或 PR review notes 是 future design direction；目前已實作且 repo 規範要求守住的 path 仍是 GitHub issue-to-context，不是 hidden LLM planner。
 
 它的目標不是代替人或 AI 寫程式，而是讓 Codex、Claude Code 或其他 implementer 在修改任何檔案前，先取得可檢查、可重複、受 repo 設定約束的工作脈絡。
 
 核心定位：
 
-- request / issue scoped：目前以單一 GitHub issue 作為 scope source of truth，並保留 future request adapter 的 deterministic design boundary
+- issue-scoped today：目前以單一 GitHub issue 作為 scope source of truth，並保留 future request adapter 的 deterministic design boundary
 - brownfield-friendly：面向 existing GitHub issues、既有 repo docs、source references 與 repo-specific workflow rules
 - repo-safe：讀取 target repo context，但不自動修改 target repo code
 - deterministic：相同 issue、repo files 與 config 應產生穩定 output

@@ -2,15 +2,17 @@ Language: [繁體中文](README.md) | English
 
 # spec-injector
 
-`spec-injector` is a deterministic request-to-context compiler for AI coding agents.
+`spec-injector` is currently a deterministic GitHub issue-to-context compiler for AI coding agents.
 
-It compiles GitHub issues, repo docs, source references, source trust direction, guardrails, validation hints, and the target repo's `.spec-injector/config.json` into a bounded task package / prompt that an AI coding agent can use directly before starting work. GitHub issue input is the currently implemented entry point; future fuzzy request / markdown brief adapters remain a deterministic design direction, not a hidden LLM planner.
+It compiles GitHub issues, repo docs, source references, source trust direction, guardrails, validation hints, and the target repo's `.spec-injector/config.json` into a bounded task package / prompt that an AI coding agent can use directly before starting work.
+
+Broader deterministic request-to-context adapters for fuzzy requests, markdown briefs, or PR review notes are a future design direction; the implemented and repo-governed path today remains GitHub issue-to-context, not a hidden LLM planner.
 
 Its goal is not to replace humans or AI writing code, but to let Codex, Claude Code, or other implementers obtain checkable, repeatable work context constrained by repo configuration before modifying any files.
 
 Core positioning:
 
-- request / issue scoped: currently uses a single GitHub issue as the scope source of truth, while keeping future request adapters behind deterministic design boundaries
+- issue-scoped today: currently uses a single GitHub issue as the scope source of truth, while keeping future request adapters behind deterministic design boundaries
 - brownfield-friendly: designed around existing GitHub issues, repo docs, source references, and repo-specific workflow rules
 - repo-safe: reads target repo context, but does not automatically modify target repo code
 - deterministic: the same issue, repo files, and config should produce stable output
@@ -284,10 +286,12 @@ These directions should get separate issues, tests, and corresponding docs updat
 ## Documentation links
 
 - Agent instructions: [AGENTS.md](AGENTS.md)
+- Agent handoff patterns: [docs/agent-handoff.md](docs/agent-handoff.md)
 - Architecture: [docs/architecture.md](docs/architecture.md)
 - Core concepts: [docs/concepts.md](docs/concepts.md)
 - Catalog / protocol model: [docs/catalog-protocol.md](docs/catalog-protocol.md)
 - Product moat thesis: [docs/product-moat.md](docs/product-moat.md)
+- Positioning and adjacent workflows: [docs/positioning.md](docs/positioning.md)
 - Classifier: [docs/classifier.md](docs/classifier.md)
 - References: [docs/references.md](docs/references.md)
 - Guardrails: [docs/guardrails.md](docs/guardrails.md)
