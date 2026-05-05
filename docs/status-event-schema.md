@@ -124,7 +124,7 @@ The minimal shape is JSON-object based so future producers can write simple loca
 ### Field Guidelines
 
 - `source` must identify an explicit producer. Hidden autonomous producers are out of scope.
-- `lastCommand.output` should be avoided. Prefer `exitCode`, `result`, and a concise sanitized `summary`.
+- Avoid using `lastCommand.output`; prefer `exitCode`, `result`, and a concise, sanitized `summary` instead.
 - `worktreePath` and repo paths may be sensitive. Future consumers should treat them as local-only unless explicitly shared.
 - `validation` should distinguish `passed`, `failed`, `skipped`, and `not-required`.
 - `reviewState` should not collapse bot findings into approval. It may record classification counts, but live review threads remain authoritative.
