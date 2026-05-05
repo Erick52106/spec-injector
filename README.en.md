@@ -288,6 +288,7 @@ These directions should get separate issues, tests, and corresponding docs updat
 - Agent instructions: [AGENTS.md](AGENTS.md)
 - Agent handoff patterns: [docs/agent-handoff.md](docs/agent-handoff.md)
 - Architecture: [docs/architecture.md](docs/architecture.md)
+- Issue-to-context pipeline: [docs/issue-to-context-pipeline.md](docs/issue-to-context-pipeline.md)
 - Core concepts: [docs/concepts.md](docs/concepts.md)
 - Catalog / protocol model: [docs/catalog-protocol.md](docs/catalog-protocol.md)
 - Product moat thesis: [docs/product-moat.md](docs/product-moat.md)
