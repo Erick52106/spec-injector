@@ -89,6 +89,15 @@ The current implemented / documented capabilities can be understood in four stag
 | Output | Produces a bounded Markdown task package or compact planning prompt for an AI coding agent to read before implementation. | Output is handoff context, not an autonomous execution plan. |
 | Verify | Repo workflow docs define validation, implementation evidence comments, PR body evidence URLs, HEAD/readback checks, and review closeout. | Workflow guardrails are read-only / human-reviewed discipline, not a merge bot or remediation automation. |
 
+## Current capabilities
+
+- Compiles GitHub issues into bounded, agent-ready task context; see [issue-to-context pipeline](docs/issue-to-context-pipeline.md).
+- Surfaces references and diagnostics so missing or unreadable context remains visible; see [workflow](docs/workflow.md) and [validation](docs/validation.md).
+- Uses source trust and context-budget design to keep task packages bounded; see [source trust](docs/source-trust.md).
+- Supports human-reviewed validation, evidence, readback, and finding-assessment workflows; see [workflow](docs/workflow.md) and [validation](docs/validation.md).
+- Includes read-only workflow guardrails like label/milestone audit; see [label taxonomy](docs/label-taxonomy.md).
+- Keeps companion, status, and remediation ideas documented as design-only, not shipped runtime behavior; see [current capability showcase planning doc](docs/readme-current-capability-showcase.md) and [readme showcase readiness](docs/readme-showcase-readiness.md).
+
 ## Quickstart
 
 Requirements:

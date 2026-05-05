@@ -89,6 +89,15 @@ GitHub Issue
 | Output | 產生 bounded Markdown task package 或 compact planning prompt，供 AI coding agent 開工前閱讀。 | Output 是 handoff context，不是 autonomous execution plan。 |
 | Verify | Repo workflow docs 規範 validation、implementation evidence comment、PR body evidence URL、HEAD/readback check 與 review closeout。 | Workflow guardrails 是 read-only / human-reviewed discipline，不是 merge bot 或 remediation automation。 |
 
+## 目前能力
+
+- 將 GitHub issue 編譯為 bounded、agent-ready 的 task context；可參考 [issue-to-context pipeline](docs/issue-to-context-pipeline.md)。
+- 顯示 source references 與診斷資訊，讓缺漏或不可讀 context 保持可見；可參考 [workflow](docs/workflow.md) 與 [validation](docs/validation.md)。
+- 以 source trust 與 context-budget 設計約束 task package 邊界；可參考 [source trust](docs/source-trust.md)。
+- 支援 human-reviewed 的 validation / evidence / readback 與 review finding 分類流程；可參考 [workflow](docs/workflow.md) 與 [validation](docs/validation.md)。
+- 提供 read-only 的 workflow guardrail，例如 label / milestone audit；可參考 [label taxonomy](docs/label-taxonomy.md)。
+- 將 companion / status / remediation 相關方向保留為 design-only，不視為已實作功能；可參考 [current capability showcase planning doc](docs/readme-current-capability-showcase.md) 與 [readme showcase readiness](docs/readme-showcase-readiness.md)。
+
 ## Quickstart
 
 Requirements:
