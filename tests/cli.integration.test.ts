@@ -1723,8 +1723,9 @@ test('spec evidence-check reports multiple distinct closing issues as needs huma
 
 test('spec evidence-check flags --issue mismatch and ambiguity as needs-human-review', async (t) => {
   const fixture = await createEvidenceCheckFixture(t, {
-    issueNumber: 149,
+    issueNumber: 120,
     prBody: [
+      'Closes #120',
       'Closes #149',
       '## Summary',
       'ok',
@@ -1737,7 +1738,7 @@ test('spec evidence-check flags --issue mismatch and ambiguity as needs-human-re
       '- `pnpm build` ✅',
       '- `pnpm test` ✅',
       '## Implementation Evidence',
-      '- Issue evidence comment URL: https://github.com/Erick52106/spec-injector/issues/149#issuecomment-1090001',
+      '- Issue evidence comment URL: https://github.com/Erick52106/spec-injector/issues/120#issuecomment-1090001',
       '- Latest HEAD: 1234567890abcdef1234567890abcdef12345678',
     ].join('\n'),
   });
@@ -1751,8 +1752,56 @@ test('spec evidence-check flags --issue mismatch and ambiguity as needs-human-re
 
   assert.notEqual(result.code, 0);
   assert.match(result.stdout, /Evidence check summary:\s+NEEDS-HUMAN-REVIEW/i);
-  assert.match(result.stdout, /Expected issue/);
-  assert.match(result.stdout, /expected #120, found #149/i);
+  assert.match(result.stdout, /detected 2 distinct closing issues/i);
+  assert.match(result.stdout, /evidence URL matches one candidate, but source issue remains ambiguous/i);
+  const ghLog = (await readGhLog(fixture.ghLogPath)).join('\n');
+  assertNoGhMutationCommands(ghLog);
+});
+
+test('spec evidence-check fails when multi-linked issue evidence URL is not among candidates', async (t) => {
+  const fixture = await createEvidenceCheckFixture(t, {
+    issueNumber: 120,
+    prBody: [
+      'Closes #120',
+      'Closes #149',
+      '## Summary',
+      'ok',
+      '## Scope',
+      'ok',
+      '## Non-goals',
+      'ok',
+      '## Validation',
+      '- `git diff --check` ✅',
+      '- `pnpm build` ✅',
+      '- `pnpm test` ✅',
+      '## Implementation Evidence',
+      '- Issue evidence comment URL: https://github.com/Erick52106/spec-injector/issues/777#issuecomment-1090001',
+      '- Latest HEAD: 1234567890abcdef1234567890abcdef12345678',
+    ].join('\n'),
+    issueComments: [{
+      url: 'https://github.com/Erick52106/spec-injector/issues/777#issuecomment-1090001',
+      body: [
+        '## Implementation evidence',
+        '- PR URL: https://github.com/Erick52106/spec-injector/pull/1091',
+        '- Branch: feat/pr-evidence-consistency-checker-109',
+        '- Commit hash / HEAD: 1234567890abcdef1234567890abcdef12345678',
+        '- Tests / validation:',
+        '- `git diff --check` ✅',
+        '- `pnpm build` ✅',
+        '- `pnpm test` ✅',
+      ].join('\n'),
+    }],
+  });
+
+  const result = await runSpec([
+    'evidence-check',
+    '--pr', String(fixture.prNumber),
+    '--repo', fixture.repo,
+  ], { env: fixture.env });
+
+  assert.notEqual(result.code, 0);
+  assert.match(result.stdout, /Evidence check summary:\s+FAIL/i);
+  assert.match(result.stdout, /evidence URL does not match any linked issue/i);
   const ghLog = (await readGhLog(fixture.ghLogPath)).join('\n');
   assertNoGhMutationCommands(ghLog);
 });

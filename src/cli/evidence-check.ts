@@ -220,28 +220,28 @@ function buildReport(input: {
       }
     } else if (input.linkedIssues.length > 1) {
       const urlIssue = parseIssueNumberFromEvidenceUrl(input.evidenceUrl);
-      if (urlIssue && !input.linkedIssues.includes(urlIssue)) {
+      if (urlIssue === null) {
         checks.push(needsHumanReview(
           'Issue evidence URL',
           input.evidenceUrl,
-          'evidence URL does not match any linked issue',
-          'Resolve source issue ambiguity before readback reuse.'
+          'could not parse linked issue from evidence URL under ambiguity',
+          'Keep source issue selection to a human before using this evidence URL as authoritative.'
         ));
-      } else {
-        checks.push(pass(
+      } else if (input.linkedIssues.includes(urlIssue)) {
+        checks.push(needsHumanReview(
           'Issue evidence URL',
           input.evidenceUrl,
-          'evidence URL found for one linked issue',
-          'Evidence is parseable, but source issue selection remains ambiguous.'
+          'evidence URL matches one candidate, but source issue remains ambiguous',
+          'Do not reuse this evidence URL as authoritative until a human selects exactly one source issue.'
+        ));
+      } else {
+        checks.push(fail(
+          'Issue evidence URL',
+          input.evidenceUrl,
+          'evidence URL does not match any linked issue',
+          'Stop and backfill an evidence URL that points to one of the linked issues.'
         ));
       }
-    } else {
-      checks.push(pass(
-        'Issue evidence URL',
-        input.evidenceUrl,
-        'evidence URL found',
-        'Use this URL for PR body evidence readback.'
-      ));
     }
   }
 
