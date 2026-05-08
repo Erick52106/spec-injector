@@ -428,7 +428,7 @@ Evidence comment 應包含：
 ```text
 ## Summary
 - compact description
-- Closes #208
+- Closes #<issue-number>
 
 ## Scope
 - related issue / PR URL:
