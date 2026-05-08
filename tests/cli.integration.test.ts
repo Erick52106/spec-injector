@@ -4385,8 +4385,13 @@ test('spec plan prompt diagnostics-heavy sample stays bounded and reference-orie
 
   assert.match(promptIssueDocs, /`docs\/issue-mentioned-doc\.md` — issue-mentioned; mentioned in issue/);
   assert.match(promptIssueSources, /`src\/issue-mentioned-source\.ts` — issue-mentioned; mentioned in issue/);
+  assert.doesNotMatch(
+    promptIssueSources,
+    /src\/unreadable-source\.ts|src\/missing-issue-source\.ts|alias-source\.ts/
+  );
   assert.match(promptAutoDocs, /`docs\/diagnostics-guide\.md` — auto-discovered/);
   assert.match(promptAutoSources, /`src\/diagnostics-source\.ts` — auto-discovered/);
+  assert.doesNotMatch(promptAutoSources, /src\/auto-discovered-read-failed-source\.ts/);
   assert.match(
     promptAutoSources,
     /`src\/auto-discovered-truncation-source\.ts` — auto-discovered; truncated to first \d+ bytes; full file at src\/auto-discovered-truncation-source\.ts/
@@ -4403,8 +4408,13 @@ test('spec plan prompt diagnostics-heavy sample stays bounded and reference-orie
   assert.match(result.stderr, /Unreadable: src\/unreadable-source\.ts \(EACCES\)/);
   assert.match(result.stderr, /Read failed: src\/auto-discovered-read-failed-source\.ts \(EIO\)/);
   assert.doesNotMatch(result.stdout, /TRUNCATION_TAIL_SENTINEL/);
+  assert.doesNotMatch(result.stdout, /TRUNCATION_HEAD_SENTINEL/);
   assert.doesNotMatch(result.stdout, /ISSUE_MENTIONED_DOC_SENTINEL/);
+  assert.doesNotMatch(result.stdout, /ISSUE_MENTIONED_SOURCE_SENTINEL/);
   assert.doesNotMatch(result.stdout, /AUTO_DISCOVERED_SOURCE_SENTINEL/);
+  assert.doesNotMatch(result.stdout, /ALIAS_SOURCE_SENTINEL/);
+  assert.doesNotMatch(result.stdout, /UNREADABLE_SOURCE_SENTINEL/);
+  assert.doesNotMatch(result.stdout, /AUTO_DISCOVERED_READ_FAILED_SOURCE_SENTINEL/);
 });
 
 test('spec plan ignores API and route paths when extracting file references', async (t) => {
