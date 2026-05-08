@@ -381,6 +381,158 @@ Evidence comment 應包含：
 
 若 evidence comment URL 需要回填 PR body，先建立 PR，再貼 issue comment，取得永久 comment URL 後更新 PR body，最後反查 PR body。
 
+## Compact evidence templates
+
+以下為 compact 版本，保留 evidence-check 所需欄位，但減少重複填寫。實際流程與權限邊界仍以本文件、`docs/validation.md` 與人類 merge 決策為準。
+
+### Implementation evidence comment template
+
+```text
+## Implementation evidence
+
+- Source issue URL:
+- PR URL:
+- Branch:
+- HEAD / commit hash:
+- Files changed:
+  - `path/to/file.md`
+- Scope:
+  - in-scope: ...
+  - out-of-scope: ...
+- Non-goals:
+  - 不放寬 evidence-check 要求
+  - 不代替 human merge decision
+  - 不修改 runtime / tests / CI / package script
+- Validation:
+  - git diff --check
+  - pnpm build
+  - pnpm test
+  - pnpm test:gh: not run / not required
+- Readback:
+  - PR body readback: VERIFIED
+  - Issue evidence readback: VERIFIED
+- Protected issue state:
+  - #120:
+  - #149:
+- Target repo safety:
+  - target repo mutation: no
+  - hidden mutation: no
+- Evidence-check boundary:
+  - PASS ≠ merge approval
+  - human merge approval required
+- Issue evidence URL: <paste permanent comment URL>
+```
+
+### PR body template
+
+```text
+## Summary
+- compact description
+- Closes #208
+
+## Scope
+- related issue / PR URL:
+- files changed:
+  - `docs/workflow.md`
+  - `docs/cheatsheet.md`
+- branch:
+- non-goals:
+  - 不放寬 evidence-check required section
+  - 不移除 readback verification
+  - 不移除 human merge authority
+  - 不新增 automation
+
+## Non-goals
+- 不修改 runtime
+- 不修改 tests
+- 不修改 CI
+- 不 close #120
+- 不處理 #149 remediation loop
+- 不修改 target repo
+
+## Validation
+- git diff --check
+- pnpm build
+- pnpm test
+- pnpm test:gh: not run / not required
+
+## Implementation Evidence
+- PR URL:
+- Branch:
+- Commit hash / HEAD:
+- Files changed:
+  - `...`
+- issue evidence URL:
+- PR body readback URL:
+- issue evidence readback URL:
+- #120 state:
+- #149 state:
+- target repo mutation confirmation: no
+
+## Review finding assessment
+- No automated findings yet.
+- If findings exist, add compact matrix below:
+  - source: CodeRabbit / Codex / human
+  - location: path#Lx (if any)
+  - classification: adopted / not adopted / optional polish / noise / not applicable / needs human review
+  - action:
+    - adopted: fix with evidence
+    - not adopted / noise / not applicable / optional polish: leave rationale
+    - needs human review: stop-and-report
+```
+
+### Review finding assessment template
+
+```text
+## Finding assessment
+
+- source:
+- location:
+- classification: adopted / not adopted / optional polish / noise / not applicable / needs human review
+- action:
+- rationale:
+- validation / evidence:
+- blocking?: yes / no
+```
+
+### Merge closeout summary template
+
+```text
+## Merge closeout summary
+
+- Merge method: squash / merge / rebase
+- Merge commit / squash commit:
+- Final HEAD:
+- PR URL:
+- issue URL:
+- Files changed:
+  - `...`
+- Validation / checks:
+  - gh pr checks:
+  - pnpm build:
+  - pnpm test:
+- Review closeout:
+  - actionable finding count:
+  - adopted findings and follow-up status:
+  - unresolved human-required finding: none
+- Issue state:
+  - #120:
+  - #149:
+- issue evidence URL:
+- PR body readback URL:
+- closeout comment URL:
+- Human merge decision:
+  - approved by human: yes / no
+  - auto-merge / auto-close: no
+- Cleanup:
+  - branch/worktree cleanup performed here: no
+```
+
+### Human decision boundary
+
+- PR body / issue evidence 寫入後仍需 readback verify。
+- `spec evidence-check` PASS 僅代表欄位完整；最終 merge 權限仍屬 human。
+
 ## Concurrency rules
 
 可併發：

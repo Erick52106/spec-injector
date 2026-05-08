@@ -76,6 +76,12 @@
 - metadata-only:
   - required: `gh pr view` / `gh issue view` readback（無 repo file change）
 
+## Compact evidence template quick view
+- PR body section order（compact）：`Summary`、`Scope`、`Non-goals`、`Validation`、`Implementation Evidence`、`Review finding assessment`
+- Implementation evidence comment 需含：
+  - Source issue / PR URL、branch、HEAD、files changed、scope / non-goals、validation、#120 / #149 state、readback、target repo mutation no、human merge boundary
+- full fields 在 `docs/workflow.md` 對應的 compact template section
+
 ## Do not do
 - no stash / clean / reset（除非 human 明確授權）
 - no target repo mutation（含 commit / push / branch / file edit / `.spec-injector/` / `spec init`）
