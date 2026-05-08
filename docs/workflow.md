@@ -84,6 +84,8 @@ spec evidence-check \
 
 CodeRabbit / Codex auto review findings 只能作為 auxiliary signals。`spec evidence-check` 可提醒 review finding assessment 是否存在，但不代表 approval，也不取代 human merge decision。
 
+Thread-level limitation：`spec evidence-check` 目前只做 read-only 輔助檢核，不會完整 enforce GitHub review thread / conversation closeout。它可提醒 PR body / evidence / HEAD / validation / findings shape，但不能保證每條 CodeRabbit / Codex / human thread 都已關閉。`PASS` 僅表示輔助欄位滿足程度，不是 merge approval。該 checker 不能 auto-comment、auto-resolve、auto-merge、auto-close，也不會 mutate GitHub issue / PR metadata；最終 thread-level closeout 必須由 human 逐條確認與接手。
+
 ## Worktree naming
 
 建議命名：

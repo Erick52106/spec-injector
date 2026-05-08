@@ -92,6 +92,8 @@ PR body 必須包含：
 
 Source issue 必須有 implementation evidence comment。PR body 回填後必須用 `gh pr view` 或等價方式反查，確認不是空的，且包含 evidence URL 與 commit hash。
 
+Workflow 快速進場建議可先看 `docs/cheatsheet.md`，但 `docs/workflow.md` 與 `docs/validation.md` 為 canonical policy。
+
 ## Labels / roadmap metadata
 
 - Issue 應有合理的 area / type / status labels。
