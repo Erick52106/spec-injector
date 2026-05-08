@@ -65,14 +65,14 @@ export async function evidenceCheck(opts: EvidenceCheckOptions): Promise<void> {
       'number,url,body,headRefName,headRefOid,isDraft,reviews',
     ], 'Could not read PR metadata.');
     const body = pr.body ?? '';
-    const linkedIssue = parseLinkedIssue(body);
+    const linkedIssues = parseLinkedIssues(body);
     const evidenceUrl = findEvidenceUrl(body);
-    const issue = linkedIssue
+    const issue = linkedIssues.length === 1
       ? readJson<IssuePayload>([
         'gh',
         'issue',
         'view',
-        String(linkedIssue),
+        String(linkedIssues[0]),
         '--repo',
         context.repo,
         '--json',
@@ -94,7 +94,7 @@ export async function evidenceCheck(opts: EvidenceCheckOptions): Promise<void> {
       pr,
       issue,
       body,
-      linkedIssue,
+      linkedIssues,
       expectedIssue: parseIssueOption(opts.issue),
       evidenceUrl,
       expectedEvidenceUrl: opts.evidenceUrl,
@@ -134,7 +134,7 @@ function buildReport(input: {
   pr: PullRequestPayload;
   issue: IssuePayload | null;
   body: string;
-  linkedIssue: number | null;
+  linkedIssues: number[];
   expectedIssue: number | null;
   evidenceUrl: string | null;
   expectedEvidenceUrl?: string;
@@ -149,28 +149,37 @@ function buildReport(input: {
     : undefined;
   const combinedEvidence = [input.body, evidenceComment?.body ?? ''].join('\n');
 
-  if (input.linkedIssue) {
-    checks.push(pass(
-      'PR body linked issue',
-      `#${input.linkedIssue}`,
-      'linked issue reference found',
-      'Continue using this source issue as the evidence anchor.'
-    ));
-  } else {
+  if (input.linkedIssues.length === 0) {
     checks.push(fail(
       'PR body linked issue',
       'none',
       'source issue reference is missing',
       'Stop and add a human-reviewed linked issue reference such as Closes #<issue>.'
     ));
+  } else if (input.linkedIssues.length > 1) {
+    checks.push(needsHumanReview(
+      'PR body linked issues',
+      `#${input.linkedIssues.join(', #')}`,
+      `detected ${input.linkedIssues.length} distinct closing issues`,
+      'Do not auto-select a source issue; choose exactly one source issue with human review before proceeding.'
+    ));
+  } else {
+    const [linkedIssue] = input.linkedIssues;
+    checks.push(pass(
+      'PR body linked issue',
+      `#${linkedIssue}`,
+      'linked issue reference found',
+      'Continue using this source issue as the evidence anchor.'
+    ));
   }
 
-  if (input.expectedIssue && input.linkedIssue && input.expectedIssue !== input.linkedIssue) {
-    checks.push(fail(
+  if (input.expectedIssue && input.linkedIssues.length > 0 && input.expectedIssue !== input.linkedIssues[0]) {
+    const expectedIssueEvidence = `expected #${input.expectedIssue}, found ${input.linkedIssues.length === 1 ? `#${input.linkedIssues[0]}` : `${input.linkedIssues.length} candidates`}`;
+    checks.push(needsHumanReview(
       'Expected issue',
-      `expected #${input.expectedIssue}, found #${input.linkedIssue}`,
-      'linked issue does not match --issue',
-      'Stop and confirm the correct source issue before editing PR metadata.'
+      expectedIssueEvidence,
+      `expected issue does not uniquely match PR linked issue(s)`,
+      'Stop and confirm the correct source issue with human review.'
     ));
   }
 
@@ -192,36 +201,70 @@ function buildReport(input: {
         'evidence URL does not match --evidence-url',
         'Stop and confirm which implementation evidence comment is authoritative.'
       ));
-    } else if (input.linkedIssue && urlIssue !== input.linkedIssue) {
-      checks.push(fail(
-        'Issue evidence URL',
-        input.evidenceUrl,
-        'evidence URL points to a different issue',
-        'Stop and backfill the source issue evidence comment URL; do not auto-edit the PR body.'
-      ));
-    } else {
-      checks.push(pass(
-        'Issue evidence URL',
-        input.evidenceUrl,
-        'evidence URL points to linked issue',
-        'Use this URL for PR body evidence readback.'
-      ));
+    } else if (input.linkedIssues.length === 1) {
+      const linkedIssue = input.linkedIssues[0];
+      if (urlIssue !== linkedIssue) {
+        checks.push(fail(
+          'Issue evidence URL',
+          input.evidenceUrl,
+          'evidence URL points to a different issue',
+          'Stop and backfill the source issue evidence comment URL; do not auto-edit the PR body.'
+        ));
+      } else {
+        checks.push(pass(
+          'Issue evidence URL',
+          input.evidenceUrl,
+          'evidence URL points to linked issue',
+          'Use this URL for PR body evidence readback.'
+        ));
+      }
+    } else if (input.linkedIssues.length > 1) {
+      const urlIssue = parseIssueNumberFromEvidenceUrl(input.evidenceUrl);
+      if (urlIssue === null) {
+        checks.push(needsHumanReview(
+          'Issue evidence URL',
+          input.evidenceUrl,
+          'could not parse linked issue from evidence URL under ambiguity',
+          'Keep source issue selection to a human before using this evidence URL as authoritative.'
+        ));
+      } else if (input.linkedIssues.includes(urlIssue)) {
+        checks.push(needsHumanReview(
+          'Issue evidence URL',
+          input.evidenceUrl,
+          'evidence URL matches one candidate, but source issue remains ambiguous',
+          'Do not reuse this evidence URL as authoritative until a human selects exactly one source issue.'
+        ));
+      } else {
+        checks.push(fail(
+          'Issue evidence URL',
+          input.evidenceUrl,
+          'evidence URL does not match any linked issue',
+          'Stop and backfill an evidence URL that points to one of the linked issues.'
+        ));
+      }
     }
   }
 
-  if (input.evidenceUrl && evidenceComment) {
+  if (input.linkedIssues.length === 1 && input.evidenceUrl && evidenceComment) {
     checks.push(pass(
       'Issue evidence comment',
       input.evidenceUrl,
       'issue evidence comment exists',
       'Keep this comment aligned with latest HEAD before merge readiness.'
     ));
-  } else if (input.evidenceUrl) {
+  } else if (input.linkedIssues.length === 1 && input.evidenceUrl) {
     checks.push(fail(
       'Issue evidence comment',
       input.evidenceUrl,
       'issue evidence comment was not found on the linked issue',
       'Stop and verify the source issue comment URL before merge readiness.'
+    ));
+  } else if (input.linkedIssues.length > 1) {
+    checks.push(needsHumanReview(
+      'Issue evidence comment',
+      input.evidenceUrl ?? 'provided',
+      'source issue ambiguity prevents authoritative comment verification',
+      'Resolve source issue first, then verify issue evidence comment against that issue.'
     ));
   }
 
@@ -399,11 +442,12 @@ function checkCi(checks: CheckPayload[], checksReadError?: string): EvidenceChec
   return result;
 }
 
-function parseLinkedIssue(body: string): number | null {
-  const match = [...body.matchAll(LINKED_ISSUE_PATTERN)]
+function parseLinkedIssues(body: string): number[] {
+  const issueNumbers = [...body.matchAll(LINKED_ISSUE_PATTERN)]
     .map((item) => item[1])
-    .find(Boolean);
-  return match ? Number.parseInt(match, 10) : null;
+    .map((value) => Number.parseInt(value, 10))
+    .filter((issue) => Number.isFinite(issue));
+  return [...new Set(issueNumbers)];
 }
 
 function parseIssueOption(issueOption: string | undefined): number | null {
@@ -516,6 +560,14 @@ function printReport(report: { overall: Severity; checks: EvidenceCheck[] }): vo
       `evidence: ${check.evidence}; reason: ${check.reason}; suggested human action: ${check.action}`
     );
   }
+
+  console.log('');
+  console.log('Auxiliary notice:');
+  console.log('- spec evidence-check is a read-only checker.');
+  console.log('- PASS means evidence shape looks OK, but PASS is not approval.');
+  console.log('- Human merge decision remains authoritative.');
+  console.log('- This checker does not edit PRs, post issue comments, resolve review threads, merge, close issues, or mutate GitHub metadata.');
+  console.log('- It does not fully enforce thread-level review conversation closeout.');
 }
 
 function pass(item: string, evidence: string, reason: string, action: string): EvidenceCheck {

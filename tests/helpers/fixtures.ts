@@ -42,6 +42,9 @@ type EvidenceCheckFixture = {
 };
 
 type EvidenceCheckFixtureOptions = {
+  issueNumber?: number;
+  evidenceCommentId?: string;
+  branch?: string;
   prBody?: string;
   issueComments?: Array<{ url: string; body: string }>;
   headSha?: string;
@@ -242,11 +245,12 @@ export async function createEvidenceCheckFixture(
 ): Promise<EvidenceCheckFixture> {
   const repo = 'Erick52106/spec-injector';
   const prNumber = 1091;
-  const issueNumber = 109;
+  const issueNumber = options.issueNumber ?? 109;
+  const evidenceCommentId = options.evidenceCommentId ?? '1090001';
   const headSha = options.headSha ?? '1234567890abcdef1234567890abcdef12345678';
-  const evidenceUrl = `https://github.com/${repo}/issues/${issueNumber}#issuecomment-1090001`;
+  const evidenceUrl = `https://github.com/${repo}/issues/${issueNumber}#issuecomment-${evidenceCommentId}`;
   const prUrl = `https://github.com/${repo}/pull/${prNumber}`;
-  const branch = 'feat/pr-evidence-consistency-checker-109';
+  const branch = options.branch ?? 'feat/pr-evidence-consistency-checker-109';
   const defaultValidation = [
     '- `git diff --check` ✅',
     '- `pnpm build` ✅',
