@@ -28,6 +28,17 @@ Broader deterministic request-to-context adapters for fuzzy requests、markdown 
 - 現況 runtime 已輸出 source labels / source categories、bounded snippets / item-count limits、可視化 diagnostics。
 - 現況 runtime 尚未實作完整 trust-level policy engine，也尚未實作 token / byte budget 演算法。
 
+補充（monorepo / discovery）：
+- `discovery.docs` 與 `discovery.source` 是 **bounded、啟發式** 的候選來源；目前不保證能完整還原 monorepo package / workspace 解讀。
+- Brownfield monorepo 請盡量改用明確 package-level 路徑，例如：
+  - `packages/<name>/README.md`
+  - `packages/<name>/docs/...`
+  - `packages/<name>/package.json`
+  - `apps/<name>/README.md`
+  - `apps/<name>/docs/...`
+- 導入文件路徑時，若出現 `read failed (EISDIR)`，代表可能把資料夾當成檔案 path，需回到 [docs/source-trust.md](docs/source-trust.md) 與 [docs/issue-to-context-pipeline.md](docs/issue-to-context-pipeline.md) 的 directory / file guidance。
+- `path alias hints` 僅為診斷訊號，不等於 `issue-mentioned` 確認引用；虛擬 import 路徑也不代表 CLI 已完整映射到實際 package 檔案。
+
 ## Why this exists
 
 AI coding agent 常見的失誤不是「不會寫程式」，而是開工前沒有足夠清楚的邊界：
