@@ -4262,6 +4262,53 @@ test('spec plan shows truncation metadata for long auto-discovered source snippe
   assert.doesNotMatch(fullAutoSources, /TRUNCATED_TAIL_SENTINEL/);
 });
 
+test('spec plan truncates auto-discovered source on UTF-8 boundaries', async (t) => {
+  const utf8BoundarySourceContent = `${'A'.repeat(499)}😀unicode tail`; // 😀 is 4 bytes
+  const originalBytes = Buffer.byteLength(utf8BoundarySourceContent, 'utf8');
+  assert.equal(originalBytes > 500, true);
+
+  const fixture = await createExplicitPathPlanFixture(t, {
+    issueNumber: 177,
+    title: 'Verify UTF-8 safe source truncation boundary',
+    bodyLines: [
+      'This issue should trigger auto-discovery of a utf-8 boundary source file.',
+    ],
+    config: {
+      discovery: {
+        docs: [],
+        source: ['src'],
+        max_docs: 5,
+        max_source_files: 5,
+      },
+    },
+    repoFiles: {
+      'src/utf8-boundary-source.ts': utf8BoundarySourceContent,
+    },
+  });
+
+  const fullResult = await runSpec(
+    ['plan', fixture.issueUrl, '--repo', fixture.repoDir, '--dry-run'],
+    { env: fixture.env }
+  );
+
+  assert.equal(fullResult.code, 0, fullResult.stderr);
+  assertNoRawStackTrace(fullResult);
+
+  const fullAutoSources = sectionBetween(fullResult.stdout, '## 7. Auto-Discovered Source Files', '## 8. Matched Guardrails');
+  assert.match(
+    fullAutoSources,
+    /### src\/utf8-boundary-source\.ts\n\n_source: auto-discovered; truncated to first 499 bytes; full file at src\/utf8-boundary-source\.ts_/
+  );
+  assert.doesNotMatch(fullAutoSources, /\uFFFD/);
+  assert.doesNotMatch(fullAutoSources, /unicode tail/);
+  const matchedTruncatedBytes = fullAutoSources.match(/truncated to first (\d+) bytes/);
+  assert.ok(matchedTruncatedBytes);
+  const truncatedBytes = Number.parseInt(matchedTruncatedBytes?.[1] ?? '0', 10);
+  assert.equal(truncatedBytes <= 500, true);
+  assert.equal(truncatedBytes > 0, true);
+  assert.equal(truncatedBytes <= originalBytes, true);
+});
+
 test('spec plan ignores API and route paths when extracting file references', async (t) => {
   const fixture = await createExplicitPathPlanFixture(t, {
     issueNumber: 83,

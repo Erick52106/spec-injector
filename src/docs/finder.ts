@@ -560,7 +560,8 @@ function createSourceContentSnippet(content: string): {
   truncatedBytes: number;
   originalBytes: number;
 } {
-  const originalBytes = Buffer.byteLength(content, 'utf8');
+  const sourceBuffer = Buffer.from(content, 'utf8');
+  const originalBytes = sourceBuffer.byteLength;
   if (originalBytes <= SOURCE_SNIPPET_BYTES) {
     return {
       content,
@@ -570,11 +571,20 @@ function createSourceContentSnippet(content: string): {
     };
   }
 
-  const truncatedContent = Buffer.from(content, 'utf8').subarray(0, SOURCE_SNIPPET_BYTES).toString('utf8');
+  let safeEnd = SOURCE_SNIPPET_BYTES;
+  while (
+    safeEnd > 0 &&
+    safeEnd < sourceBuffer.length &&
+    (sourceBuffer[safeEnd] & 0b11000000) === 0b10000000
+  ) {
+    safeEnd -= 1;
+  }
+
+  const truncatedContent = sourceBuffer.subarray(0, safeEnd).toString('utf8');
   return {
     content: truncatedContent,
     truncated: true,
-    truncatedBytes: SOURCE_SNIPPET_BYTES,
+    truncatedBytes: safeEnd,
     originalBytes,
   };
 }
