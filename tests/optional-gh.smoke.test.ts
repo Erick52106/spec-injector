@@ -99,6 +99,30 @@ function assertNoLiveGhMutationCommands(logValue: string): void {
   }
 }
 
+function assertNoLabelAuditReadFailures(output: string): void {
+  const lowerOutput = output.toLowerCase();
+  const forbiddenPatterns = [
+    'could not read gh issue list output',
+    'could not read gh pr list output',
+    'could not parse gh issue list output',
+    'could not parse gh pr list output',
+    'could not parse accepted taxonomy markers',
+    'could not parse workflow layer-to-milestone mapping',
+    'gh issue list output is missing required fields',
+    'gh pr list output is missing required fields',
+    'failed to parse',
+    'api error',
+    'gh issue list failed',
+    'gh pr list failed',
+    'rate limit',
+    'authentication',
+  ];
+
+  for (const pattern of forbiddenPatterns) {
+    assert.ok(!lowerOutput.includes(pattern), `label-audit live smoke should not report read/parse/API failures, found: ${pattern}`);
+  }
+}
+
 test(
   'optional gh smoke test: `spec plan` against public issue 61',
   { skip: process.env.SPEC_INJECTOR_RUN_GH_TESTS !== '1' },
@@ -196,10 +220,13 @@ test(
 
       const combinedOutput = `${result.stdout}\n${result.stderr}`;
 
+      // Keep opt-in tolerance for metadata quality states (warning/needs-human-review),
+      // but fail fast when live GitHub reads / parsing are broken.
       assert.ok(result.code === 0 || result.code === 1, `expected exit code 0 or 1, got ${String(result.code)}`);
       assert.match(result.stdout, /Label audit summary:/i);
       assert.match(result.stdout, /Label audit summary:\s+(PASS|WARNING|NEEDS-HUMAN-REVIEW|FAIL)/i);
       assert.ok(result.stdout.length > 0 || result.stderr.length > 0, 'label-audit command should emit output');
+      assertNoLabelAuditReadFailures(combinedOutput);
 
       const ghLog = (await fs.readFile(liveGh.ghLogPath, 'utf8')).trim();
       assert.ok(
