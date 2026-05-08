@@ -204,6 +204,19 @@ Prompt output with `--format prompt` is shorter and designed for AI planning. It
 
 Task package details are documented in [docs/task-package.md](docs/task-package.md).
 
+Monorepo/discovery caveat:
+
+- `discovery.docs` and `discovery.source` are bounded, heuristic discovery inputs and are **not** a complete monorepo / workspace resolver.
+- For monorepo repos, prefer explicit package-level paths (for example):
+  - `packages/<name>/README.md`
+  - `packages/<name>/docs/...`
+  - `packages/<name>/package.json`
+  - `apps/<name>/README.md`
+  - `apps/<name>/docs/...`
+- If a configured path is a directory but expected as a file, `read failed (EISDIR)` can appear; treat it as a directory-vs-file input issue and adjust config explicitly.
+- `path alias hints` are diagnostic only and are not confirmed issue references; virtual import paths are not guaranteed to be automatically mapped to package internals by runtime today.
+- For stronger monorepo context, keep discovery explicit and consult [docs/source-trust.md](docs/source-trust.md) and [docs/issue-to-context-pipeline.md](docs/issue-to-context-pipeline.md).
+
 ## Concepts
 
 Key terms used across this project:

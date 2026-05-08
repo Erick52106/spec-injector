@@ -129,3 +129,55 @@ When this map is reused in README later:
 - [ ] Does it avoid hosted dashboard, RAG, hidden planner claims?
 - [ ] Does it avoid companion runtime / Spec Cat UI as current?
 - [ ] Does it keep #149 remediation loop out of current flow?
+
+## 9. Monorepo discovery guidance (Issue #205 docs-only follow-up)
+
+Current discovery is deterministic and bounded; it is designed for initial context collection and not a full monorepo resolver.
+
+- `issue-mentioned references` are treated differently from auto-discovered references.
+- `path alias hints` are weak diagnostic signals and are not confirmed issue references.
+- `missing`, `unreadable`, and `read failed` diagnostics (including `read failed (EISDIR)`) are expected outputs when configured paths are unreadable or directory inputs are not aligned.
+- Source snippets can be truncated when bounded output policy applies, and truncation reasons should remain visible.
+
+### Practical monorepo guidance
+
+For monorepo repos, use explicit package-level discovery paths first:
+
+- `packages/<name>/README.md`
+- `packages/<name>/docs/...`
+- `packages/<name>/package.json`
+- `apps/<name>/README.md`
+- `apps/<name>/docs/...`
+
+Example config shape (sanitized):
+
+```json
+{
+  "discovery": {
+    "docs": [
+      "packages/<name>/README.md",
+      "packages/<name>/docs"
+    ],
+    "source": [
+      "packages/<name>/src/index.ts",
+      "packages/<name>/package.json"
+    ]
+  }
+}
+```
+
+Virtual/export path handling guidance:
+
+- If an issue mentions `vitest/browser/context.d.ts`, actual source may live under `packages/vitest/browser/context.d.ts`.
+- Add the concrete package file path explicitly to `discovery.source` when possible.
+
+Troubleshooting `EISDIR`:
+
+- If you see `read failed (EISDIR)` for a configured path, verify whether the config entry points to a directory while the current discovery mode expects a file path in that spot.
+- Use explicit file paths or current supported discovery patterns in `.spec-injector/config.json` before adding broader workspace assumptions.
+
+### Evidence tie-in
+
+- The Vitest dogfood report `docs/dogfood/vitest-2026-05-09.md` (WARN verdict) shows monorepo path inference and directory input friction.
+- This supports documentation-first follow-up, and it does not itself justify a runtime monorepo walker in this issue.
+- It also does not imply runtime zh-TW classifier changes.

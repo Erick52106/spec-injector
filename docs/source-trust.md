@@ -263,3 +263,55 @@ These criteria are for future implementation issues, not this PR's runtime behav
 | Not implemented | Not implemented | full trust-level runtime policy engine；token / byte budget algorithm；hidden scoring；semantic RAG / vector search；hidden summarization；LLM confidence |
 
 Issue `#149` remains parked / design-only. It is not current behavior and must not be implemented as auto-fix / auto-resolve / auto-merge / auto-close or target-repo mutation.
+
+## Monorepo discovery behavior and path-shape guidance
+
+### Current behavior (docs-only interpretation)
+
+Current auto-discovery 的定位是 deterministic 且 bounded；它能提供 bounded initial context，但不是完整 monorepo/package/workspace resolver。
+
+- `issue-mentioned paths` 與 `auto-discovered references` 的處理順序不同：issue 明確提到的 path 仍保有較高權重；alias hint 仍是診斷訊號。
+- `path alias hints` 不會被提升為 confirmed source；它們是 `diagnostic` / `ambiguous` 的輔助線索。
+- `missing` / `unreadable` / `read failed`（含 `read failed (EISDIR)`）是預期 diagnostic 輸出的一部份，需納入排錯流程。
+- source snippet 可能被截斷，且會保留截斷原因與 trust label，避免誤以為完整讀取。
+- `discovery.docs` / `discovery.source` 的目錄項目不一定會被視為遞迴套件級 discover；若未明確支援，請用更明確的 file/path pattern 設定。
+
+### Monorepo docs/source 設定建議（current docs）
+
+- Brownfield monorepo 請優先使用 package / app 層級路徑：
+  - `packages/<name>/README.md`
+  - `packages/<name>/docs/...`
+  - `packages/<name>/package.json`
+  - `apps/<name>/README.md`
+  - `apps/<name>/docs/...`
+- 虛擬/匯出路徑示例：
+  - issue 可能提到 `vitest/browser/context.d.ts`
+  - 實際檔案可能位於 `packages/vitest/browser/context.d.ts`
+  - 當你已知 package 實體位置，請直接把實體檔放進 `discovery.source`，不要假設 runtime 一定自動映射 alias。
+
+```json
+{
+  "discovery": {
+    "docs": [
+      "packages/<name>/README.md",
+      "packages/<name>/docs"
+    ],
+    "source": [
+      "packages/<name>/package.json",
+      "packages/<name>/src/index.ts"
+    ]
+  }
+}
+```
+
+### Directory input 與 `EISDIR` 的排障
+
+- 若看到 `read failed (EISDIR)`，先確認該路徑在設定上是否是「應為檔案卻填了目錄」。
+- 建議改為明確 file path，或先縮小到更小 scope 的目錄（例如 `packages/<name>/docs`）再逐步擴展。
+- 若仍需要更完整套件推斷，請以 follow-up issue 紀錄，保持 runtime 行為不變（避免超出 #205 non-goals）。
+
+### 狗食報告依據
+
+- `#202` 的 `docs/dogfood/vitest-2026-05-09.md` 顯示 monorepo 中 path inference / directory input 的 friction，並且驗證到 `EISDIR` 類 read-failed 狀況。
+- 這支持本次以 docs/guidance-first 為第一步，不在 #205 內實作 monorepo walker 或 workspace parser。
+- 目前不表示可以直接將 `#206`（zh-TW classifier）或其他 runtime 行為納入同一版實作。
