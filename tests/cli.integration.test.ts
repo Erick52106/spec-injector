@@ -4140,6 +4140,175 @@ test('spec plan keeps failed auto-discovered references out of prompt reference 
   assert.match(promptResult.stderr, /Read failed: src\/payment-failed\.ts \(EIO\)/);
 });
 
+test('spec plan handles deterministic permission-like unreadable diagnostics', async (t) => {
+  const fixture = await createExplicitPathPlanFixture(t, {
+    issueNumber: 175,
+    title: 'Permission-like unreadable diagnostics regression',
+    bodyLines: [
+      'Validate explicit issue references with permission-like read failures.',
+      '- `docs/permission-issue.md`',
+      '- `src/permission-source.ts`',
+      '- `docs/readable-issue.md`',
+      '- `src/readable-source.ts`',
+    ],
+    config: {
+      always_read: ['docs/readable-issue.md'],
+      discovery: {
+        docs: [],
+        source: ['src'],
+        max_docs: 5,
+        max_source_files: 5,
+      },
+    },
+    repoFiles: {
+      'docs/readable-issue.md': '# Readable Issue\n\nREADABLE_ISSUE_SENTINEL\n',
+      'docs/permission-issue.md': '# Permission Issue\n\nPERMISSION_ISSUE_SENTINEL\n',
+      'src/readable-source.ts': 'export const readableSource = "READABLE_SOURCE_SENTINEL";\n',
+      'src/permission-source.ts': 'export const permissionSource = "PERMISSION_SOURCE_SENTINEL";\n',
+    },
+  });
+
+  for (const readErrorCode of ['EACCES', 'EPERM'] as const) {
+    const env = await createReadFailureEnv(t, fixture.env, [
+      ['docs/permission-issue.md', readErrorCode],
+      ['src/permission-source.ts', readErrorCode],
+    ]);
+    const promptResult = await runSpec(
+      ['plan', fixture.issueUrl, '--repo', fixture.repoDir, '--dry-run', '--format', 'prompt'],
+      { env }
+    );
+    const fullResult = await runSpec(
+      ['plan', fixture.issueUrl, '--repo', fixture.repoDir, '--dry-run'],
+      { env }
+    );
+
+    assert.equal(promptResult.code, 0, promptResult.stderr);
+    assert.equal(fullResult.code, 0, fullResult.stderr);
+    assertNoRawStackTrace(promptResult);
+    assertNoRawStackTrace(fullResult);
+
+    const promptMissing = sectionBetween(promptResult.stdout, '## 5. Missing Files', '## 6. Instructions');
+    assert.match(promptMissing, new RegExp(`\`docs/permission-issue\\.md\` — unreadable \\(${readErrorCode}; auto-discovered; mentioned in issue\\)`));
+    assert.match(promptMissing, new RegExp(`\`src/permission-source\\.ts\` — unreadable \\(${readErrorCode}; auto-discovered; mentioned in issue\\)`));
+    assert.doesNotMatch(promptMissing, /path alias hint/);
+
+    const promptIssueSources = sectionBetween(promptResult.stdout, '### Issue-Mentioned Source Files', '### Auto-Discovered Docs');
+    assert.match(promptIssueSources, /`src\/readable-source\.ts` — issue-mentioned; mentioned in issue/);
+    assert.doesNotMatch(promptIssueSources, /permission-source/);
+
+    assert.match(promptResult.stderr, new RegExp(`Unreadable: docs/permission-issue\\.md \\(${readErrorCode}\\)`));
+    assert.match(promptResult.stderr, new RegExp(`Unreadable: src/permission-source\\.ts \\(${readErrorCode}\\)`));
+    assert.doesNotMatch(fullResult.stdout, /### src\/permission-source\.ts/);
+  }
+});
+
+test('spec plan shows truncation metadata for long auto-discovered source snippets', async (t) => {
+  const fixture = await createExplicitPathPlanFixture(t, {
+    issueNumber: 176,
+    title: 'Verify auto-discovered source truncation metadata',
+    bodyLines: [
+      'This issue should show auto-discovered source truncation metadata.',
+      'Make sure long source output includes bounded context and file path reference.',
+    ],
+    config: {
+      discovery: {
+        docs: [],
+        source: ['src'],
+        max_docs: 5,
+        max_source_files: 5,
+      },
+    },
+    repoFiles: {
+      'src/auto-discovered-truncation-source.ts':
+      'export const longSourceContent = "TRUNCATION_HEAD_SENTINEL\\n'
+        + `${'A'.repeat(520)}`
+        + '\\nTRUNCATED_TAIL_SENTINEL"\n',
+      'docs/context.md': '# Context\n\nTruncation fixture for source discovery.\n',
+    },
+  });
+
+  const promptFirst = await runSpec(
+    ['plan', fixture.issueUrl, '--repo', fixture.repoDir, '--dry-run', '--format', 'prompt'],
+    { env: fixture.env }
+  );
+  const promptSecond = await runSpec(
+    ['plan', fixture.issueUrl, '--repo', fixture.repoDir, '--dry-run', '--format', 'prompt'],
+    { env: fixture.env }
+  );
+  const fullResult = await runSpec(
+    ['plan', fixture.issueUrl, '--repo', fixture.repoDir, '--dry-run'],
+    { env: fixture.env }
+  );
+
+  assert.equal(promptFirst.code, 0, promptFirst.stderr);
+  assert.equal(promptSecond.code, 0, promptSecond.stderr);
+  assert.equal(fullResult.code, 0, fullResult.stderr);
+  assert.equal(normalizePlanOutput(promptSecond.stdout), normalizePlanOutput(promptFirst.stdout));
+  assertNoRawStackTrace(promptFirst);
+  assertNoRawStackTrace(fullResult);
+
+  const promptAutoSources = sectionBetween(promptFirst.stdout, '### Auto-Discovered Source Files', '## 5. Missing Files');
+  assert.match(
+    promptAutoSources,
+    /`src\/auto-discovered-truncation-source\.ts` — auto-discovered; truncated to first 500 bytes; full file at src\/auto-discovered-truncation-source\.ts/
+  );
+
+  const fullAutoSources = sectionBetween(fullResult.stdout, '## 7. Auto-Discovered Source Files', '## 8. Matched Guardrails');
+  assert.match(
+    fullAutoSources,
+    /### src\/auto-discovered-truncation-source\.ts\n\n_source: auto-discovered; truncated to first 500 bytes; full file at src\/auto-discovered-truncation-source\.ts_/
+  );
+  assert.match(fullAutoSources, /TRUNCATION_HEAD_SENTINEL/);
+  assert.doesNotMatch(fullAutoSources, /TRUNCATED_TAIL_SENTINEL/);
+});
+
+test('spec plan truncates auto-discovered source on UTF-8 boundaries', async (t) => {
+  const utf8BoundarySourceContent = `${'A'.repeat(499)}😀unicode tail`; // 😀 is 4 bytes
+  const originalBytes = Buffer.byteLength(utf8BoundarySourceContent, 'utf8');
+  assert.equal(originalBytes > 500, true);
+
+  const fixture = await createExplicitPathPlanFixture(t, {
+    issueNumber: 177,
+    title: 'Verify UTF-8 safe source truncation boundary',
+    bodyLines: [
+      'This issue should trigger auto-discovery of a utf-8 boundary source file.',
+    ],
+    config: {
+      discovery: {
+        docs: [],
+        source: ['src'],
+        max_docs: 5,
+        max_source_files: 5,
+      },
+    },
+    repoFiles: {
+      'src/utf8-boundary-source.ts': utf8BoundarySourceContent,
+    },
+  });
+
+  const fullResult = await runSpec(
+    ['plan', fixture.issueUrl, '--repo', fixture.repoDir, '--dry-run'],
+    { env: fixture.env }
+  );
+
+  assert.equal(fullResult.code, 0, fullResult.stderr);
+  assertNoRawStackTrace(fullResult);
+
+  const fullAutoSources = sectionBetween(fullResult.stdout, '## 7. Auto-Discovered Source Files', '## 8. Matched Guardrails');
+  assert.match(
+    fullAutoSources,
+    /### src\/utf8-boundary-source\.ts\n\n_source: auto-discovered; truncated to first 499 bytes; full file at src\/utf8-boundary-source\.ts_/
+  );
+  assert.doesNotMatch(fullAutoSources, /\uFFFD/);
+  assert.doesNotMatch(fullAutoSources, /unicode tail/);
+  const matchedTruncatedBytes = fullAutoSources.match(/truncated to first (\d+) bytes/);
+  assert.ok(matchedTruncatedBytes);
+  const truncatedBytes = Number.parseInt(matchedTruncatedBytes?.[1] ?? '0', 10);
+  assert.equal(truncatedBytes <= 500, true);
+  assert.equal(truncatedBytes > 0, true);
+  assert.equal(truncatedBytes <= originalBytes, true);
+});
+
 test('spec plan ignores API and route paths when extracting file references', async (t) => {
   const fixture = await createExplicitPathPlanFixture(t, {
     issueNumber: 83,

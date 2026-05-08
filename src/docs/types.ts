@@ -15,6 +15,9 @@ export interface DocSection {
   kind: DocSourceKind;
   readStatus?: 'missing' | 'unreadable' | 'read-error';
   readErrorCode?: string;
+  truncated?: boolean;
+  truncatedBytes?: number;
+  originalBytes?: number;
   reasons?: string[];
   pathAliasHints?: PathAliasHint[];
 }
