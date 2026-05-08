@@ -325,6 +325,20 @@ Current implemented layer:
 Documented future-facing layers:
 
 - **Layer 2 AI workflow**: AI tool uses task package to draft an implementation plan, then waits for human approval before implementation.
-- **Layer 3 future agent interface**: possible structured outputs or richer agent-facing integrations, while preserving deterministic and reviewable boundaries.
+- **Layer 3 Protocolization**: richer evidence and protocol alignment for deterministic context handoff, while preserving deterministic and reviewable boundaries.
+- **Layer 4 Companion UX**: consistent human-facing guidance, boundary statements, and support for handoff quality, still design-oriented.
 
 Future docs and design candidates include custom domains, richer classifier evidence visibility, JSON output, and optional user repo CI scaffolding. They are not part of the current runtime unless a later issue implements them explicitly.
+
+## Current canonical layer model
+
+The current canonical model is the 4-layer roadmap:
+
+- Layer 1 — Core Compiler
+- Layer 2 — Workflow Guardrails
+- Layer 3 — Protocolization
+- Layer 4 — Companion UX
+
+If the repository still contains older 3-layer references, keep them as terminology history / previous framing only, not as current canonical positioning.
+
+Issue #149 remains parked / design-only and is not a current capability. It requires separate design gates before implementation and should not be represented as auto-fix, auto-resolve, auto-merge, auto-close, or target-repo mutation behavior.

@@ -15,9 +15,10 @@ The goals are to:
 
 | Layer | Name | Role |
 | --- | --- | --- |
-| Layer 1 | Deterministic CLI | Current core: stable, scriptable, debuggable commands with repeatable outputs. It does not call an LLM, API, or local model unless that behavior is explicitly part of a command design. |
-| Layer 2 | AI workflow / slash-command-like usage | AI-friendly workflow instructions built on top of Layer 1. For example, `/spec-plan <issue>` or an AI running `spec plan --dry-run --format prompt`. The AI may install, initialize, run commands, and draft implementation plans, but must stop for human approval before modifying a target repo when the workflow requires it. |
-| Layer 3 | Agent / subagent / multi-agent interface | A structured interface for planner, implementer, reviewer, and verifier agents. Future candidates include `--format json` or `--format agent`. `spec-injector` acts as a deterministic context compiler so agents consume normalized context instead of independently guessing repo context. |
+| Layer 1 | Core Compiler | Current core: stable, scriptable, debuggable commands with repeatable outputs. It does not call an LLM, API, or local model unless that behavior is explicitly part of a command design. |
+| Layer 2 | Workflow Guardrails | AI-friendly workflow instructions built on top of Layer 1. For example, `/spec-plan <issue>` or an AI running `spec plan --dry-run --format prompt`. The AI may install, initialize, run commands, and draft implementation plans, but must stop for human approval before modifying a target repo when the workflow requires it. |
+| Layer 3 | Protocolization | A structured interface for planner, implementer, reviewer, and verifier agents. Future candidates include `--format json` or `--format agent`. `spec-injector` acts as a deterministic context compiler so agents consume normalized context instead of independently guessing repo context. |
+| Layer 4 | Companion UX | Human-facing guidance and companion experience patterns built on top of Layers 1-3, including progress surfacing, explicit boundary statements, and review handoff framing. |
 
 ## Layer 1: Deterministic CLI
 
@@ -127,6 +128,17 @@ Layer 3 principles:
 
 `--format json`, MCP, and subagent orchestration are future candidates. They are not implemented by this issue.
 
+## Layer 4: Companion UX
+
+Layer 4 is the companion-facing product and communication layer for humans.
+
+Layer 4 principles:
+
+- Keep narrative alignment across docs and READMEs.
+- Make current-scope and design-boundary statements explicit.
+- Surface deterministic evidence handoff and review checkpoints.
+- Keep companion guidance consistent with Layers 1–3 and avoid scope overreach.
+
 ## Boundary rules
 
 - Layer 1 must remain deterministic and scriptable.
@@ -165,3 +177,14 @@ Layer 3 principles:
 - Do not modify CLI runtime.
 - Do not modify the config schema.
 - Do not call an LLM, API, or local model.
+
+## Current canonical layer model
+
+Canonical model is now 4 layers:
+
+- Layer 1 — Core Compiler
+- Layer 2 — Workflow Guardrails
+- Layer 3 — Protocolization
+- Layer 4 — Companion UX
+
+Legacy wording that describes only 3 layers should be kept only as terminology history / previous framing and is no longer the current canonical model.
