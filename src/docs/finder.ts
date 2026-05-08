@@ -15,6 +15,9 @@ type ScoredReference = {
   found: boolean;
   readStatus?: DocSection['readStatus'];
   readErrorCode?: string;
+  truncated?: boolean;
+  truncatedBytes?: number;
+  originalBytes?: number;
 };
 
 const EXPLICIT_FILE_EXTENSIONS = new Set([
@@ -23,6 +26,7 @@ const EXPLICIT_FILE_EXTENSIONS = new Set([
 const EXPLICIT_ROOT_FILES = new Set(['README.md', 'AGENTS.md', 'CLAUDE.md', 'GEMINI.md']);
 const DOC_EXTENSIONS = new Set(['.md']);
 const ISSUE_MENTIONED_REASON = 'mentioned in issue';
+const SOURCE_SNIPPET_BYTES = 500;
 
 // Load explicitly listed doc paths with a given kind label.
 // Failed reads keep their source kind and carry a deterministic read status.
@@ -421,8 +425,19 @@ export async function discoverSourceFiles(
       }
       continue;
     }
+    const snippet = createSourceContentSnippet(readResult.content);
     const score = scoreSrc(keywords, relPath, readResult.content, sourceSignals);
-    if (score > 0) scored.push({ filePath: relPath, score, content: readResult.content.slice(0, 500), found: true });
+    if (score > 0) {
+      scored.push({
+        filePath: relPath,
+        score,
+        content: snippet.content,
+        found: true,
+        truncated: snippet.truncated,
+        truncatedBytes: snippet.truncatedBytes,
+        originalBytes: snippet.originalBytes,
+      });
+    }
   }
 
   scored.sort((a, b) => b.score - a.score);
@@ -432,9 +447,12 @@ export async function discoverSourceFiles(
     content: entry.content,
     found: entry.found,
     readStatus: entry.readStatus,
-    readErrorCode: entry.readErrorCode,
-    kind: 'source' as DocSourceKind,
-  }));
+      readErrorCode: entry.readErrorCode,
+      truncated: entry.truncated,
+      truncatedBytes: entry.truncatedBytes,
+      originalBytes: entry.originalBytes,
+      kind: 'source' as DocSourceKind,
+    }));
 }
 
 function unreadableDocSection(
@@ -534,6 +552,31 @@ function normalizeRepoPath(filePath: string): string {
 
 function comparePath(a: string, b: string): number {
   return a < b ? -1 : a > b ? 1 : 0;
+}
+
+function createSourceContentSnippet(content: string): {
+  content: string;
+  truncated: boolean;
+  truncatedBytes: number;
+  originalBytes: number;
+} {
+  const originalBytes = Buffer.byteLength(content, 'utf8');
+  if (originalBytes <= SOURCE_SNIPPET_BYTES) {
+    return {
+      content,
+      truncated: false,
+      truncatedBytes: originalBytes,
+      originalBytes,
+    };
+  }
+
+  const truncatedContent = Buffer.from(content, 'utf8').subarray(0, SOURCE_SNIPPET_BYTES).toString('utf8');
+  return {
+    content: truncatedContent,
+    truncated: true,
+    truncatedBytes: SOURCE_SNIPPET_BYTES,
+    originalBytes,
+  };
 }
 
 type SourceDiscoverySignals = {
