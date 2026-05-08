@@ -59,11 +59,17 @@
    - 交由 human 作 merge
 
 ## Quick validation matrix
-- Docs-only:
+- ordinary docs-only (copy/link or wording adjustments):
   - required: `git diff --check`
-  - recommended: `pnpm test`（若文件含實際命令或行為說明）
-- implementation:
-  - required: `git diff --check`, `pnpm build`, `pnpm test`
+  - when doc includes markdown links: manual sanity check for broken/bare URLs, obvious path typo, and section consistency
+  - quick test command: optional `pnpm test`（僅當文件明示行為驗證）
+- workflow-rule / AGENTS / validation / guardrail docs:
+  - required: `git diff --check`
+  - markdown/link sanity check（含 `docs/**` 參考鏈）
+  - consistency readback vs `docs/workflow.md` and `docs/validation.md`（`git diff` 變更核對）
+  - `pnpm build`
+  - `pnpm test`
+  - if PR touches closeout expectations（issue evidence / PR body readback rules）：extra evidence/readback pass
 - tests:
   - required when issue scope includes behavior, command output, or runtime
 - metadata-only:
@@ -93,3 +99,4 @@
 - 正規規則入口：`docs/workflow.md`
 - 驗證規則入口：`docs/validation.md`
 - 這份文件僅作為快速執行時使用的 cheatsheet
+- workflow-rule 類別的實際驗證邏輯以 `docs/validation.md` 為準，cheatsheet 只保留快速執行提示
