@@ -329,8 +329,9 @@ Current implemented layer:
 
 Documented future-facing layers:
 
-- **Layer 2 AI workflow**：AI tool uses task package to draft an implementation plan, then waits for human approval before implementation.
-- **Layer 3 future agent interface**：possible structured outputs or richer agent-facing integrations, while preserving deterministic and reviewable boundaries.
+- **Layer 2 Workflow Guardrails**：AI tool uses task package to draft an implementation plan, then waits for human approval before implementation.
+- **Layer 3 Protocolization**：possible richer protocolized context handoff, while preserving deterministic and reviewable boundaries.
+- **Layer 4 Companion UX**：human-facing summary quality, boundary statements, and handoff alignment, still design-oriented.
 
 Future docs and design candidates include custom domains, richer classifier evidence visibility, JSON output, and optional user repo CI scaffolding. They are not part of the current runtime unless a later issue implements them explicitly.
 

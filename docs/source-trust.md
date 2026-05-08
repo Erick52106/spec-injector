@@ -262,4 +262,4 @@ These criteria are for future implementation issues, not this PR's runtime behav
 | Partial / design direction | Design | trust levels as design vocabulary；include modes as design vocabulary；context budget policy beyond item-count caps |
 | Not implemented | Not implemented | full trust-level runtime policy engine；token / byte budget algorithm；hidden scoring；semantic RAG / vector search；hidden summarization；LLM confidence |
 
-#149 remains parked / design-only. It is not current behavior and must not be implemented as auto-fix / auto-resolve / auto-merge / auto-close or target-repo mutation.
+Issue `#149` remains parked / design-only. It is not current behavior and must not be implemented as auto-fix / auto-resolve / auto-merge / auto-close or target-repo mutation.
