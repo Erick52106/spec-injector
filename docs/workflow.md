@@ -420,7 +420,6 @@ Evidence comment 應包含：
 - Evidence-check boundary:
   - PASS ≠ merge approval
   - human merge approval required
-- Issue evidence URL: <paste permanent comment URL>
 ```
 
 ### PR body template
