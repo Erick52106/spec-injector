@@ -1665,6 +1665,186 @@ test('spec evidence-check does not let --issue satisfy a missing PR body closing
   assertNoGhMutationCommands(ghLog);
 });
 
+test('spec evidence-check accepts a single closing issue matching --issue', async (t) => {
+  const fixture = await createEvidenceCheckFixture(t);
+
+  const result = await runSpec([
+    'evidence-check',
+    '--pr', String(fixture.prNumber),
+    '--repo', fixture.repo,
+    '--issue', '109',
+  ], { env: fixture.env });
+
+  assert.equal(result.code, 0, result.stderr);
+  assert.match(result.stdout, /Evidence check summary:\s+PASS/i);
+  assert.match(result.stdout, /PR body linked issue.*#109/i);
+  assert.doesNotMatch(result.stdout, /PR body linked issues/i);
+  const ghLog = (await readGhLog(fixture.ghLogPath)).join('\n');
+  assertNoGhMutationCommands(ghLog);
+});
+
+test('spec evidence-check reports multiple distinct closing issues as needs human review', async (t) => {
+  const fixture = await createEvidenceCheckFixture(t, {
+    issueNumber: 120,
+    prBody: [
+      'Closes #120',
+      'Closes #149',
+      '## Summary',
+      'ok',
+      '## Scope',
+      'ok',
+      '## Non-goals',
+      'ok',
+      '## Validation',
+      '- `git diff --check` ✅',
+      '- `pnpm build` ✅',
+      '- `pnpm test` ✅',
+      '## Implementation Evidence',
+      '- Issue evidence comment URL: https://github.com/Erick52106/spec-injector/issues/120#issuecomment-1090001',
+      '- Latest HEAD: 1234567890abcdef1234567890abcdef12345678',
+    ].join('\n'),
+  });
+
+  const result = await runSpec([
+    'evidence-check',
+    '--pr', String(fixture.prNumber),
+    '--repo', fixture.repo,
+  ], { env: fixture.env });
+
+  assert.notEqual(result.code, 0);
+  assert.match(result.stdout, /Evidence check summary:\s+NEEDS-HUMAN-REVIEW/i);
+  assert.match(result.stdout, /#120/);
+  assert.match(result.stdout, /#149/);
+  assert.match(result.stdout, /detected 2 distinct closing issues/i);
+  assert.doesNotMatch(result.stdout, /linked issue reference found/i);
+  const ghLog = (await readGhLog(fixture.ghLogPath)).join('\n');
+  assertNoGhMutationCommands(ghLog);
+});
+
+test('spec evidence-check flags --issue mismatch and ambiguity as needs-human-review', async (t) => {
+  const fixture = await createEvidenceCheckFixture(t, {
+    issueNumber: 149,
+    prBody: [
+      'Closes #149',
+      '## Summary',
+      'ok',
+      '## Scope',
+      'ok',
+      '## Non-goals',
+      'ok',
+      '## Validation',
+      '- `git diff --check` ✅',
+      '- `pnpm build` ✅',
+      '- `pnpm test` ✅',
+      '## Implementation Evidence',
+      '- Issue evidence comment URL: https://github.com/Erick52106/spec-injector/issues/149#issuecomment-1090001',
+      '- Latest HEAD: 1234567890abcdef1234567890abcdef12345678',
+    ].join('\n'),
+  });
+
+  const result = await runSpec([
+    'evidence-check',
+    '--pr', String(fixture.prNumber),
+    '--repo', fixture.repo,
+    '--issue', '120',
+  ], { env: fixture.env });
+
+  assert.notEqual(result.code, 0);
+  assert.match(result.stdout, /Evidence check summary:\s+NEEDS-HUMAN-REVIEW/i);
+  assert.match(result.stdout, /Expected issue/);
+  assert.match(result.stdout, /expected #120, found #149/i);
+  const ghLog = (await readGhLog(fixture.ghLogPath)).join('\n');
+  assertNoGhMutationCommands(ghLog);
+});
+
+test('spec evidence-check treats duplicate same closing issue references as one', async (t) => {
+  const fixture = await createEvidenceCheckFixture(t, {
+    issueNumber: 120,
+    prBody: [
+      'Closes #120',
+      'Fixes #120',
+      '## Summary',
+      'ok',
+      '## Scope',
+      'ok',
+      '## Non-goals',
+      'ok',
+      '## Validation',
+      '- `git diff --check` ✅',
+      '- `pnpm build` ✅',
+      '- `pnpm test` ✅',
+      '## Implementation Evidence',
+      '- Issue evidence comment URL: https://github.com/Erick52106/spec-injector/issues/120#issuecomment-1090001',
+      '- Latest HEAD: 1234567890abcdef1234567890abcdef12345678',
+    ].join('\n'),
+  });
+
+  const result = await runSpec([
+    'evidence-check',
+    '--pr', String(fixture.prNumber),
+    '--repo', fixture.repo,
+  ], { env: fixture.env });
+
+  assert.equal(result.code, 0, result.stderr);
+  assert.match(result.stdout, /Evidence check summary:\s+PASS/i);
+  assert.match(result.stdout, /PR body linked issue.*#120/i);
+  assert.doesNotMatch(result.stdout, /detected 2 distinct closing issues/i);
+  const ghLog = (await readGhLog(fixture.ghLogPath)).join('\n');
+  assertNoGhMutationCommands(ghLog);
+});
+
+test('spec evidence-check prints auxiliary read-only non-merge authority footer', async (t) => {
+  const passFixture = await createEvidenceCheckFixture(t, {
+    issueNumber: 120,
+  });
+  const passResult = await runSpec([
+    'evidence-check',
+    '--pr', String(passFixture.prNumber),
+    '--repo', passFixture.repo,
+    '--issue', '120',
+  ], { env: passFixture.env });
+  assert.match(passResult.stdout, /Auxiliary notice:/i);
+  assert.match(passResult.stdout, /read-only checker/i);
+  assert.match(passResult.stdout, /PASS means evidence shape looks OK/i);
+  assert.match(passResult.stdout, /PASS is not approval/i);
+  assert.match(passResult.stdout, /Human merge decision remains authoritative/i);
+
+  const issueFixture = await createEvidenceCheckFixture(t, {
+    issueNumber: 120,
+    prBody: [
+      'Closes #120',
+      'Closes #149',
+      '## Summary',
+      'ok',
+      '## Scope',
+      'ok',
+      '## Non-goals',
+      'ok',
+      '## Validation',
+      '- `git diff --check` ✅',
+      '- `pnpm build` ✅',
+      '- `pnpm test` ✅',
+      '## Implementation Evidence',
+      '- Issue evidence comment URL: https://github.com/Erick52106/spec-injector/issues/120#issuecomment-1090001',
+      '- Latest HEAD: 1234567890abcdef1234567890abcdef12345678',
+    ].join('\n'),
+  });
+  const needsResult = await runSpec([
+    'evidence-check',
+    '--pr', String(issueFixture.prNumber),
+    '--repo', issueFixture.repo,
+    '--issue', '120',
+  ], { env: issueFixture.env });
+  assert.match(needsResult.stdout, /Auxiliary notice:/i);
+  assert.match(needsResult.stdout, /does not edit PRs|does not edit pr/i);
+  assert.match(needsResult.stdout, /does not fully enforce thread-level review conversation closeout/i);
+  assert.match(needsResult.stdout, /Evidence check summary:\s+NEEDS-HUMAN-REVIEW/i);
+  const passLog = (await readGhLog(passFixture.ghLogPath)).join('\n');
+  const issueLog = (await readGhLog(issueFixture.ghLogPath)).join('\n');
+  assertNoGhMutationCommands(passLog);
+  assertNoGhMutationCommands(issueLog);
+});
+
 test('spec evidence-check prefers closing keyword issue over earlier bare issue mentions', async (t) => {
   const fixture = await createEvidenceCheckFixture(t, {
     prBody: [
