@@ -23,6 +23,11 @@ Broader deterministic request-to-context adapters for fuzzy requests、markdown 
 - agent-agnostic：輸出 Markdown task package / prompt，供 Codex、Claude Code 或其他 AI coding agent 消費
 - no hidden LLM：不呼叫 hidden LLM、external AI API 或 local model
 
+補充（目前實作邊界）：
+- source-trust aware / context-budget aware 是 current direction + partial runtime behavior。
+- 現況 runtime 已輸出 source labels / source categories、bounded snippets / item-count limits、可視化 diagnostics。
+- 現況 runtime 尚未實作完整 trust-level policy engine，也尚未實作 token / byte budget 演算法。
+
 ## Why this exists
 
 AI coding agent 常見的失誤不是「不會寫程式」，而是開工前沒有足夠清楚的邊界：
@@ -328,3 +333,16 @@ Documented future-facing layers:
 - **Layer 3 future agent interface**：possible structured outputs or richer agent-facing integrations, while preserving deterministic and reviewable boundaries.
 
 Future docs and design candidates include custom domains, richer classifier evidence visibility, JSON output, and optional user repo CI scaffolding. They are not part of the current runtime unless a later issue implements them explicitly.
+
+## Current canonical layer model
+
+`spec-injector` 的目前 canonical model 為 4-layer roadmap：
+
+- Layer 1 — Core Compiler
+- Layer 2 — Workflow Guardrails
+- Layer 3 — Protocolization
+- Layer 4 — Companion UX
+
+若文件中仍存在舊版 3-layer 或其他歷史敘事，僅保留作為 terminology history / previous framing；不表示目前實作定位。
+
+`#149 supervised remediation loop` 目前仍為 parked / design-only，不會被表示為 current capability，不作為 current implementation boundary；它在實作前仍需額外設計核可，且不得自動 auto-fix、auto-resolve、auto-merge、auto-close 或 mutate target repo。

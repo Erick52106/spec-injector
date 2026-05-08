@@ -165,3 +165,14 @@ Layer 3 principles:
 - Do not modify CLI runtime.
 - Do not modify the config schema.
 - Do not call an LLM, API, or local model.
+
+## Current canonical layer model
+
+Canonical model is now 4 layers:
+
+- Layer 1 — Core Compiler
+- Layer 2 — Workflow Guardrails
+- Layer 3 — Protocolization
+- Layer 4 — Companion UX
+
+Legacy wording that describes only 3 layers should be kept only as terminology history / previous framing and is no longer the current canonical model.
