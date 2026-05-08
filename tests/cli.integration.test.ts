@@ -4309,6 +4309,114 @@ test('spec plan truncates auto-discovered source on UTF-8 boundaries', async (t)
   assert.equal(truncatedBytes <= originalBytes, true);
 });
 
+test('spec plan prompt diagnostics-heavy sample stays bounded and reference-oriented', async (t) => {
+  const fixture = await createExplicitPathPlanFixture(t, {
+    issueNumber: 204,
+    title: 'Prompt diagnostics-heavy output stability sample',
+    bodyLines: [
+      'Validate prompt-mode output is reference-oriented and bounded under diagnostics-heavy context.',
+      'Keep explicit references discoverable and missing/read diagnostics explicit:',
+      '- `docs/issue-mentioned-doc.md`',
+      '- `src/issue-mentioned-source.ts`',
+      '- `src/missing-issue-source.ts`',
+      '- `src/unreadable-source.ts`',
+      '- `alias-source.ts`',
+      '',
+      'Auto-discovery should surface additional diagnostics and truncation context from repository candidates.',
+      'This issue is about diagnostics, truncation, and source read behavior.',
+    ],
+    config: {
+      discovery: {
+        docs: [],
+        source: ['src'],
+        max_docs: 4,
+        max_source_files: 8,
+      },
+    },
+    repoFiles: {
+      'docs/issue-mentioned-doc.md': '# Issue Mentioned Doc\n\nISSUE_MENTIONED_DOC_SENTINEL\n',
+      'docs/diagnostics-guide.md': '# Diagnostics Guide\n\nAuto-discovered diagnostics reference for source-boundary checks.\n',
+      'src/issue-mentioned-source.ts': 'export const issueMentionedSource = "ISSUE_MENTIONED_SOURCE_SENTINEL";\n',
+      'src/runtime/alias-source.ts': 'export const aliasSource = "ALIAS_SOURCE_SENTINEL";\n',
+      'src/diagnostics-source.ts': 'export const diagnosticsSource = "AUTO_DISCOVERED_SOURCE_SENTINEL";\n',
+      'src/auto-discovered-truncation-source.ts': [
+        'export const longSourceContent = `TRUNCATION_HEAD_SENTINEL',
+        `${'A'.repeat(520)}`,
+        'TRUNCATION_TAIL_SENTINEL`;',
+      ].join('\n'),
+      'src/auto-discovered-read-failed-source.ts': 'export const readFailedSource = "AUTO_DISCOVERED_READ_FAILED_SOURCE_SENTINEL";\n',
+      'src/unreadable-source.ts': 'export const unreadableSource = "UNREADABLE_SOURCE_SENTINEL";\n',
+    },
+  });
+
+  const env = await createReadFailureEnv(t, fixture.env, [
+    ['src/unreadable-source.ts', 'EACCES'],
+    ['src/auto-discovered-read-failed-source.ts', 'EIO'],
+  ]);
+
+  const result = await runSpec(
+    ['plan', fixture.issueUrl, '--repo', fixture.repoDir, '--dry-run', '--format', 'prompt'],
+    { env }
+  );
+
+  assert.equal(result.code, 0, result.stderr);
+  assertNoRawStackTrace(result);
+
+  assertOrderedSubstrings(result.stdout, [
+    '# Implementation Plan Prompt:',
+    '## 1. Issue Summary',
+    '## 2. Detected Domains',
+    '## 3. Guardrails',
+    '## 4. Relevant File References',
+    '### Issue-Mentioned Docs',
+    '### Issue-Mentioned Source Files',
+    '### Auto-Discovered Docs',
+    '### Rule-Matched Docs',
+    '### Auto-Discovered Source Files',
+    '## 5. Missing Files',
+    '## 6. Instructions',
+  ]);
+
+  const promptIssueDocs = sectionBetween(result.stdout, '### Issue-Mentioned Docs', '### Issue-Mentioned Source Files');
+  const promptIssueSources = sectionBetween(result.stdout, '### Issue-Mentioned Source Files', '### Auto-Discovered Docs');
+  const promptAutoDocs = sectionBetween(result.stdout, '### Auto-Discovered Docs', '### Rule-Matched Docs');
+  const promptAutoSources = sectionBetween(result.stdout, '### Auto-Discovered Source Files', '## 5. Missing Files');
+  const promptMissing = sectionBetween(result.stdout, '## 5. Missing Files', '## 6. Instructions');
+
+  assert.match(promptIssueDocs, /`docs\/issue-mentioned-doc\.md` — issue-mentioned; mentioned in issue/);
+  assert.match(promptIssueSources, /`src\/issue-mentioned-source\.ts` — issue-mentioned; mentioned in issue/);
+  assert.doesNotMatch(
+    promptIssueSources,
+    /src\/unreadable-source\.ts|src\/missing-issue-source\.ts|alias-source\.ts/
+  );
+  assert.match(promptAutoDocs, /`docs\/diagnostics-guide\.md` — auto-discovered/);
+  assert.match(promptAutoSources, /`src\/diagnostics-source\.ts` — auto-discovered/);
+  assert.doesNotMatch(promptAutoSources, /src\/auto-discovered-read-failed-source\.ts/);
+  assert.match(
+    promptAutoSources,
+    /`src\/auto-discovered-truncation-source\.ts` — auto-discovered; truncated to first \d+ bytes; full file at src\/auto-discovered-truncation-source\.ts/
+  );
+
+  assert.match(
+    promptMissing,
+    /`alias-source\.ts` — not found \(issue-mentioned; mentioned in issue; path alias hint: possible moved path `src\/runtime\/alias-source\.ts` \(same basename; not a confirmed issue reference\)\)/
+  );
+  assert.match(promptMissing, /`src\/missing-issue-source\.ts` — not found \(issue-mentioned; mentioned in issue\)/);
+  assert.match(promptMissing, /`src\/unreadable-source\.ts` — unreadable \(EACCES; [^)]+mentioned in issue\)/);
+  assert.match(promptMissing, /`src\/auto-discovered-read-failed-source\.ts` — read failed \(EIO; auto-discovered\)/);
+
+  assert.match(result.stderr, /Unreadable: src\/unreadable-source\.ts \(EACCES\)/);
+  assert.match(result.stderr, /Read failed: src\/auto-discovered-read-failed-source\.ts \(EIO\)/);
+  assert.doesNotMatch(result.stdout, /TRUNCATION_TAIL_SENTINEL/);
+  assert.doesNotMatch(result.stdout, /TRUNCATION_HEAD_SENTINEL/);
+  assert.doesNotMatch(result.stdout, /ISSUE_MENTIONED_DOC_SENTINEL/);
+  assert.doesNotMatch(result.stdout, /ISSUE_MENTIONED_SOURCE_SENTINEL/);
+  assert.doesNotMatch(result.stdout, /AUTO_DISCOVERED_SOURCE_SENTINEL/);
+  assert.doesNotMatch(result.stdout, /ALIAS_SOURCE_SENTINEL/);
+  assert.doesNotMatch(result.stdout, /UNREADABLE_SOURCE_SENTINEL/);
+  assert.doesNotMatch(result.stdout, /AUTO_DISCOVERED_READ_FAILED_SOURCE_SENTINEL/);
+});
+
 test('spec plan ignores API and route paths when extracting file references', async (t) => {
   const fixture = await createExplicitPathPlanFixture(t, {
     issueNumber: 83,
