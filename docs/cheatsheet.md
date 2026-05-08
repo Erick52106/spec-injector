@@ -49,6 +49,7 @@
 13. run evidence-check
    - `spec evidence-check --pr <num> --repo <owner/name> --expected-head <sha>`
    - PASS 僅為輔助結果
+   - 不保證所有 CodeRabbit / Codex / human review threads 已關閉，thread closeout 仍需人工逐條確認
 14. run label-audit when relevant
    - 對照 issue / PR metadata 與 label 規範
 15. wait for human merge decision
