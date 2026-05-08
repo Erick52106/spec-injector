@@ -404,9 +404,21 @@ function renderDocMetadata(
     metadata.push(opts.includeSourcePrefix ? `source: ${sourceLabel}` : sourceLabel);
   }
   metadata.push(...(doc.reasons ?? []));
+  metadata.push(...renderTruncationMetadata(doc));
   const aliasHint = renderPathAliasHint(doc, { useMarkdown: true });
   if (aliasHint) metadata.push(aliasHint);
   return metadata;
+}
+
+function renderTruncationMetadata(doc: DocSection): string[] {
+  if (doc.kind !== 'source' || !doc.truncated || !doc.truncatedBytes || !doc.originalBytes || doc.originalBytes <= doc.truncatedBytes) {
+    return [];
+  }
+
+  return [
+    `truncated to first ${doc.truncatedBytes} bytes`,
+    `full file at ${doc.filePath}`,
+  ];
 }
 
 function renderPathAliasHint(
