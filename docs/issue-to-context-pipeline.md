@@ -144,10 +144,9 @@ Current discovery is deterministic and bounded; it is designed for initial conte
 For monorepo repos, use explicit package-level discovery paths first:
 
 - `packages/<name>/README.md`
-- `packages/<name>/docs/...`
-- `packages/<name>/package.json`
+- `packages/<name>/docs/architecture.md`
 - `apps/<name>/README.md`
-- `apps/<name>/docs/...`
+- `apps/<name>/docs/usage.md`
 
 Example config shape (sanitized):
 
@@ -156,11 +155,11 @@ Example config shape (sanitized):
   "discovery": {
     "docs": [
       "packages/<name>/README.md",
-      "packages/<name>/docs"
+      "packages/<name>/docs/architecture.md"
     ],
     "source": [
-      "packages/<name>/src/index.ts",
-      "packages/<name>/package.json"
+      "packages/<name>/src",
+      "packages/<name>/browser"
     ]
   }
 }
@@ -169,12 +168,14 @@ Example config shape (sanitized):
 Virtual/export path handling guidance:
 
 - If an issue mentions `vitest/browser/context.d.ts`, actual source may live under `packages/vitest/browser/context.d.ts`.
-- Add the concrete package file path explicitly to `discovery.source` when possible.
+- Current CLI `discovery.source` 行為只走目錄式來源，不保證可設定單一 file path；請視為 issue-mentioned 參考線索而非已實作的 explicit file config 支援。
+- 如需這類 file-level support，建議另開 follow-up issue；本次不在 #205 內實作。
 
 Troubleshooting `EISDIR`:
 
-- If you see `read failed (EISDIR)` for a configured path, verify whether the config entry points to a directory while the current discovery mode expects a file path in that spot.
-- Use explicit file paths or current supported discovery patterns in `.spec-injector/config.json` before adding broader workspace assumptions.
+- If you see `read failed (EISDIR)` for a configured path, verify whether the config entry shape matches current field expectations.
+- For `discovery.docs`, prefer explicit Markdown files; directory paths may trigger `read failed (EISDIR)` with current explicit-file loading.
+- For `discovery.source`, prefer directory roots that exist in the repo and are intended for recursive scanning.
 
 ### Evidence tie-in
 

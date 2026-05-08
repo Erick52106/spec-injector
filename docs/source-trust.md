@@ -280,25 +280,32 @@ Current auto-discovery 的定位是 deterministic 且 bounded；它能提供 bou
 
 - Brownfield monorepo 請優先使用 package / app 層級路徑：
   - `packages/<name>/README.md`
-  - `packages/<name>/docs/...`
-  - `packages/<name>/package.json`
+  - `packages/<name>/docs/architecture.md`
   - `apps/<name>/README.md`
-  - `apps/<name>/docs/...`
+  - `apps/<name>/docs/usage.md`
 - 虛擬/匯出路徑示例：
   - issue 可能提到 `vitest/browser/context.d.ts`
   - 實際檔案可能位於 `packages/vitest/browser/context.d.ts`
-  - 當你已知 package 實體位置，請直接把實體檔放進 `discovery.source`，不要假設 runtime 一定自動映射 alias。
+  - `discovery.source` 目前僅保證支援目錄輸入；issue path 無法直接當作已驗證的 `discovery.source` file entry。
+  - 若 issue 確認到實際檔案，請用 issue-mentioned 路徑納入上下文，並在 #205 之外另開 follow-up 討論 explicit file support。
+- 可放入 `discovery.source` 的常用目錄範例（非完整清單）：
+  - `packages/<name>/src`
+  - `packages/<name>/browser`
+  - `apps/<name>/src`
 
 ```json
 {
   "discovery": {
     "docs": [
       "packages/<name>/README.md",
-      "packages/<name>/docs"
+      "packages/<name>/docs/architecture.md",
+      "apps/<name>/README.md",
+      "apps/<name>/docs/usage.md"
     ],
     "source": [
-      "packages/<name>/package.json",
-      "packages/<name>/src/index.ts"
+      "packages/<name>/src",
+      "packages/<name>/browser",
+      "apps/<name>/src"
     ]
   }
 }
@@ -307,7 +314,7 @@ Current auto-discovery 的定位是 deterministic 且 bounded；它能提供 bou
 ### Directory input 與 `EISDIR` 的排障
 
 - 若看到 `read failed (EISDIR)`，先確認該路徑在設定上是否是「應為檔案卻填了目錄」。
-- 建議改為明確 file path，或先縮小到更小 scope 的目錄（例如 `packages/<name>/docs`）再逐步擴展。
+- 建議改為對應欄位可接受的形態（docs 用明確 md 檔，source 用目錄根），或先縮小到更小 scope 的目錄（例如 `packages/<name>/src`）再逐步擴展。
 - 若仍需要更完整套件推斷，請以 follow-up issue 紀錄，保持 runtime 行為不變（避免超出 #205 non-goals）。
 
 ### 狗食報告依據
