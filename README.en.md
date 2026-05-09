@@ -94,6 +94,18 @@ The current implemented / documented capabilities can be understood in four stag
 | Output | Produces a bounded Markdown task package or compact planning prompt for an AI coding agent to read before implementation. | Output is handoff context, not an autonomous execution plan. |
 | Verify | Repo workflow docs define validation, implementation evidence comments, PR body evidence URLs, HEAD/readback checks, and review closeout. | Workflow guardrails are read-only / human-reviewed discipline, not a merge bot or remediation automation. |
 
+## Roadmap boundaries
+
+This table keeps future docs and parked designs from being mistaken for current capability:
+
+| Lane | Status | What it means | What it does not mean |
+| --- | --- | --- | --- |
+| Current | Implemented / documented today | deterministic GitHub issue-to-context compiler; bounded task package / prompt output; source labels / source categories; missing / unreadable / read failed diagnostics; visible truncation metadata; read-only `spec evidence-check` / `spec label-audit`; opt-in live `gh` smoke. | Not a hosted control plane, agent orchestration platform, merge bot, hidden LLM planner, semantic RAG / vector search, or target repo mutation system. |
+| Current with caveat | Supported wording, partial runtime, or auxiliary report | source-trust vocabulary has partial runtime support, but is not a full policy engine; boundedness currently relies on item-count limits / truncation metadata, not a token / byte budget algorithm; monorepo support is guidance, not a full resolver; dogfood evidence is WARN / caveated; evidence-check / label-audit are auxiliary reports. | Does not mean approval authority, unconditional PASS, a complete monorepo package export resolver, or fully implemented future trust / budget policy. |
+| Future / design-only | Direction only until separate implementation exists | catalog / protocol direction; stronger trust policy design; future budget policy design; companion / Spec Cat / status UX; more dogfood evidence; #206 zh-TW classifier work only if evidence supports it. | Does not mean Layer 3 / Layer 4 runtime exists, and does not mean #206 has shipped. |
+| Parked | Explicitly not active implementation | #149 supervised remediation loop remains parked; thread-level review remediation must wait until safety prerequisites exist before it can be reconsidered. | Does not mean the remediation loop is current capability, and does not mean auto-fix / auto-resolve / auto-close / auto-merge can start. |
+| Explicit non-goals / must not claim | Must stay out of README claims | Do not claim a hosted control plane, agent orchestration platform, merge bot, companion runtime, hidden LLM planner, RAG / vector search, target repo auto-editing, automatic monorepo package export resolver, or shipped zh-TW classifier. | Future docs, design records, and parked issues must not be packaged as current product behavior. |
+
 ## Current pipeline and documentation map
 
 The current safe path is: a `request / GitHub issue` enters a deterministic issue parser / classifier, gathers repo docs, source references, and guardrails, preserves diagnostics such as missing / unreadable / alias hints, and emits a bounded task package / prompt for an AI coding agent to use inside a human-reviewed workflow. This current pipeline is a deterministic handoff context, not a hidden planner, target-repo mutation system, or merge automation path; implementation and merge decisions still stay with humans and repo workflow rules.
