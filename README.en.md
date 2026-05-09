@@ -364,7 +364,7 @@ Current implemented layer:
 
 Documented future-facing layers:
 
-- **Layer 2 AI workflow**: AI tool uses task package to draft an implementation plan, then waits for human approval before implementation.
+- **Layer 2 — Workflow Guardrails**: AI tool uses task package to draft an implementation plan, then waits for human approval before implementation.
 - **Layer 3 Protocolization**: richer evidence and protocol alignment for deterministic context handoff, while preserving deterministic and reviewable boundaries.
 - **Layer 4 Companion UX**: consistent human-facing guidance, boundary statements, and support for handoff quality, still design-oriented.
 
