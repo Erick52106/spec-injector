@@ -105,6 +105,22 @@ GitHub Issue
 | Output | 產生 bounded Markdown task package 或 compact planning prompt，供 AI coding agent 開工前閱讀。 | Output 是 handoff context，不是 autonomous execution plan。 |
 | Verify | Repo workflow docs 規範 validation、implementation evidence comment、PR body evidence URL、HEAD/readback check 與 review closeout。 | Workflow guardrails 是 read-only / human-reviewed discipline，不是 merge bot 或 remediation automation。 |
 
+## 目前管線與文件地圖
+
+目前可安全描述的主線是：`request / GitHub issue` 進入 deterministic issue parser / classifier，收斂 repo docs、source references 與 guardrails，保留 missing / unreadable / alias hints 等 diagnostics，最後輸出 bounded task package / prompt，交給 AI coding agent 在 human-reviewed workflow 中實作。這條 current pipeline 的重點是 deterministic handoff context，不是 hidden planner、target repo mutation、merge automation，最終實作與 merge decision 仍由人與 repo workflow 決定。
+
+主要文件可對照：
+
+- [docs/issue-to-context-pipeline.md](docs/issue-to-context-pipeline.md)：current pipeline 與 future lane separation
+- [docs/source-trust.md](docs/source-trust.md)：source-trust vocabulary 與 bounded context caveats
+- [docs/validation.md](docs/validation.md)：validation matrix 與 quality gates
+- [docs/workflow.md](docs/workflow.md)：issue-to-PR workflow guardrails
+- [docs/cheatsheet.md](docs/cheatsheet.md)：happy-path quick reference
+- [docs/dogfood/vitest-2026-05-09.md](docs/dogfood/vitest-2026-05-09.md)：caveated dogfood evidence
+- [docs/design/layers.md](docs/design/layers.md)：Layer 1–4 boundary model
+
+邊界上，current 包含 deterministic compiler、source labels/categories、diagnostics、visible truncation metadata、read-only `spec evidence-check` / `spec label-audit` guardrails；caveated 部分包含 source-trust vocabulary 仍是 partial runtime support、context budget 仍以 bounded snippets / item limits 為主、dogfood evidence 是 cautious progress、monorepo 目前只有 docs guidance。future / design-only 則保留給 #206 zh-TW classifier、#149 supervised remediation loop，以及 companion/status、full trust policy engine、full budget algorithm 等後續方向。
+
 ## 目前能力
 
 - 將 GitHub issue 編譯為 bounded、agent-ready 的 task context；可參考 [issue-to-context pipeline](docs/issue-to-context-pipeline.md)。

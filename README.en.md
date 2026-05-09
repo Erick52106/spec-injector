@@ -89,6 +89,22 @@ The current implemented / documented capabilities can be understood in four stag
 | Output | Produces a bounded Markdown task package or compact planning prompt for an AI coding agent to read before implementation. | Output is handoff context, not an autonomous execution plan. |
 | Verify | Repo workflow docs define validation, implementation evidence comments, PR body evidence URLs, HEAD/readback checks, and review closeout. | Workflow guardrails are read-only / human-reviewed discipline, not a merge bot or remediation automation. |
 
+## Current pipeline and documentation map
+
+The current safe path is: a `request / GitHub issue` enters a deterministic issue parser / classifier, gathers repo docs, source references, and guardrails, preserves diagnostics such as missing / unreadable / alias hints, and emits a bounded task package / prompt for an AI coding agent to use inside a human-reviewed workflow. This current pipeline is a deterministic handoff context, not a hidden planner, target-repo mutation system, or merge automation path; implementation and merge decisions still stay with humans and repo workflow rules.
+
+Key documentation map:
+
+- [docs/issue-to-context-pipeline.md](docs/issue-to-context-pipeline.md): current pipeline and future-lane separation
+- [docs/source-trust.md](docs/source-trust.md): source-trust vocabulary and bounded-context caveats
+- [docs/validation.md](docs/validation.md): validation matrix and quality gates
+- [docs/workflow.md](docs/workflow.md): issue-to-PR workflow guardrails
+- [docs/cheatsheet.md](docs/cheatsheet.md): happy-path quick reference
+- [docs/dogfood/vitest-2026-05-09.md](docs/dogfood/vitest-2026-05-09.md): caveated dogfood evidence
+- [docs/design/layers.md](docs/design/layers.md): Layer 1-4 boundary model
+
+At the boundary level, current capability includes the deterministic compiler, source labels/categories, diagnostics, visible truncation metadata, and read-only `spec evidence-check` / `spec label-audit` guardrails. Caveated areas include source-trust vocabulary as partial runtime support rather than a full policy engine, context budget as bounded snippets / item limits rather than a full token/byte algorithm, dogfood evidence as cautious progress, and monorepo support as documentation guidance rather than a resolver. Future / design-only work remains with #206 zh-TW classifier support, #149 supervised remediation-loop evaluation, and companion/status, full trust-policy, and full budget-algorithm directions.
+
 ## Current capabilities
 
 - Compiles GitHub issues into bounded, agent-ready task context; see [issue-to-context pipeline](docs/issue-to-context-pipeline.md).
