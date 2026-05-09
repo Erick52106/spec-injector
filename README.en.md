@@ -105,6 +105,12 @@ Key documentation map:
 
 At the boundary level, current capability includes the deterministic compiler, source labels/categories, diagnostics, visible truncation metadata, and read-only `spec evidence-check` / `spec label-audit` guardrails. Caveated areas include source-trust vocabulary as partial runtime support rather than a full policy engine, context budget as bounded snippets / item limits rather than a full token/byte algorithm, dogfood evidence as cautious progress, and monorepo support as documentation guidance rather than a resolver. Future / design-only work remains with #206 zh-TW classifier support, #149 supervised remediation-loop evaluation, and companion/status, full trust-policy, and full budget-algorithm directions.
 
+## Dogfood evidence and limitations
+
+[docs/dogfood/vitest-2026-05-09.md](docs/dogfood/vitest-2026-05-09.md) captures the second brownfield dogfood against the public monorepo target `vitest-dev/vitest`, pinned to commit `d77e93659d1703f9d96b58373b38738bf190289e`, and executed in read-only mode. The run shows the deterministic issue-to-context flow can produce useful planning context while keeping diagnostics, truncation metadata, and path caveats visible, so it supports cautious README progress.
+However, the Vitest report is a WARN / caveated evidence result, not an unconditional PASS. It does not justify claims such as “production-ready for all brownfield repos,” and it does not claim a shipped monorepo resolver. Monorepo support remains #205 documentation guidance, not runtime resolver behavior.
+Boundary status is unchanged: #206 Traditional Chinese classifier support remains evidence-gated, #149 supervised remediation remains parked/design-only, and `spec-injector` does not perform target repo mutation or automatic remediation/merge actions.
+
 ## Current capabilities
 
 - Compiles GitHub issues into bounded, agent-ready task context; see [issue-to-context pipeline](docs/issue-to-context-pipeline.md).
