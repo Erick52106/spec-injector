@@ -121,6 +121,12 @@ GitHub Issue
 
 邊界上，current 包含 deterministic compiler、source labels/categories、diagnostics、visible truncation metadata、read-only `spec evidence-check` / `spec label-audit` guardrails；caveated 部分包含 source-trust vocabulary 仍是 partial runtime support、context budget 仍以 bounded snippets / item limits 為主、dogfood evidence 是 cautious progress、monorepo 目前只有 docs guidance。future / design-only 則保留給 #206 zh-TW classifier、#149 supervised remediation loop，以及 companion/status、full trust policy engine、full budget algorithm 等後續方向。
 
+## Dogfood 證據與限制
+
+[docs/dogfood/vitest-2026-05-09.md](docs/dogfood/vitest-2026-05-09.md) 記錄了第二個 brownfield dogfood，target 為公開 monorepo `vitest-dev/vitest`，並固定在 commit `d77e93659d1703f9d96b58373b38738bf190289e` 進行 read-only 驗證。這份 evidence 顯示 deterministic issue-to-context flow 已足以產生可用的 planning context，也能看見 diagnostics、truncation metadata 與 path caveats，因此可支持 README 以保守方式前進。
+但該次 dogfood 的結論是 WARN / caveated evidence，不是 unconditional PASS：它不支持「所有 brownfield repo 都 production-ready」的宣稱，也不支持 monorepo resolver 已完成的宣稱。對 monorepo 的現況是 #205 提供 docs guidance，而非 runtime resolver。
+同時，本 repo 仍維持邊界：#206 傳統中文 classifier 仍是 evidence-gated、#149 supervised remediation 仍是 parked/design-only、`spec-injector` 不做 target repo mutation 或自動修復/合併。
+
 ## 目前能力
 
 - 將 GitHub issue 編譯為 bounded、agent-ready 的 task context；可參考 [issue-to-context pipeline](docs/issue-to-context-pipeline.md)。
