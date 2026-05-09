@@ -23,6 +23,11 @@ Core positioning:
 - agent-agnostic: emits Markdown task packages / prompts for Codex, Claude Code, or other AI coding agents
 - no hidden LLM: does not call a hidden LLM, external AI API, or local model
 
+Boundary note (current implementation):
+- source-trust aware / context-budget aware is current guidance plus partial runtime support.
+- Current runtime emits source labels / source categories, bounded snippets / item-count limits, and visible diagnostics.
+- Current runtime does not ship a full trust-policy engine or a full token/byte context-budget algorithm.
+
 ## Why this exists
 
 Common AI coding agent failures are usually not about being unable to write code, but about starting work without clear enough boundaries:
@@ -46,7 +51,7 @@ The Layer 1 CLI of `spec-injector` guarantees these boundaries:
 - `spec plan --dry-run` only outputs to stdout and does not write a task package
 - non-dry-run output from `spec plan` only writes to `.spec-injector/out/issue-<number>-task-package.md`
 - task packages can surface missing files, unreadable files, path alias hints, and validation checklists so context gaps are visible
-- read-only workflow guardrails can check label / milestone taxonomy, PR evidence readback, and the optional live `gh` smoke path, but do not auto-fix metadata or merge
+- read-only workflow guardrails (including `spec evidence-check` / `spec label-audit`) are report/check only; `PASS` is not approval, and they do not auto-create/edit/delete metadata or merge
 - mutating commands must be explicit command behavior, such as `spec init`, `spec config add/remove always-read`, or `spec clean`
 - CLI core does not automatically create branches, commits, PRs, issue comments, or modify target repo source code
 
@@ -117,7 +122,7 @@ Boundary status is unchanged: #206 Traditional Chinese classifier support remain
 - Surfaces references and diagnostics so missing or unreadable context remains visible; see [workflow](docs/workflow.md) and [validation](docs/validation.md).
 - Uses source trust and context-budget design to keep task packages bounded; see [source trust](docs/source-trust.md).
 - Supports human-reviewed validation, evidence, readback, and finding-assessment workflows; see [workflow](docs/workflow.md) and [validation](docs/validation.md).
-- Includes read-only workflow guardrails like label/milestone audit; see [label taxonomy](docs/label-taxonomy.md).
+- Includes read-only `spec evidence-check` / `spec label-audit` guardrails that report workflow risk only and do not provide approval, merge authority, or metadata mutation; see [label taxonomy](docs/label-taxonomy.md).
 - Keeps companion, status, and remediation ideas documented as design-only, not shipped runtime behavior; see [current capability showcase planning doc](docs/readme-current-capability-showcase.md) and [readme showcase readiness](docs/readme-showcase-readiness.md).
 
 ## Quickstart
@@ -173,7 +178,7 @@ This test is intentionally `opt-in`; it does not run automatically in `pnpm test
 - `gh auth status --active --hostname github.com`
 - `spec plan https://github.com/Erick52106/spec-injector/issues/61 --dry-run --format prompt`
 
-The result must include the basic prompt sections, confirming issue URL parsing and the minimal live `spec plan` read path. If the environment does not have `gh` installed or authenticated, this test is not a default regression blocker; set up the environment first, then run it explicitly.
+The result must include the basic prompt sections, confirming issue URL parsing and the minimal live `spec plan` read path. This is a read-only smoke path, not a default CI gate and not an approval authority. If the environment does not have `gh` installed or authenticated, this test is not a default regression blocker; set up the environment first, then run it explicitly.
 
 Current local install and release details are documented in [docs/release.md](docs/release.md).
 
@@ -359,7 +364,7 @@ Current implemented layer:
 
 Documented future-facing layers:
 
-- **Layer 2 AI workflow**: AI tool uses task package to draft an implementation plan, then waits for human approval before implementation.
+- **Layer 2 — Workflow Guardrails**: AI tool uses task package to draft an implementation plan, then waits for human approval before implementation.
 - **Layer 3 Protocolization**: richer evidence and protocol alignment for deterministic context handoff, while preserving deterministic and reviewable boundaries.
 - **Layer 4 Companion UX**: consistent human-facing guidance, boundary statements, and support for handoff quality, still design-oriented.
 

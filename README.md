@@ -62,7 +62,7 @@ AI coding agent 常見的失誤不是「不會寫程式」，而是開工前沒�
 - `spec plan --dry-run` 只輸出到 stdout，不寫入 task package
 - `spec plan` 的 non-dry-run output 只寫入 `.spec-injector/out/issue-<number>-task-package.md`
 - task package 可以揭露 missing files、unreadable files、path alias hints 與 validation checklist，讓 context gaps 可被看見
-- read-only workflow guardrails 可以檢查 label / milestone taxonomy、PR evidence readback 與 optional live `gh` smoke path，但不自動修 metadata 或 merge
+- read-only workflow guardrails（含 `spec evidence-check` / `spec label-audit`）只能做 report/check；`PASS` 不是 approval，也不自動建立/修改/刪除 metadata 或 merge
 - mutating commands 必須是明確 command 行為，例如 `spec init`、`spec config add/remove always-read`、`spec clean`
 - CLI core 不會自動建立 branch、commit、PR、issue comment 或修改 target repo source code
 
@@ -133,7 +133,7 @@ GitHub Issue
 - 顯示 source references 與診斷資訊，讓缺漏或不可讀 context 保持可見；可參考 [workflow](docs/workflow.md) 與 [validation](docs/validation.md)。
 - 以 source trust 與 context-budget 設計約束 task package 邊界；可參考 [source trust](docs/source-trust.md)。
 - 支援 human-reviewed 的 validation / evidence / readback 與 review finding 分類流程；可參考 [workflow](docs/workflow.md) 與 [validation](docs/validation.md)。
-- 提供 read-only 的 workflow guardrail，例如 label / milestone audit；可參考 [label taxonomy](docs/label-taxonomy.md)。
+- 提供 read-only 的 `spec evidence-check` / `spec label-audit` guardrails，僅報告 workflow 風險、不做 approval / merge / metadata mutation；可參考 [label taxonomy](docs/label-taxonomy.md)。
 - 將 companion / status / remediation 相關方向保留為 design-only，不視為已實作功能；可參考 [current capability showcase planning doc](docs/readme-current-capability-showcase.md) 與 [readme showcase readiness](docs/readme-showcase-readiness.md)。
 
 ## Quickstart
@@ -189,7 +189,7 @@ pnpm test:gh
 - `gh auth status --active --hostname github.com`
 - `spec plan https://github.com/Erick52106/spec-injector/issues/61 --dry-run --format prompt`
 
-執行結果會要求至少包含基本 prompt sections，確認 issue URL 解析與 `spec plan` 最小 live 讀取鏈路。若環境未安裝 `gh` 或未登入，測試不會作為預設 regressions 阻擋；請先補齊環境後再執行。
+執行結果會要求至少包含基本 prompt sections，確認 issue URL 解析與 `spec plan` 最小 live 讀取鏈路。它是 read-only smoke，非預設 CI gate，也不代表 approval authority。若環境未安裝 `gh` 或未登入，測試不會作為預設 regressions 阻擋；請先補齊環境後再執行。
 
 Current local install and release details are documented in [docs/release.md](docs/release.md).
 
