@@ -94,7 +94,7 @@ The report must include target, target rationale, safety checklist, commands, in
 
 ## #206 zh-TW Classifier Gate
 
-#206 stays deferred until real zh-TW issue/repo evidence or deterministic fixtures justify it.
+`#206` stays deferred until real zh-TW issue/repo evidence or deterministic fixtures justify it.
 
 ### Enough Evidence
 
@@ -143,7 +143,7 @@ Layer 4 can explore visuals and mockups without implying runtime existence.
 | Status emitter | Future design. | Must not imply watcher, daemon, or live repo monitoring. |
 | Visual dashboard | Static mockup only. | Must not imply approval, merge, remediation, or hosted control plane. |
 
-#149 remains parked and is not unblocked by visual design, status vocabulary, or mascot work.
+`#149` remains parked and is not unblocked by visual design, status vocabulary, or mascot work.
 
 ## README / Visual Overclaim Checklist
 
