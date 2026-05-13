@@ -18,6 +18,8 @@ Autonomous Worker Profiles / Codex autonomous PR work 的 start-gate routing sou
 
 Autonomous review follow-up 的 batching、freshness、duplicate collapse、root-cause escalation、patch budget 與 final closeout ledger source of truth 見 [AWP review triage gates](awp-review-triage-gates.md)。可用 `spec awp-review-check --repo . --evidence <path>` 檢查 local JSON evidence；該 checker 不讀寫 GitHub、不 resolve review threads、不 auto-fix、不 merge，也不要求 downstream Scope Police 解析完整 ledger。
 
+Supervised remediation loop 的 #149 design 見 [supervised-remediation-loop.md](supervised-remediation-loop.md)。該文件只定義 human-supervised review finding follow-up、finding-to-commit traceability、stale finding prevention、validation refresh 與 do-not-automate boundaries；它不是 current remediation bot，也不授權 auto-fix、auto-resolve、auto-merge、auto-close 或 target repo mutation。
+
 Downstream target repo 如何採用 `spec workflow-check` status/ref evidence、何時仍需要 target repo PR、以及 tachigo / tachiya thin-wiring examples，見 [target repo adoption contract](target-repo-adoption-contract.md)。該 contract 明確保留 local-only、read-only、no target repo mutation 邊界。
 
 Downstream AI entrypoints 若需要安裝、更新或檢查 `spec-injector` AWP capability，請引用 [AI bootstrap install contract](ai-bootstrap-install-contract.md)。該 contract 定義 canonical repo URL、`SPEC_INJECTOR_DIR` local runner fallback、`spec doctor --workflow awp --format json` readiness check，以及 no generated output / no target repo mutation 邊界。

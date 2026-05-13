@@ -114,7 +114,7 @@ GitHub Issue
 | Current | Implemented / documented today | deterministic GitHub issue-to-context compiler；bounded task package / prompt output；source labels / source categories；missing / unreadable / read failed diagnostics；visible truncation metadata；read-only `spec evidence-check` / `spec label-audit`；opt-in live `gh` smoke。 | 不是 hosted control plane、agent orchestration platform、merge bot、hidden LLM planner、semantic RAG / vector search，且不修改 target repo。 |
 | Current with caveat | Supported wording, partial runtime, or auxiliary report | source-trust vocabulary 有 partial runtime support，但不是 full policy engine；boundedness 目前以 item-count limits / truncation metadata 為主，不是 token / byte budget algorithm；monorepo 是 guidance，不是 full resolver；dogfood evidence 是 WARN / caveated；evidence-check / label-audit 是 auxiliary reports。 | 不代表 approval authority、unconditional PASS、完整 monorepo package export resolver，或 future trust / budget policy 已全部實作。 |
 | Future / design-only | Direction only until separate implementation exists | catalog / protocol direction；stronger trust policy design；future budget policy design；companion / Spec Cat / status UX；更多 dogfood evidence；#206 zh-TW classifier 只有在 evidence 支持後才可能處理。 | 不代表 Layer 3 / Layer 4 runtime 已存在，也不代表 #206 已 shipped。 |
-| Parked | Explicitly not active implementation | #149 supervised remediation loop 仍 parked；thread-level review remediation 需等 safety prerequisites 存在後才可重新評估。 | 不代表 remediation loop 是 current capability，也不代表 auto-fix / auto-resolve / auto-close / auto-merge 可以開始做。 |
+| Parked / design recorded | Explicitly not active implementation | #149 supervised remediation loop 已有 [design record](docs/supervised-remediation-loop.md)，但仍不是 shipped runtime；thread-level review remediation 需等 separate implementation issue 與 safety gates 才可重新評估。 | 不代表 remediation loop 是 current capability，也不代表 auto-fix / auto-resolve / auto-close / auto-merge 或 target repo mutation 可以開始做。 |
 | Explicit non-goals / must not claim | Must stay out of README claims | 不宣稱 hosted control plane、agent orchestration platform、merge bot、companion runtime、hidden LLM planner、RAG / vector search、target repo auto-editing、automatic monorepo package export resolver、zh-TW classifier shipped。 | 不應用 future docs、design records 或 parked issues 包裝成 current product behavior。 |
 
 ## 目前管線與文件地圖
@@ -146,7 +146,7 @@ GitHub Issue
 - 以 source trust 與 context-budget 設計約束 task package 邊界；可參考 [source trust](docs/source-trust.md)。
 - 支援 human-reviewed 的 validation / evidence / readback 與 review finding 分類流程；可參考 [workflow](docs/workflow.md) 與 [validation](docs/validation.md)。
 - 提供 read-only 的 `spec evidence-check` / `spec label-audit` guardrails，僅報告 workflow 風險、不做 approval / merge / metadata mutation；可參考 [label taxonomy](docs/label-taxonomy.md)。
-- 將 companion / status / remediation 相關方向保留為 design-only，不視為已實作功能；可參考 [current capability showcase planning doc](docs/readme-current-capability-showcase.md) 與 [readme showcase readiness](docs/readme-showcase-readiness.md)。
+- 將 companion / status / remediation 相關方向保留為 design-only，不視為已實作功能；可參考 [current capability showcase planning doc](docs/readme-current-capability-showcase.md)、[readme showcase readiness](docs/readme-showcase-readiness.md) 與 [supervised remediation loop design](docs/supervised-remediation-loop.md)。
 
 ## Quickstart
 
@@ -415,4 +415,4 @@ Future docs and design candidates include custom domains, richer classifier evid
 
 若文件中仍存在舊版 3-layer 或其他歷史敘事，僅保留作為 terminology history / previous framing；不表示目前實作定位。
 
-`#149 supervised remediation loop` 目前仍為 parked / design-only，不會被表示為 current capability，不作為 current implementation boundary；它在實作前仍需額外設計核可，且不得自動 auto-fix、auto-resolve、auto-merge、auto-close 或 mutate target repo。
+`#149 supervised remediation loop` 目前只有 [design record](docs/supervised-remediation-loop.md)，不會被表示為 current capability，不作為 current implementation boundary；任何未來 CLI 或 automation work 仍需新的 implementation issue 與明確核可，且不得自動 auto-fix、auto-resolve、auto-merge、auto-close 或 mutate target repo。

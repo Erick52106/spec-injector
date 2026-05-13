@@ -54,6 +54,34 @@ test('AWP review triage gate policy remains linked from CLI docs', async () => {
   assert.match(workflow, /\[AWP review triage gates\]\(awp-review-triage-gates\.md\)/);
 });
 
+test('supervised remediation loop design remains design-only and linked from workflow docs', async () => {
+  const designPath = path.join(repoRoot, 'docs', 'supervised-remediation-loop.md');
+  const workflowPath = path.join(repoRoot, 'docs', 'workflow.md');
+  const readmePath = path.join(repoRoot, 'README.md');
+  const englishReadmePath = path.join(repoRoot, 'README.en.md');
+
+  const [design, workflow, readme, englishReadme] = await Promise.all([
+    fs.readFile(designPath, 'utf8'),
+    fs.readFile(workflowPath, 'utf8'),
+    fs.readFile(readmePath, 'utf8'),
+    fs.readFile(englishReadmePath, 'utf8'),
+  ]);
+
+  assert.match(design, /Supervised Remediation Loop Design/);
+  assert.match(design, /Finding To Commit Traceability/);
+  assert.match(design, /Stale Finding Prevention/);
+  assert.match(design, /Validation Refresh/);
+  assert.match(design, /Relationship To Existing Guardrails/);
+  assert.match(design, /Do Not Automate/);
+  assert.match(design, /must not become a remediation bot/i);
+  assert.match(design, /must not call GitHub mutation APIs/i);
+  assert.match(design, /human merge decision/i);
+
+  assert.match(workflow, /\[supervised-remediation-loop\.md\]\(supervised-remediation-loop\.md\)/);
+  assert.match(readme, /\[supervised remediation loop design\]\(docs\/supervised-remediation-loop\.md\)/);
+  assert.match(englishReadme, /\[supervised remediation loop design\]\(docs\/supervised-remediation-loop\.md\)/);
+});
+
 test('target repo adoption contract remains linked from workflow docs', async () => {
   const contractPath = path.join(repoRoot, 'docs', 'target-repo-adoption-contract.md');
   const workflowPath = path.join(repoRoot, 'docs', 'workflow.md');
