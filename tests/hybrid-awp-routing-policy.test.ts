@@ -158,7 +158,7 @@ test('optional AWP delegation evidence manifest remains linked from policy docs 
   assert.match(manifest, /Agent wrapper \/ local runner/);
   assert.match(manifest, /Target repo local script/);
   assert.match(manifest, /only validate shape and readback consistency/i);
-  assert.match(manifest, /must not:\n\n- spawn, close, or manage subagents/);
+  assert.match(manifest, /must not:\s*\n\s*-\s*spawn, close, or manage subagents/i);
   assert.match(manifest, /cannot prove/);
   assert.match(manifest, /separate implementation issue/);
   assert.match(manifest, /Do not require non-AWP users to adopt this manifest/);
