@@ -141,6 +141,26 @@ async function createStatusFailingGitEnv(
   };
 }
 
+const AWP_REVIEW_FIXTURE_HEAD = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+const AWP_REVIEW_STALE_HEAD = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
+
+async function writeAwpReviewFixture(
+  repoDir: string,
+  fixtureName: string,
+  replacements?: Record<string, string>
+): Promise<string> {
+  const headSha = (await runCommand('git', ['rev-parse', 'HEAD'], repoDir)).stdout.trim();
+  const sourcePath = path.join(repoRoot, 'tests', 'fixtures', 'awp-review', fixtureName);
+  let content = await fs.readFile(sourcePath, 'utf8');
+  const effectiveReplacements = replacements ?? { [AWP_REVIEW_FIXTURE_HEAD]: headSha };
+  for (const [from, to] of Object.entries(effectiveReplacements)) {
+    content = content.replaceAll(from, to);
+  }
+  const evidencePath = path.join(repoDir, fixtureName);
+  await fs.writeFile(evidencePath, content, 'utf8');
+  return evidencePath;
+}
+
 test('classifier does not treat dashboard transactions endpoint wording as wallet evidence', () => {
   const domains = classifyDomains({
     number: 77,
@@ -1612,7 +1632,7 @@ test('spec awp-review-check accepts fresh review batch and collapses duplicate f
   const repoDir = await createTempRepo(t, 'spec-injector-awp-review-fresh-');
   await writeConfig(repoDir, { version: 2, guardrails: [] });
   await initCleanGitRepo(repoDir);
-  const evidencePath = path.join(repoRoot, 'tests', 'fixtures', 'awp-review', 'fresh-duplicate-pass.json');
+  const evidencePath = await writeAwpReviewFixture(repoDir, 'fresh-duplicate-pass.json');
 
   const result = await runSpec([
     'awp-review-check',
@@ -1637,7 +1657,8 @@ test('spec awp-review-check fails stale review head evidence before patching', a
   const repoDir = await createTempRepo(t, 'spec-injector-awp-review-stale-');
   await writeConfig(repoDir, { version: 2, guardrails: [] });
   await initCleanGitRepo(repoDir);
-  const evidencePath = path.join(repoRoot, 'tests', 'fixtures', 'awp-review', 'stale-review-head-fail.json');
+  const headSha = (await runCommand('git', ['rev-parse', 'HEAD'], repoDir)).stdout.trim();
+  const evidencePath = await writeAwpReviewFixture(repoDir, 'stale-review-head-fail.json', { [AWP_REVIEW_STALE_HEAD]: headSha });
 
   const result = await runSpec([
     'awp-review-check',
@@ -1653,11 +1674,31 @@ test('spec awp-review-check fails stale review head evidence before patching', a
   assert.ok((parsed.missing_fields as string[]).includes('review_head_freshness'));
 });
 
+test('spec awp-review-check fails when evidence current head differs from repo HEAD', async (t) => {
+  const repoDir = await createTempRepo(t, 'spec-injector-awp-review-current-head-stale-');
+  await writeConfig(repoDir, { version: 2, guardrails: [] });
+  await initCleanGitRepo(repoDir);
+  const evidencePath = await writeAwpReviewFixture(repoDir, 'fresh-duplicate-pass.json', {});
+
+  const result = await runSpec([
+    'awp-review-check',
+    '--repo', repoDir,
+    '--evidence', evidencePath,
+    '--format', 'json',
+  ]);
+
+  assert.notEqual(result.code, 0);
+  const parsed = JSON.parse(result.stdout) as Record<string, unknown>;
+  assert.equal(parsed.status, 'fail');
+  assert.equal(parsed.review_batch_status, 'fail');
+  assert.ok((parsed.missing_fields as string[]).includes('current_head_sha_freshness'));
+});
+
 test('spec awp-review-check returns manual when review head evidence is missing', async (t) => {
   const repoDir = await createTempRepo(t, 'spec-injector-awp-review-missing-sha-');
   await writeConfig(repoDir, { version: 2, guardrails: [] });
   await initCleanGitRepo(repoDir);
-  const evidencePath = path.join(repoRoot, 'tests', 'fixtures', 'awp-review', 'missing-sha-manual.json');
+  const evidencePath = await writeAwpReviewFixture(repoDir, 'missing-sha-manual.json');
 
   const result = await runSpec([
     'awp-review-check',
@@ -1677,7 +1718,7 @@ test('spec awp-review-check returns manual when triage fields are incomplete', a
   const repoDir = await createTempRepo(t, 'spec-injector-awp-review-missing-triage-');
   await writeConfig(repoDir, { version: 2, guardrails: [] });
   await initCleanGitRepo(repoDir);
-  const evidencePath = path.join(repoRoot, 'tests', 'fixtures', 'awp-review', 'missing-triage-fields-manual.json');
+  const evidencePath = await writeAwpReviewFixture(repoDir, 'missing-triage-fields-manual.json');
 
   const result = await runSpec([
     'awp-review-check',
@@ -1698,7 +1739,7 @@ test('spec awp-review-check skips non-autonomous evidence without failing ordina
   const repoDir = await createTempRepo(t, 'spec-injector-awp-review-non-auto-');
   await writeConfig(repoDir, { version: 2, guardrails: [] });
   await initCleanGitRepo(repoDir);
-  const evidencePath = path.join(repoRoot, 'tests', 'fixtures', 'awp-review', 'non-autonomous-skipped.json');
+  const evidencePath = await writeAwpReviewFixture(repoDir, 'non-autonomous-skipped.json');
 
   const result = await runSpec([
     'awp-review-check',
@@ -1717,7 +1758,7 @@ test('spec awp-review-check fails repeated concept findings without root-cause e
   const repoDir = await createTempRepo(t, 'spec-injector-awp-review-root-missing-');
   await writeConfig(repoDir, { version: 2, guardrails: [] });
   await initCleanGitRepo(repoDir);
-  const evidencePath = path.join(repoRoot, 'tests', 'fixtures', 'awp-review', 'root-cause-missing-fail.json');
+  const evidencePath = await writeAwpReviewFixture(repoDir, 'root-cause-missing-fail.json');
 
   const result = await runSpec([
     'awp-review-check',
@@ -1738,7 +1779,7 @@ test('spec awp-review-check fails collapsed repeated concept without root-cause 
   const repoDir = await createTempRepo(t, 'spec-injector-awp-review-collapsed-root-missing-');
   await writeConfig(repoDir, { version: 2, guardrails: [] });
   await initCleanGitRepo(repoDir);
-  const evidencePath = path.join(repoRoot, 'tests', 'fixtures', 'awp-review', 'root-cause-count-missing-fail.json');
+  const evidencePath = await writeAwpReviewFixture(repoDir, 'root-cause-count-missing-fail.json');
 
   const result = await runSpec([
     'awp-review-check',
@@ -1758,7 +1799,7 @@ test('spec awp-review-check fails oversized follow-up patches without split asse
   const repoDir = await createTempRepo(t, 'spec-injector-awp-review-budget-fail-');
   await writeConfig(repoDir, { version: 2, guardrails: [] });
   await initCleanGitRepo(repoDir);
-  const evidencePath = path.join(repoRoot, 'tests', 'fixtures', 'awp-review', 'patch-budget-over-fail.json');
+  const evidencePath = await writeAwpReviewFixture(repoDir, 'patch-budget-over-fail.json');
 
   const result = await runSpec([
     'awp-review-check',
@@ -1778,7 +1819,7 @@ test('spec awp-review-check accepts patch budget exactly at threshold', async (t
   const repoDir = await createTempRepo(t, 'spec-injector-awp-review-budget-threshold-');
   await writeConfig(repoDir, { version: 2, guardrails: [] });
   await initCleanGitRepo(repoDir);
-  const evidencePath = path.join(repoRoot, 'tests', 'fixtures', 'awp-review', 'patch-budget-threshold-pass.json');
+  const evidencePath = await writeAwpReviewFixture(repoDir, 'patch-budget-threshold-pass.json');
 
   const result = await runSpec([
     'awp-review-check',
@@ -1797,7 +1838,7 @@ test('spec awp-review-check fails closeout ledger dispositions that need rationa
   const repoDir = await createTempRepo(t, 'spec-injector-awp-review-ledger-rationale-');
   await writeConfig(repoDir, { version: 2, guardrails: [] });
   await initCleanGitRepo(repoDir);
-  const evidencePath = path.join(repoRoot, 'tests', 'fixtures', 'awp-review', 'ledger-rationale-missing-fail.json');
+  const evidencePath = await writeAwpReviewFixture(repoDir, 'ledger-rationale-missing-fail.json');
 
   const result = await runSpec([
     'awp-review-check',
@@ -1817,7 +1858,7 @@ test('spec awp-review-check fails actionable findings without closeout dispositi
   const repoDir = await createTempRepo(t, 'spec-injector-awp-review-ledger-missing-');
   await writeConfig(repoDir, { version: 2, guardrails: [] });
   await initCleanGitRepo(repoDir);
-  const evidencePath = path.join(repoRoot, 'tests', 'fixtures', 'awp-review', 'ledger-missing-disposition-fail.json');
+  const evidencePath = await writeAwpReviewFixture(repoDir, 'ledger-missing-disposition-fail.json');
 
   const result = await runSpec([
     'awp-review-check',
@@ -1837,7 +1878,7 @@ test('spec awp-review-check fails actionable closeout entries without validation
   const repoDir = await createTempRepo(t, 'spec-injector-awp-review-ledger-validation-');
   await writeConfig(repoDir, { version: 2, guardrails: [] });
   await initCleanGitRepo(repoDir);
-  const evidencePath = path.join(repoRoot, 'tests', 'fixtures', 'awp-review', 'ledger-validation-missing-fail.json');
+  const evidencePath = await writeAwpReviewFixture(repoDir, 'ledger-validation-missing-fail.json');
 
   const result = await runSpec([
     'awp-review-check',

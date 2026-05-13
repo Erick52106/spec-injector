@@ -161,7 +161,8 @@ function assessEvidence(repoPath: string, checkedAt: string, evidence: Evidence,
   }
 
   const findings = Array.isArray(evidence.findings) ? evidence.findings : [];
-  const reviewBatch = assessReviewBatch(evidence, findings);
+  const repoHead = getHeadSha(repoPath);
+  const reviewBatch = assessReviewBatch(evidence, findings, repoHead);
   const rootCause = assessRootCause(findings);
   const patchBudget = assessPatchBudget(evidence.patch_budget);
   const closeoutLedger = assessCloseoutLedger(findings);
@@ -186,7 +187,7 @@ function assessEvidence(repoPath: string, checkedAt: string, evidence: Evidence,
   });
 }
 
-function assessReviewBatch(evidence: Evidence, findings: Finding[]): GateAssessment {
+function assessReviewBatch(evidence: Evidence, findings: Finding[], repoHead: string): GateAssessment {
   const missing: string[] = [];
   const warnings: string[] = [];
   const reviewHead = normalizeRef(evidence.review_head_sha);
@@ -219,6 +220,7 @@ function assessReviewBatch(evidence: Evidence, findings: Finding[]): GateAssessm
   }
 
   if (missing.length > 0) return { status: 'manual', missingFields: unique(missing), warnings };
+  if (repoHead !== 'n/a' && currentHead !== repoHead) return { status: 'fail', missingFields: ['current_head_sha_freshness'], warnings };
   if (reviewHead !== currentHead) return { status: 'fail', missingFields: ['review_head_freshness'], warnings };
   return { status: 'pass', missingFields: [], warnings };
 }
@@ -237,7 +239,7 @@ function assessRootCause(findings: Finding[]): GateAssessment {
   }
 
   for (const conceptFindings of activeByConcept.values()) {
-    const count = Math.max(...conceptFindings.map((finding) => numericFindingCount(finding)));
+    const count = Math.max(conceptFindings.length, ...conceptFindings.map((finding) => numericFindingCount(finding)));
     if (count < 2) continue;
     const hasRootCause = conceptFindings.some((finding) => meaningful(finding.root_cause_assessment));
     const hasStateModel = conceptFindings.some((finding) =>
@@ -317,10 +319,11 @@ function buildResult(input: {
 }): AwpReviewCheckResult {
   const evidence = input.evidence ?? {};
   const findings = Array.isArray(evidence.findings) ? evidence.findings : [];
+  const localHead = getHeadSha(input.repoPath);
   return {
     status: input.status,
     repo: input.repoPath,
-    head_sha: getHeadSha(input.repoPath),
+    head_sha: localHead,
     checked_at: input.checkedAt,
     missing_fields: unique(input.missingFields),
     warnings: unique(input.warnings),
@@ -329,7 +332,7 @@ function buildResult(input: {
     autonomous_signal: isAutonomousSignal(normalize(evidence.autonomous_signal)) ? 'present' : 'absent',
     review_head_sha: normalizeRef(evidence.review_head_sha) ?? 'n/a',
     current_head_sha: normalizeRef(evidence.current_head_sha) ?? 'n/a',
-    head_freshness: headFreshness(evidence),
+    head_freshness: headFreshness(evidence, localHead),
     actionable_findings: findings.filter((finding) => !isDuplicate(finding) && isActionableFinding(finding)).length,
     duplicate_findings: findings.filter(isDuplicate).length,
     manual_findings: input.missingFields.length > 0 && input.status === 'manual' ? findings.length : 0,
@@ -385,12 +388,13 @@ function skippedGate(): GateAssessment {
   return { status: 'skipped', missingFields: [], warnings: [] };
 }
 
-function headFreshness(evidence: Evidence): AwpReviewCheckResult['head_freshness'] {
+function headFreshness(evidence: Evidence, repoHead: string): AwpReviewCheckResult['head_freshness'] {
   const signal = normalize(evidence.autonomous_signal);
   if (!isAutonomousSignal(signal)) return 'n/a';
   const reviewHead = normalizeRef(evidence.review_head_sha);
   const currentHead = normalizeRef(evidence.current_head_sha);
   if (!reviewHead || !currentHead) return 'missing';
+  if (repoHead !== 'n/a' && currentHead !== repoHead) return 'stale';
   return reviewHead === currentHead ? 'fresh' : 'stale';
 }
 
