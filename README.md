@@ -181,6 +181,7 @@ spec workflow-check --repo . --phase start --issue <issue-number-or-url>
 spec workflow-check --repo . --phase commit --pr-body /path/to/pr-body.md
 spec workflow-check --repo . --phase merge --pr-body /path/to/pr-body.md --head-sha <sha>
 spec workflow-check --repo . --phase commit --pr-body /path/to/pr-body.md --routing-evidence /path/to/start-gate.json
+spec awp-review-check --repo . --evidence /path/to/awp-review-evidence.json
 ```
 
 Notes:
@@ -195,6 +196,7 @@ Notes:
 - `spec workflow-check --format json` emits the same stable fields as the text output: `phase`, `status`, `repo`, `head_sha`, `checked_at`, `missing_fields`, `warnings`, and `evidence_summary`.
 - Hybrid AWP checks add optional JSON/text fields such as `routing_mode`, `routing_task_class`, `spark_required`, `worker_5_4_required`, `controller_role`, `controller_fallback`, `controller_fallback_reason`, `fallback_status`, `fallback_reason_quality`, and `routing_mismatch`.
 - Downstream repos such as `tachigo` / `tachiya` only need to copy or reference the workflow-check `status` and evidence `ref` in their PR body / ledger. Their Scope Police workflows should not parse full `spec plan` or task-package evidence.
+- AWP review follow-up 可使用 [AWP review triage gates](docs/awp-review-triage-gates.md) 與 `spec awp-review-check --repo . --evidence <path>` 檢查 review batch freshness、duplicate collapse、root-cause gate、patch budget 與 closeout ledger。這個 checker 只讀 local JSON，不讀寫 GitHub、不 resolve thread、不 auto-fix、不 merge。
 
 `spec workflow-check` phases:
 

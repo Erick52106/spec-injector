@@ -178,6 +178,31 @@ Safety:
     await workflowCheck(opts);
   });
 
+// awp-review-check subcommand
+program
+  .command('awp-review-check')
+  .description('Run local-only AWP review triage, root-cause, patch-budget, and closeout ledger checks')
+  .option('--repo <path>', 'Path to target repo (default: CWD)')
+  .requiredOption('--evidence <path>', 'Path to local AWP review evidence JSON')
+  .option('--format <format>', 'Output format: text or json (default: text)')
+  .addHelpText('after', `
+Checks:
+  - review batch freshness by reviewed HEAD vs current HEAD
+  - duplicate finding collapse by fingerprint / duplicate_of evidence
+  - repeated-concept root-cause and matrix-test evidence
+  - follow-up patch budget and split assessment
+  - closeout ledger disposition, rationale, validation, and evidence refs
+
+Safety:
+  Local-only evidence checker. Prints to stdout by default.
+  Does not call GitHub, resolve review threads, comment, auto-fix, merge, close, or mutate downstream repos.
+  PASS is evidence only; it is not approval or merge authorization.
+`)
+  .action(async (opts: { repo?: string; evidence: string; format?: string }) => {
+    const { awpReviewCheck } = await import('./awp-review-check.js');
+    await awpReviewCheck(opts);
+  });
+
 // evidence-check subcommand
 program
   .command('evidence-check')
