@@ -220,6 +220,7 @@ function assessReviewBatch(evidence: Evidence, findings: Finding[], repoHead: st
   }
 
   if (missing.length > 0) return { status: 'manual', missingFields: unique(missing), warnings };
+  if (repoHead === 'n/a') return { status: 'fail', missingFields: ['repo_head_sha'], warnings };
   if (repoHead !== 'n/a' && currentHead !== repoHead) return { status: 'fail', missingFields: ['current_head_sha_freshness'], warnings };
   if (reviewHead !== currentHead) return { status: 'fail', missingFields: ['review_head_freshness'], warnings };
   return { status: 'pass', missingFields: [], warnings };
@@ -229,7 +230,7 @@ function assessRootCause(findings: Finding[]): GateAssessment {
   const missing: string[] = [];
   const activeByConcept = new Map<string, Finding[]>();
   for (const finding of findings) {
-    if (isDuplicate(finding) || !isActiveFinding(finding)) continue;
+    if (!participatesInRootCauseGate(finding)) continue;
     const concept = normalizeRef(finding.concept_key);
     if (!concept) {
       missing.push('concept_key');
@@ -394,6 +395,7 @@ function headFreshness(evidence: Evidence, repoHead: string): AwpReviewCheckResu
   const reviewHead = normalizeRef(evidence.review_head_sha);
   const currentHead = normalizeRef(evidence.current_head_sha);
   if (!reviewHead || !currentHead) return 'missing';
+  if (repoHead === 'n/a') return 'missing';
   if (repoHead !== 'n/a' && currentHead !== repoHead) return 'stale';
   return reviewHead === currentHead ? 'fresh' : 'stale';
 }
@@ -420,6 +422,13 @@ function isActionableFinding(finding: Finding): boolean {
   if (normalize(finding.is_outdated) === 'yes') return false;
   if (normalize(finding.adoption_decision) === 'reject' && normalize(finding.category) === 'noise') return true;
   return isActiveFinding(finding) && normalize(finding.adoption_decision) !== 'defer';
+}
+
+function participatesInRootCauseGate(finding: Finding): boolean {
+  if (isDuplicate(finding)) return false;
+  if (normalize(finding.is_outdated) === 'yes') return false;
+  if (normalize(finding.adoption_decision) === 'defer') return false;
+  return isActiveFinding(finding);
 }
 
 function isDuplicate(finding: Finding): boolean {

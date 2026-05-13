@@ -1694,6 +1694,26 @@ test('spec awp-review-check fails when evidence current head differs from repo H
   assert.ok((parsed.missing_fields as string[]).includes('current_head_sha_freshness'));
 });
 
+test('spec awp-review-check fails autonomous evidence when repo HEAD cannot be read', async (t) => {
+  const repoDir = await createTempRepo(t, 'spec-injector-awp-review-non-git-');
+  await writeConfig(repoDir, { version: 2, guardrails: [] });
+  const evidencePath = path.join(repoRoot, 'tests', 'fixtures', 'awp-review', 'fresh-duplicate-pass.json');
+
+  const result = await runSpec([
+    'awp-review-check',
+    '--repo', repoDir,
+    '--evidence', evidencePath,
+    '--format', 'json',
+  ]);
+
+  assert.notEqual(result.code, 0);
+  const parsed = JSON.parse(result.stdout) as Record<string, unknown>;
+  assert.equal(parsed.status, 'fail');
+  assert.equal(parsed.review_batch_status, 'fail');
+  assert.equal(parsed.head_sha, 'n/a');
+  assert.ok((parsed.missing_fields as string[]).includes('repo_head_sha'));
+});
+
 test('spec awp-review-check returns manual when review head evidence is missing', async (t) => {
   const repoDir = await createTempRepo(t, 'spec-injector-awp-review-missing-sha-');
   await writeConfig(repoDir, { version: 2, guardrails: [] });
@@ -1773,6 +1793,41 @@ test('spec awp-review-check fails repeated concept findings without root-cause e
   assert.equal(parsed.root_cause_status, 'fail');
   assert.ok((parsed.missing_fields as string[]).includes('root_cause_assessment'));
   assert.ok((parsed.missing_fields as string[]).includes('matrix_tests_required'));
+});
+
+test('spec awp-review-check ignores outdated and deferred findings for repeated concept root-cause gate', async (t) => {
+  const repoDir = await createTempRepo(t, 'spec-injector-awp-review-root-inactive-');
+  await writeConfig(repoDir, { version: 2, guardrails: [] });
+  await initCleanGitRepo(repoDir);
+  const evidencePath = await writeAwpReviewFixture(repoDir, 'root-cause-missing-fail.json');
+  const raw = JSON.parse(await fs.readFile(evidencePath, 'utf8')) as Record<string, unknown>;
+  const findings = raw.findings as Array<Record<string, unknown>>;
+  findings[0] = {
+    ...findings[0],
+    is_outdated: 'yes',
+    adoption_decision: 'defer',
+    disposition: 'deferred',
+    rationale: 'superseded by current head evidence',
+  };
+  findings[1] = {
+    ...findings[1],
+    adoption_decision: 'defer',
+    disposition: 'deferred',
+    rationale: 'tracked in a later batch',
+  };
+  await fs.writeFile(evidencePath, `${JSON.stringify(raw, null, 2)}\n`, 'utf8');
+
+  const result = await runSpec([
+    'awp-review-check',
+    '--repo', repoDir,
+    '--evidence', evidencePath,
+    '--format', 'json',
+  ]);
+
+  assert.equal(result.code, 0, result.stderr);
+  const parsed = JSON.parse(result.stdout) as Record<string, unknown>;
+  assert.equal(parsed.status, 'pass');
+  assert.equal(parsed.root_cause_status, 'pass');
 });
 
 test('spec awp-review-check fails collapsed repeated concept without root-cause evidence', async (t) => {
