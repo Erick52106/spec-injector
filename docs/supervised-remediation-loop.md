@@ -85,7 +85,7 @@ Validation evidence must be copied or referenced in PR body / issue evidence. A 
 
 ## Relationship To Existing Guardrails
 
-#109 introduced `spec evidence-check` as a read-only consistency checker. Later workflow gates added `spec workflow-check` and `spec awp-review-check` evidence surfaces for autonomous or AWP-flavored flows.
+Issue `#109` introduced `spec evidence-check` as a read-only consistency checker. Later workflow gates added `spec workflow-check` and `spec awp-review-check` evidence surfaces for autonomous or AWP-flavored flows.
 
 This design depends on those guardrails rather than replacing them:
 
