@@ -53,6 +53,7 @@ type EvidenceCheckFixtureOptions = {
   checks?: Array<{ name: string; state?: string; conclusion?: string; bucket?: string }>;
   checksCommand?: { exitCode?: number; stdout?: string; stderr?: string };
   reviews?: Array<{ author?: { login?: string }; body?: string; state?: string; submittedAt?: string }>;
+  reviewThreads?: Array<{ isResolved?: boolean; isOutdated?: boolean }>;
 };
 
 type LabelAuditFixture = {
@@ -320,6 +321,7 @@ export async function createEvidenceCheckFixture(
     checks: options.checks ?? [
       { name: 'build', state: 'COMPLETED', conclusion: 'SUCCESS', bucket: 'pass' },
     ],
+    reviewThreads: options.reviewThreads ?? [],
     checksCommand: options.checksCommand,
     expectedPrRef: options.expectedPrRef ?? String(prNumber),
   });
@@ -531,6 +533,7 @@ async function createFakeEvidenceGh(
     pr: Record<string, unknown>;
     issue: Record<string, unknown>;
     checks: Array<Record<string, unknown>>;
+    reviewThreads?: Array<Record<string, unknown>>;
     checksCommand?: { exitCode?: number; stdout?: string; stderr?: string };
     expectedPrRef: string;
   }
@@ -600,6 +603,21 @@ if (args[0] === 'pr' && args[1] === 'checks') {
     process.exit(payload.checksCommand.exitCode ?? 0);
   }
   process.stdout.write(JSON.stringify(payload.checks));
+  process.exit(0);
+}
+
+if (args[0] === 'api' && args[1] === 'graphql') {
+  process.stdout.write(JSON.stringify({
+    data: {
+      repository: {
+        pullRequest: {
+          reviewThreads: {
+            nodes: payload.reviewThreads ?? [],
+          },
+        },
+      },
+    },
+  }));
   process.exit(0);
 }
 

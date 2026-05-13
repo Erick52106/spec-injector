@@ -171,6 +171,9 @@ spec workflow-check --repo . --phase commit --pr-body /path/to/pr-body.md
 spec workflow-check --repo . --phase merge --pr-body /path/to/pr-body.md --head-sha <sha>
 spec workflow-check --repo . --phase commit --pr-body /path/to/pr-body.md --routing-evidence /path/to/start-gate.json
 spec awp-review-check --repo . --evidence /path/to/awp-review-evidence.json
+spec workflow-check --repo . --phase merge --pr-body /path/to/pr-body.md --finding-disposition /path/to/findings.json
+spec workflow-check --repo . --phase merge --pr-body /path/to/pr-body.md --threshold-evidence /path/to/threshold.json
+spec workflow-check --repo . --phase merge --pr <number-or-url> --format json
 ```
 
 Notes:
@@ -184,7 +187,7 @@ Notes:
 - Autonomous worker-routing flows can use the [Hybrid AWP routing policy](docs/hybrid-awp-routing-policy.md) as the start-gate source of truth before implementation begins.
 - `spec workflow-check --format json` emits the same stable fields as text output: `phase`, `status`, `repo`, `head_sha`, `checked_at`, `missing_fields`, `warnings`, and `evidence_summary`.
 - Hybrid AWP checks add optional JSON/text fields such as `routing_mode`, `routing_task_class`, `spark_required`, `worker_5_4_required`, `controller_role`, `controller_fallback`, `controller_fallback_reason`, `fallback_status`, `fallback_reason_quality`, and `routing_mismatch`.
-- Downstream repos such as `tachigo` / `tachiya` only need to copy or reference the workflow-check `status` and evidence `ref` in their PR body / ledger. Their Scope Police workflows should not parse full `spec plan` or task-package evidence.
+- Downstream repos such as `tachigo` / `tachiya` only need to copy or reference the workflow-check `status` and evidence `ref` in their PR body / ledger. Their Scope Police workflows should not parse full `spec plan` or task-package evidence. See the [target repo adoption contract](docs/target-repo-adoption-contract.md).
 - AWP review follow-up can use [AWP review triage gates](docs/awp-review-triage-gates.md) and `spec awp-review-check --repo . --evidence <path>` to check review batch freshness, duplicate collapse, root-cause gates, patch budget, and closeout ledger evidence. This checker reads local JSON only; it does not read or write GitHub, resolve threads, auto-fix, or merge.
 
 `spec workflow-check` phases:
