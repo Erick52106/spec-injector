@@ -965,6 +965,7 @@ test('spec workflow-check start phase emits Hybrid AWP routing fields for autono
   assert.equal(parsed.controller_role, 'scope|architecture|review');
   assert.equal(parsed.controller_fallback, 'denied');
   assert.equal(parsed.controller_fallback_reason, 'n/a');
+  assert.ok(typeof parsed.delegation_threshold === 'string' && parsed.delegation_threshold.length > 0);
   assert.equal(parsed.fallback_status, 'n/a');
   assert.equal(parsed.fallback_reason_quality, 'n/a');
   assert.equal(parsed.routing_mismatch, 'none');
