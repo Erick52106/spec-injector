@@ -12,6 +12,8 @@ Dogfood finding、review blocker、CI failure、evidence freshness gap 與 repea
 
 Issue / PR label taxonomy、visual hierarchy、combination rules、migration staging 與 #110 label / milestone audit checker rules 見 [label-taxonomy.md](label-taxonomy.md)。
 
+Autonomous Worker Profiles / Codex autonomous PR work 的 start-gate routing source of truth 見 [Hybrid AWP routing policy](hybrid-awp-routing-policy.md)。該 policy 只適用於有明確 autonomous routing signal 的 workflow；一般 human PR 或非 autonomous work 不應因缺少 AWP routing evidence 而 fail。
+
 Future companion / workflow observability status vocabulary 見 [status-event-schema.md](status-event-schema.md)。該 schema 是 Layer 4 design proposal，不代表 daemon、companion UI、CLI JSON output、watcher、merge bot 或 target repo automation 已實作。
 
 `spec label-audit` 是 repo-local、human-readable 的 read-only guardrail。它讀取 accepted taxonomy 與 `gh issue list` / `gh pr list` metadata，輸出 `PASS` / `WARNING` / `NEEDS-HUMAN-REVIEW`；它只 report，不建立 labels、不修改 labels、不修改 milestones、不修改 issue / PR metadata。`needs human review` 代表 stop-and-report，不代表 checker 自動替 human 做 metadata 決策。

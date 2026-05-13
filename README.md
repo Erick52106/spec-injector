@@ -190,6 +190,7 @@ Notes:
 - `spec plan ... --dry-run --format prompt --verbose` is the recommended pre-implementation command for AI planning.
 - For a full generated task package file, omit `--dry-run`; output is written under `.spec-injector/out/`.
 - `spec workflow-check` is a local-only, stdout-first workflow gate for autonomous PR evidence. It does not edit GitHub, add/commit files, write task packages, comment, merge, or mutate downstream repos.
+- Autonomous worker-routing flow 可在 implementation 開始前使用 [Hybrid AWP routing policy](docs/hybrid-awp-routing-policy.md) 作為 start-gate source of truth。
 - `spec workflow-check --format json` emits the same stable fields as the text output: `phase`, `status`, `repo`, `head_sha`, `checked_at`, `missing_fields`, `warnings`, and `evidence_summary`.
 - Downstream repos such as `tachigo` / `tachiya` only need to copy or reference the workflow-check `status` and evidence `ref` in their PR body / ledger. Their Scope Police workflows should not parse full `spec plan` or task-package evidence.
 
