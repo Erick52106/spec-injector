@@ -60,7 +60,7 @@ async function runDoctor(workflow: string): Promise<DoctorResult> {
     },
     {
       id: 'workflow_check_phase_start_commit_merge',
-      status: /\bstart\|commit\|merge\b/.test(workflowOutput) ? 'pass' : 'fail',
+      status: hasWords(workflowOutput, ['start', 'commit', 'merge']) ? 'pass' : 'fail',
       required: true,
       evidence: 'spec workflow-check --help includes start|commit|merge',
     },
@@ -135,6 +135,10 @@ function hasLongOption(output: string, optionName: string): boolean {
   return new RegExp(`(?:^|\\s)--${escaped}(?:\\s|,|$)`, 'm').test(output);
 }
 
+function hasWords(output: string, words: string[]): boolean {
+  return words.every((word) => new RegExp(`\\b${word}\\b`, 'i').test(output));
+}
+
 function doctorExecutableCommand(): string[] {
   if (process.env.SPEC_DOCTOR_SPEC_BIN) return [process.env.SPEC_DOCTOR_SPEC_BIN];
   return [process.execPath, process.argv[1]];
@@ -156,8 +160,26 @@ async function readPackageVersion(): Promise<string> {
 
 async function readCommit(): Promise<string> {
   if (process.env.SPEC_INJECTOR_COMMIT) return process.env.SPEC_INJECTOR_COMMIT;
-  const result = run(['git', 'rev-parse', '--short', 'HEAD'], { cwd: packageRoot() });
+  const root = packageRoot();
+  const topLevel = run(['git', 'rev-parse', '--show-toplevel'], { cwd: root });
+  if (topLevel.exitCode !== 0) return 'unknown';
+
+  const [realRoot, realTopLevel] = await Promise.all([
+    realPathOrResolved(root),
+    realPathOrResolved(topLevel.stdout.trim()),
+  ]);
+  if (realRoot !== realTopLevel) return 'unknown';
+
+  const result = run(['git', 'rev-parse', '--short', 'HEAD'], { cwd: root });
   return result.exitCode === 0 ? result.stdout.trim() : 'unknown';
+}
+
+async function realPathOrResolved(value: string): Promise<string> {
+  try {
+    return await fs.realpath(value);
+  } catch {
+    return path.resolve(value);
+  }
 }
 
 function packageRoot(): string {

@@ -89,6 +89,10 @@ test('AI bootstrap install contract remains linked from workflow docs and README
   assert.match(contract, /SPEC_INJECTOR_DIR/);
   assert.match(contract, /node "\$SPEC_INJECTOR_DIR\/dist\/cli\/index\.js"/);
   assert.match(contract, /command -v spec/);
+  assert.match(contract, /spec workflow-check --help/);
+  assert.match(contract, /--finding-disposition/);
+  assert.match(contract, /--threshold-evidence/);
+  assert.match(contract, /--pr(?!-body)\b/);
   assert.match(contract, /spec doctor --workflow awp --format json/);
   assert.match(contract, /Do not commit `.spec-injector\/out\/`/);
   assert.match(contract, /tachigo/i);

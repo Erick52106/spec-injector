@@ -753,9 +753,10 @@ test('spec doctor reports current AWP workflow capabilities as JSON', async () =
     warnings: string[];
     capabilities: Array<{ id: string; status: string; evidence: string }>;
   };
+  const packageJson = JSON.parse(await fs.readFile(path.join(repoRoot, 'package.json'), 'utf8')) as { version: string };
   assert.equal(parsed.workflow, 'awp');
   assert.equal(parsed.status, 'pass');
-  assert.equal(parsed.version, '0.1.0');
+  assert.equal(parsed.version, packageJson.version);
   assert.deepEqual(parsed.missing_capabilities, []);
   assert.deepEqual(parsed.warnings, []);
   for (const id of [
@@ -779,6 +780,55 @@ test('spec doctor text output is concise and local-only', async () => {
   assert.match(result.stdout, /workflow_check_pr_readback=pass/);
   assert.match(result.stdout, /does not call GitHub/i);
   assert.doesNotMatch(result.stdout, /https:\/\/api\.github\.com/i);
+});
+
+test('spec doctor accepts workflow-check phase tokens with non-pipe separators', async (t) => {
+  const fakeSpec = await writeFakeSpec(t, {
+    rootHelp: 'Usage: spec\\nCommands:\\n  workflow-check\\n  awp-review-check\\n',
+    workflowHelp: [
+      'Usage: spec workflow-check',
+      '--phase <phase>',
+      'Supported phases: start, commit, merge',
+      '--finding-disposition <path>',
+      '--threshold-evidence <path>',
+      '--pr <number-or-url>',
+    ].join('\\n'),
+    awpReviewHelp: 'Usage: spec awp-review-check\\n',
+  });
+
+  const result = await runSpec(['doctor', '--workflow', 'awp', '--format', 'json'], {
+    env: { ...process.env, SPEC_DOCTOR_SPEC_BIN: fakeSpec },
+  });
+
+  assert.equal(result.code, 0, result.stderr);
+  const parsed = JSON.parse(result.stdout) as { status: string; capabilities: Array<{ id: string; status: string }> };
+  assert.equal(parsed.status, 'pass');
+  assert.equal(parsed.capabilities.find((capability) => capability.id === 'workflow_check_phase_start_commit_merge')?.status, 'pass');
+});
+
+test('spec doctor does not report target repo HEAD when installed package root is nested in another git repo', async (t) => {
+  const targetRepo = await createTempRepo(t, 'spec-injector-doctor-installed-');
+  await writeRepoFiles(targetRepo, { 'README.md': 'target repo\\n' });
+  await initCleanGitRepo(targetRepo);
+  const targetHead = (await runCommand('git', ['rev-parse', '--short', 'HEAD'], targetRepo)).stdout.trim();
+  const packageDir = path.join(targetRepo, 'node_modules', 'spec-injector');
+  await fs.mkdir(packageDir, { recursive: true });
+  await fs.cp(path.join(repoRoot, 'dist'), path.join(packageDir, 'dist'), { recursive: true });
+  await fs.symlink(path.join(repoRoot, 'node_modules'), path.join(packageDir, 'node_modules'), 'dir');
+  const packageJson = JSON.parse(await fs.readFile(path.join(repoRoot, 'package.json'), 'utf8')) as { version: string };
+  await fs.writeFile(path.join(packageDir, 'package.json'), `${JSON.stringify({ version: packageJson.version }, null, 2)}\n`, 'utf8');
+
+  const result = await runCommand(process.execPath, [
+    path.join(packageDir, 'dist', 'cli', 'index.js'),
+    'doctor',
+    '--workflow', 'awp',
+    '--format', 'json',
+  ], targetRepo);
+  const parsed = JSON.parse(result.stdout) as { commit: string; status: string };
+
+  assert.equal(parsed.status, 'pass');
+  assert.equal(parsed.commit, 'unknown');
+  assert.notEqual(parsed.commit, targetHead);
 });
 
 test('spec doctor fails when workflow-check is missing from installed spec', async (t) => {
@@ -842,9 +892,9 @@ async function writeFakeSpec(
   const fakeSpec = path.join(binDir, 'spec');
   await fs.writeFile(fakeSpec, `#!/usr/bin/env node
 const args = process.argv.slice(2);
-const rootHelp = ${JSON.stringify(options.rootHelp)};
-const workflowHelp = ${JSON.stringify(options.workflowHelp)};
-const awpReviewHelp = ${JSON.stringify(options.awpReviewHelp)};
+const rootHelp = ${JSON.stringify(options.rootHelp.replaceAll('\\n', '\n'))};
+const workflowHelp = ${JSON.stringify(options.workflowHelp.replaceAll('\\n', '\n'))};
+const awpReviewHelp = ${JSON.stringify(options.awpReviewHelp.replaceAll('\\n', '\n'))};
 if (args.length === 0 || (args.length === 1 && args[0] === '--help')) {
   process.stdout.write(rootHelp);
   process.exit(0);
