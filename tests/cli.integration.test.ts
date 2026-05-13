@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
+import os from 'node:os';
 import path from 'node:path';
 import { classifyDomains, classifyDomainsWithEvidence } from '../dist/classifier/domain.js';
 import { config as runConfigCommand } from '../dist/cli/config.js';
@@ -645,6 +646,7 @@ test('spec --help lists deterministic CLI purpose and available commands', async
   assert.match(result.stdout, /\bplan\b/);
   assert.match(result.stdout, /\bconfig\b/);
   assert.match(result.stdout, /\bclean\b/);
+  assert.match(result.stdout, /\bdoctor\b/);
   assert.match(result.stdout, /\bworkflow-check\b/);
   assert.match(result.stdout, /\bevidence-check\b/);
   assert.match(result.stdout, /\blabel-audit\b/);
@@ -723,6 +725,13 @@ test('spec plan/config/clean help describe AI-facing usage and safety constraint
   assert.match(workflowCheckHelp.stdout, /stdout/i);
   assert.match(workflowCheckHelp.stdout, /does not edit GitHub/i);
 
+  const doctorHelp = await runSpec(['doctor', '--help']);
+  assert.equal(doctorHelp.code, 0, doctorHelp.stderr);
+  assert.match(doctorHelp.stdout, /workflow capability readiness/i);
+  assert.match(doctorHelp.stdout, /--workflow <workflow>/);
+  assert.match(doctorHelp.stdout, /awp/i);
+  assert.match(doctorHelp.stdout, /local-only/i);
+
   const labelAuditHelp = await runSpec(['label-audit', '--help']);
   assert.equal(labelAuditHelp.code, 0, labelAuditHelp.stderr);
   assert.match(labelAuditHelp.stdout, /label and milestone metadata audit/i);
@@ -730,6 +739,180 @@ test('spec plan/config/clean help describe AI-facing usage and safety constraint
   assert.match(labelAuditHelp.stdout, /reports only/i);
   assert.match(labelAuditHelp.stdout, /does not create, rename, delete, or mutate/i);
 });
+
+test('spec doctor reports current AWP workflow capabilities as JSON', async () => {
+  const result = await runSpec(['doctor', '--workflow', 'awp', '--format', 'json']);
+
+  assert.equal(result.code, 0, result.stderr);
+  assert.equal(result.stderr, '');
+  const parsed = JSON.parse(result.stdout) as {
+    workflow: string;
+    status: string;
+    version: string;
+    missing_capabilities: string[];
+    warnings: string[];
+    capabilities: Array<{ id: string; status: string; evidence: string }>;
+  };
+  const packageJson = JSON.parse(await fs.readFile(path.join(repoRoot, 'package.json'), 'utf8')) as { version: string };
+  assert.equal(parsed.workflow, 'awp');
+  assert.equal(parsed.status, 'pass');
+  assert.equal(parsed.version, packageJson.version);
+  assert.deepEqual(parsed.missing_capabilities, []);
+  assert.deepEqual(parsed.warnings, []);
+  for (const id of [
+    'workflow_check_command',
+    'workflow_check_phase_start_commit_merge',
+    'workflow_check_finding_disposition',
+    'workflow_check_threshold_evidence',
+    'workflow_check_pr_readback',
+    'awp_review_check_command',
+  ]) {
+    assert.equal(parsed.capabilities.find((capability) => capability.id === id)?.status, 'pass', id);
+  }
+});
+
+test('spec doctor text output is concise and local-only', async () => {
+  const result = await runSpec(['doctor', '--workflow', 'awp']);
+
+  assert.equal(result.code, 0, result.stderr);
+  assert.match(result.stdout, /workflow=awp/);
+  assert.match(result.stdout, /status=pass/);
+  assert.match(result.stdout, /workflow_check_pr_readback=pass/);
+  assert.match(result.stdout, /does not call GitHub/i);
+  assert.doesNotMatch(result.stdout, /https:\/\/api\.github\.com/i);
+});
+
+test('spec doctor accepts workflow-check phase tokens with non-pipe separators', async (t) => {
+  const fakeSpec = await writeFakeSpec(t, {
+    rootHelp: 'Usage: spec\\nCommands:\\n  workflow-check\\n  awp-review-check\\n',
+    workflowHelp: [
+      'Usage: spec workflow-check',
+      '--phase <phase>',
+      'Supported phases: start, commit, merge',
+      '--finding-disposition <path>',
+      '--threshold-evidence <path>',
+      '--pr <number-or-url>',
+    ].join('\\n'),
+    awpReviewHelp: 'Usage: spec awp-review-check\\n',
+  });
+
+  const result = await runSpec(['doctor', '--workflow', 'awp', '--format', 'json'], {
+    env: { ...process.env, SPEC_DOCTOR_SPEC_BIN: fakeSpec },
+  });
+
+  assert.equal(result.code, 0, result.stderr);
+  const parsed = JSON.parse(result.stdout) as { status: string; capabilities: Array<{ id: string; status: string }> };
+  assert.equal(parsed.status, 'pass');
+  assert.equal(parsed.capabilities.find((capability) => capability.id === 'workflow_check_phase_start_commit_merge')?.status, 'pass');
+});
+
+test('spec doctor does not report target repo HEAD when installed package root is nested in another git repo', async (t) => {
+  const targetRepo = await createTempRepo(t, 'spec-injector-doctor-installed-');
+  await writeRepoFiles(targetRepo, { 'README.md': 'target repo\\n' });
+  await initCleanGitRepo(targetRepo);
+  const targetHead = (await runCommand('git', ['rev-parse', '--short', 'HEAD'], targetRepo)).stdout.trim();
+  const packageDir = path.join(targetRepo, 'node_modules', 'spec-injector');
+  await fs.mkdir(packageDir, { recursive: true });
+  await fs.cp(path.join(repoRoot, 'dist'), path.join(packageDir, 'dist'), { recursive: true });
+  await fs.symlink(path.join(repoRoot, 'node_modules'), path.join(packageDir, 'node_modules'), 'dir');
+  const packageJson = JSON.parse(await fs.readFile(path.join(repoRoot, 'package.json'), 'utf8')) as { version: string };
+  await fs.writeFile(path.join(packageDir, 'package.json'), `${JSON.stringify({ version: packageJson.version }, null, 2)}\n`, 'utf8');
+
+  const result = await runCommand(process.execPath, [
+    path.join(packageDir, 'dist', 'cli', 'index.js'),
+    'doctor',
+    '--workflow', 'awp',
+    '--format', 'json',
+  ], targetRepo);
+  const parsed = JSON.parse(result.stdout) as { commit: string; status: string };
+
+  assert.equal(parsed.status, 'pass');
+  assert.equal(parsed.commit, 'unknown');
+  assert.notEqual(parsed.commit, targetHead);
+});
+
+test('spec doctor fails when workflow-check is missing from installed spec', async (t) => {
+  const fakeSpec = await writeFakeSpec(t, {
+    rootHelp: 'Usage: spec\\nCommands:\\n  plan\\n  validate\\n  awp-review-check\\n',
+    workflowHelpExitCode: 1,
+    workflowHelp: 'error: unknown command workflow-check\\n',
+    awpReviewHelp: 'Usage: spec awp-review-check\\n',
+  });
+
+  const result = await runSpec(['doctor', '--workflow', 'awp', '--format', 'json'], {
+    env: { ...process.env, SPEC_DOCTOR_SPEC_BIN: fakeSpec },
+  });
+
+  assert.notEqual(result.code, 0);
+  const parsed = JSON.parse(result.stdout) as { status: string; missing_capabilities: string[]; capabilities: Array<{ id: string; status: string }> };
+  assert.equal(parsed.status, 'fail');
+  assert.ok(parsed.missing_capabilities.includes('workflow_check_command'));
+  assert.equal(parsed.capabilities.find((capability) => capability.id === 'workflow_check_command')?.status, 'fail');
+});
+
+test('spec doctor fails when installed workflow-check lacks #242 AWP flags', async (t) => {
+  const fakeSpec = await writeFakeSpec(t, {
+    rootHelp: 'Usage: spec\\nCommands:\\n  workflow-check\\n  awp-review-check\\n',
+    workflowHelp: [
+      'Usage: spec workflow-check',
+      '--phase <phase>',
+      'Workflow phase: start|commit|merge',
+      '--pr-body <path>',
+      '--routing-evidence <path>',
+    ].join('\\n'),
+    awpReviewHelp: 'Usage: spec awp-review-check\\n',
+  });
+
+  const result = await runSpec(['doctor', '--workflow', 'awp', '--format', 'json'], {
+    env: { ...process.env, SPEC_DOCTOR_SPEC_BIN: fakeSpec },
+  });
+
+  assert.notEqual(result.code, 0);
+  const parsed = JSON.parse(result.stdout) as { status: string; missing_capabilities: string[] };
+  assert.equal(parsed.status, 'fail');
+  assert.ok(parsed.missing_capabilities.includes('workflow_check_finding_disposition'));
+  assert.ok(parsed.missing_capabilities.includes('workflow_check_threshold_evidence'));
+  assert.ok(parsed.missing_capabilities.includes('workflow_check_pr_readback'));
+});
+
+async function writeFakeSpec(
+  t: { after(fn: () => void | Promise<void>): void },
+  options: {
+    rootHelp: string;
+    workflowHelp: string;
+    workflowHelpExitCode?: number;
+    awpReviewHelp: string;
+    awpReviewHelpExitCode?: number;
+  }
+): Promise<string> {
+  const binDir = await fs.mkdtemp(path.join(os.tmpdir(), 'spec-injector-doctor-fake-'));
+  t.after(async () => {
+    await fs.rm(binDir, { recursive: true, force: true });
+  });
+  const fakeSpec = path.join(binDir, 'spec');
+  await fs.writeFile(fakeSpec, `#!/usr/bin/env node
+const args = process.argv.slice(2);
+const rootHelp = ${JSON.stringify(options.rootHelp.replaceAll('\\n', '\n'))};
+const workflowHelp = ${JSON.stringify(options.workflowHelp.replaceAll('\\n', '\n'))};
+const awpReviewHelp = ${JSON.stringify(options.awpReviewHelp.replaceAll('\\n', '\n'))};
+if (args.length === 0 || (args.length === 1 && args[0] === '--help')) {
+  process.stdout.write(rootHelp);
+  process.exit(0);
+}
+if (args[0] === 'workflow-check' && args[1] === '--help') {
+  process.stdout.write(workflowHelp);
+  process.exit(${options.workflowHelpExitCode ?? 0});
+}
+if (args[0] === 'awp-review-check' && args[1] === '--help') {
+  process.stdout.write(awpReviewHelp);
+  process.exit(${options.awpReviewHelpExitCode ?? 0});
+}
+process.stderr.write('unknown fake spec invocation: ' + args.join(' '));
+process.exit(1);
+`, 'utf8');
+  await fs.chmod(fakeSpec, 0o755);
+  return fakeSpec;
+}
 
 test('spec workflow-check rejects invalid phases before touching repo state', async () => {
   const result = await runSpec(['workflow-check', '--repo', repoRoot, '--phase', 'review']);
