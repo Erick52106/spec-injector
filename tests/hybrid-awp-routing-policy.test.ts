@@ -101,3 +101,34 @@ test('AI bootstrap install contract remains linked from workflow docs and README
   assert.match(readme, /\[AI bootstrap install contract\]\(docs\/ai-bootstrap-install-contract\.md\)/);
   assert.match(englishReadme, /\[AI bootstrap install contract\]\(docs\/ai-bootstrap-install-contract\.md\)/);
 });
+
+test('AWP dogfood outcome ledger remains linked from dogfood docs and README', async () => {
+  const ledgerPath = path.join(repoRoot, 'docs', 'awp-dogfood-outcome-ledger.md');
+  const dogfoodPath = path.join(repoRoot, 'docs', 'dogfood.md');
+  const readmePath = path.join(repoRoot, 'README.md');
+  const englishReadmePath = path.join(repoRoot, 'README.en.md');
+
+  const [ledger, dogfood, readme, englishReadme] = await Promise.all([
+    fs.readFile(ledgerPath, 'utf8'),
+    fs.readFile(dogfoodPath, 'utf8'),
+    fs.readFile(readmePath, 'utf8'),
+    fs.readFile(englishReadmePath, 'utf8'),
+  ]);
+
+  assert.match(ledger, /AWP Dogfood Outcome Ledger/);
+  assert.match(ledger, /至少 3-5/);
+  assert.match(ledger, /missed worker/i);
+  assert.match(ledger, /over-delegated worker/i);
+  assert.match(ledger, /workflow-check caught real issue/i);
+  assert.match(ledger, /Scope Police false positive/i);
+  assert.match(ledger, /review rounds/i);
+  assert.match(ledger, /main rework reason/i);
+  assert.match(ledger, /Workflow-created friction/);
+  assert.match(ledger, /P0 must-fix/i);
+  assert.match(ledger, /follow-up ledger/i);
+  assert.match(ledger, /Downstream Scope Police should not parse full `spec plan` output/);
+
+  assert.match(dogfood, /\[AWP Dogfood Outcome Ledger\]\(awp-dogfood-outcome-ledger\.md\)/);
+  assert.match(readme, /\[docs\/awp-dogfood-outcome-ledger\.md\]\(docs\/awp-dogfood-outcome-ledger\.md\)/);
+  assert.match(englishReadme, /\[docs\/awp-dogfood-outcome-ledger\.md\]\(docs\/awp-dogfood-outcome-ledger\.md\)/);
+});

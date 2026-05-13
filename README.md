@@ -383,6 +383,7 @@ Important fields:
 - Workflow: [docs/workflow.md](docs/workflow.md)
 - Validation matrix and quality gates: [docs/validation.md](docs/validation.md)
 - Dogfood: [docs/dogfood.md](docs/dogfood.md)
+- AWP dogfood outcome ledger: [docs/awp-dogfood-outcome-ledger.md](docs/awp-dogfood-outcome-ledger.md)
 - Install / release strategy: [docs/release.md](docs/release.md)
 - AI workflow guides: [docs/workflows/README.md](docs/workflows/README.md)
 - Issue / PR conventions: [docs/conventions.md](docs/conventions.md)
