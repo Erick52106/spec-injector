@@ -6,6 +6,8 @@ This document is the readiness checklist for #120 full README showcase work.
 
 It exists to decide whether #120 is safe to start, how it should be split, and which claims or visuals are safe to present as current versus future.
 
+Post-#120 4.6+ / 4.7 evidence gates are tracked in [readiness-gates.md](readiness-gates.md).
+
 This document does not:
 
 - implement #120

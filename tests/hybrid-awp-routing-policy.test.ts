@@ -155,6 +155,28 @@ test('third brownfield dogfood report remains indexed with safety and caveat evi
   assert.match(report, /No target repo code was modified/);
 });
 
+test('4.6 and 4.7 readiness gates remain documented and linked from README showcase planning', async () => {
+  const gatesPath = path.join(repoRoot, 'docs', 'readiness-gates.md');
+  const showcasePath = path.join(repoRoot, 'docs', 'readme-showcase-readiness.md');
+
+  const [gates, showcase] = await Promise.all([
+    fs.readFile(gatesPath, 'utf8'),
+    fs.readFile(showcasePath, 'utf8'),
+  ]);
+
+  assert.match(showcase, /\[readiness-gates\.md\]\(readiness-gates\.md\)/);
+  assert.match(gates, /4\.6\+ Readiness/);
+  assert.match(gates, /4\.7 Readiness/);
+  assert.match(gates, /Why 4\.8\+ Remains Blocked/);
+  assert.match(gates, /Third Dogfood Gate/);
+  assert.match(gates, /#206 zh-TW Classifier Gate/);
+  assert.match(gates, /Layer 3 Protocol Boundary/);
+  assert.match(gates, /Layer 4 Visual \/ Companion \/ Status Boundary/);
+  assert.match(gates, /README \/ Visual Overclaim Checklist/);
+  assert.match(gates, /#149 remains parked/);
+  assert.match(gates, /Do not close #198, #206, or #149/);
+});
+
 test('optional AWP delegation evidence manifest remains linked from policy docs and README', async () => {
   const manifestPath = path.join(repoRoot, 'docs', 'awp-delegation-evidence-manifest.md');
   const policyPath = path.join(repoRoot, 'docs', 'hybrid-awp-routing-policy.md');
