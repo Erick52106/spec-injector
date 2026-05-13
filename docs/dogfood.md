@@ -8,6 +8,11 @@ Dogfood 不等於直接實作 target repo issue。它是一種觀察與校準流
 
 AWP / `spec workflow-check` target PR outcome 的跨 repo 回收欄位，請見 [AWP Dogfood Outcome Ledger](awp-dogfood-outcome-ledger.md)。該 ledger 用於累積 3-5 張真實 PR outcome 後再調整核心 AWP baseline；它不是 merge approval，也不要求 target repo PR body 塞完整 metrics。
 
+## Reports
+
+- [Hono 2026-05-14 third brownfield dogfood](dogfood/hono-2026-05-14.md): read-only WARN evidence for `honojs/hono#4916`, with strong issue-mentioned source capture but caveated auto-discovery / classifier precision.
+- [Vitest 2026-05-09 second brownfield dogfood](dogfood/vitest-2026-05-09.md): read-only WARN evidence for `vitest-dev/vitest#10280`, with monorepo/path-shape caveats.
+
 ## What Dogfood Checks
 
 Dogfood report 應觀察：
