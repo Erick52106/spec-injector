@@ -133,6 +133,28 @@ test('AWP dogfood outcome ledger remains linked from dogfood docs and README', a
   assert.match(englishReadme, /\[docs\/awp-dogfood-outcome-ledger\.md\]\(docs\/awp-dogfood-outcome-ledger\.md\)/);
 });
 
+test('third brownfield dogfood report remains indexed with safety and caveat evidence', async () => {
+  const dogfoodIndexPath = path.join(repoRoot, 'docs', 'dogfood.md');
+  const reportPath = path.join(repoRoot, 'docs', 'dogfood', 'hono-2026-05-14.md');
+
+  const [dogfoodIndex, report] = await Promise.all([
+    fs.readFile(dogfoodIndexPath, 'utf8'),
+    fs.readFile(reportPath, 'utf8'),
+  ]);
+
+  assert.match(dogfoodIndex, /\[Hono 2026-05-14 third brownfield dogfood\]\(dogfood\/hono-2026-05-14\.md\)/);
+  assert.match(report, /honojs\/hono/);
+  assert.match(report, /16c4e3885f51376cb6cbddc80eeae0202cd86234/);
+  assert.match(report, /https:\/\/github\.com\/honojs\/hono\/issues\/4916/);
+  assert.match(report, /Did not create `\.spec-injector\/` in target repo/);
+  assert.match(report, /src\/utils\/cookie\.ts/);
+  assert.match(report, /src\/helper\/cookie\/index\.ts/);
+  assert.match(report, /src\/utils\/cookie\.test\.ts/);
+  assert.match(report, /Verdict: `WARN`/);
+  assert.match(report, /does not unblock #206/);
+  assert.match(report, /No target repo code was modified/);
+});
+
 test('optional AWP delegation evidence manifest remains linked from policy docs and README', async () => {
   const manifestPath = path.join(repoRoot, 'docs', 'awp-delegation-evidence-manifest.md');
   const policyPath = path.join(repoRoot, 'docs', 'hybrid-awp-routing-policy.md');
