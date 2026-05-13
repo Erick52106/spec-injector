@@ -5,6 +5,8 @@ import { ensureRepoPath } from '../utils/fs.js';
 import { run } from '../utils/shell.js';
 import { plan } from './plan.js';
 import type { Config } from '../config/types.js';
+import { fetchIssue } from '../github/issue.js';
+import type { Issue } from '../github/types.js';
 
 type WorkflowPhase = 'start' | 'commit' | 'merge';
 type WorkflowStatus = 'pass' | 'fail' | 'manual' | 'skipped';
@@ -17,6 +19,7 @@ type WorkflowCheckOptions = {
   issue?: string;
   prBody?: string;
   headSha?: string;
+  routingEvidence?: string;
 };
 
 type WorkflowCheckResult = {
@@ -28,6 +31,18 @@ type WorkflowCheckResult = {
   missing_fields: string[];
   warnings: string[];
   evidence_summary: string;
+  routing_mode?: string;
+  routing_task_class?: string;
+  spark_required?: string;
+  worker_5_4_required?: string;
+  controller_role?: string;
+  controller_fallback?: string;
+  controller_fallback_reason?: string;
+  delegation_threshold?: string;
+  routing_evidence_ref?: string;
+  fallback_status?: string;
+  fallback_reason_quality?: string;
+  routing_mismatch?: string;
 };
 
 type PrBodyEvidence = {
@@ -38,6 +53,49 @@ type PrBodyEvidence = {
   hasFinalMergeGate: boolean;
   hasLatestHead: boolean;
   headMatches: boolean | null;
+  hasAutonomousSignal: boolean;
+  hasRoutingStatus: boolean;
+  routingStatus: 'pass' | 'fail' | 'manual' | 'skipped' | 'pending' | 'unknown' | null;
+  hasRoutingRef: boolean;
+  routingRef: string | null;
+  hasDelegationLog: boolean;
+  hasSparkEvidence: boolean;
+  hasWorker54Evidence: boolean;
+  claimsControllerOnly: boolean;
+  controllerFallback: 'allowed' | 'denied' | null;
+  controllerFallbackReason: string | null;
+};
+
+type RoutingTaskClass =
+  | 'trivial_readonly'
+  | 'metadata_readback'
+  | 'small_docs_template_test'
+  | 'workflow_policy'
+  | 'product_behavior'
+  | 'merge_gate'
+  | 'unknown';
+
+type RoutingEvidence = {
+  source_status?: WorkflowStatus;
+  source_missing_fields?: string[];
+  routing_mode: string;
+  routing_task_class: RoutingTaskClass | 'n/a';
+  spark_required: 'yes' | 'no' | 'n/a';
+  worker_5_4_required: 'yes' | 'no' | 'n/a';
+  controller_role: string;
+  controller_fallback: 'allowed' | 'denied' | 'n/a';
+  controller_fallback_reason: string;
+  delegation_threshold: string;
+  routing_evidence_ref: string;
+  head_sha?: string;
+  spark_readback_evidence?: string;
+  worker_5_4_evidence?: string;
+};
+
+type FallbackAssessment = {
+  fallback_status: 'pass' | 'fail' | 'manual' | 'n/a';
+  fallback_reason_quality: 'strong' | 'weak' | 'missing' | 'n/a';
+  routing_mismatch: string[];
 };
 
 const PHASES = new Set<WorkflowPhase>(['start', 'commit', 'merge']);
@@ -47,6 +105,12 @@ const SPEC_REF_PATTERN = /\b(?:spec[_ -]evidence[_ -]ref|spec[_ -]gate[_ -]ref|w
 const MANUAL_FALLBACK_PATTERN = /\bmanual(?: checklist)? fallback\b|\bmanual spec gate\b|\bmanual workflow gate\b/i;
 const FINAL_MERGE_GATE_PATTERN = /\bfinal merge gate\b|\bmerge gate\b/i;
 const LATEST_HEAD_PATTERN = /\b(?:latest head|head sha|commit hash|head)\b[^\n\r]{0,80}\b[0-9a-f]{7,40}\b/i;
+const ROUTING_STATUS_PATTERN = /\b(?:routing[_ -]evidence[_ -]status|routing status)\b\s*[:=]\s*(pass|fail|manual|skipped|pending|unknown)\s*$/im;
+const AUTONOMOUS_SIGNAL_PATTERN = /\b(?:Autonomous Worker Profiles|Hybrid AWP|AWP|Codex autonomous PR|autonomous worker-routing|controller_fallback|Delegation Execution Log)\b/i;
+const SPARK_EVIDENCE_PATTERN = /\b(?:ops_spark|spark(?: \/ ops)? worker|ops worker|spark_readback_evidence|readback evidence)\b/i;
+const WORKER_54_EVIDENCE_PATTERN = /\b(?:worker_5_4|5\.4 worker|implementation worker|bounded implementation worker)\b/i;
+const CONTROLLER_ONLY_PATTERN = /\b(?:controller-only|controller only|controller_fallback\s*[:=]\s*allowed|controller fallback\s*[:=]\s*allowed)\b/i;
+const WEAK_FALLBACK_REASONS = new Set(['', 'n/a', 'na', 'none', 'small', 'done', 'ok', 'trivial']);
 
 export async function workflowCheck(opts: WorkflowCheckOptions): Promise<void> {
   const phase = parsePhase(opts.phase);
@@ -129,6 +193,25 @@ async function runStartPhase(
       missingFields: ['issue'],
       warnings: [...warnings, 'Start phase did not receive --issue; bounded context generation must be checked manually.'],
       evidenceSummary: 'start gate requires manual fallback because --issue was not provided',
+      routing: noRoutingEvidence(),
+      fallback: noFallbackAssessment(),
+    });
+  }
+
+  let issue: Issue | null = null;
+  try {
+    issue = await fetchIssue(opts.issue, repoPath);
+  } catch (err) {
+    return buildResult({
+      phase: 'start',
+      repoPath,
+      checkedAt,
+      status: 'fail',
+      missingFields: ['issue'],
+      warnings,
+      evidenceSummary: `start gate could not read issue for routing: ${(err as Error).message}`,
+      routing: noRoutingEvidence(),
+      fallback: noFallbackAssessment(),
     });
   }
 
@@ -150,17 +233,30 @@ async function runStartPhase(
       missingFields: ['bounded_context'],
       warnings: [...warnings, ...dryRun.warnings],
       evidenceSummary: `start gate could not generate bounded context: ${dryRun.error}`,
+      routing: issue ? classifyRouting(issue) : noRoutingEvidence(),
+      fallback: noFallbackAssessment(),
     });
   }
+
+  const routing = classifyRouting(issue);
+  const fallback = assessFallback(routing);
+  const missingFields: string[] = [];
+  if (routing.routing_task_class === 'unknown') missingFields.push('routing_task_class');
+  if (fallback.fallback_status === 'fail') missingFields.push('controller_fallback_reason');
+  const status: WorkflowStatus = missingFields.length > 0 || fallback.fallback_status === 'manual' ? 'manual' : 'pass';
 
   return buildResult({
     phase: 'start',
     repoPath,
     checkedAt,
-    status: 'pass',
-    missingFields: [],
+    status,
+    missingFields,
     warnings: [...warnings, ...dryRun.warnings],
-    evidenceSummary: 'start gate passed: bounded context generated with dry-run stdout-only plan check',
+    evidenceSummary: status === 'pass'
+      ? 'start gate passed: bounded context generated and Hybrid AWP routing classified'
+      : 'start gate requires manual fallback: bounded context generated but routing needs review',
+    routing,
+    fallback,
   });
 }
 
@@ -196,6 +292,7 @@ async function runCommitPhase(
   }
 
   let evidence: PrBodyEvidence;
+  let routing: RoutingEvidence | null = null;
   try {
     evidence = await parsePrBodyEvidence(opts.prBody, opts.headSha);
   } catch (err) {
@@ -209,8 +306,37 @@ async function runCommitPhase(
       evidenceSummary: 'commit gate failed: PR body evidence could not be read',
     });
   }
+  try {
+    routing = opts.routingEvidence ? await readRoutingEvidence(opts.routingEvidence) : null;
+  } catch (err) {
+    return buildResult({
+      phase: 'commit',
+      repoPath,
+      checkedAt,
+      status: 'fail',
+      missingFields: ['routing_evidence'],
+      warnings: [...warnings, `Could not read routing evidence: ${(err as Error).message}`],
+      evidenceSummary: 'commit gate failed: routing evidence could not be read',
+    });
+  }
+
+  const routingCheck = routing ? assessRoutingAlignment(routing, evidence, 'commit', opts.headSha) : null;
 
   if (evidence.hasManualFallback && !isBlockedSpecStatus(evidence.specStatus)) {
+    const fallback = assessFallback(routing ?? evidenceToFallbackRouting(evidence), evidence);
+    if (routingCheck && routingCheck.fallback_status === 'fail') {
+      return buildResult({
+        phase: 'commit',
+        repoPath,
+        checkedAt,
+        status: 'fail',
+        missingFields: routingCheck.routing_mismatch,
+        warnings,
+        evidenceSummary: `commit gate routing alignment failed: ${routingCheck.routing_mismatch.join(', ')}`,
+        routing: routing ?? evidenceToFallbackRouting(evidence),
+        fallback: routingCheck,
+      });
+    }
     return buildResult({
       phase: 'commit',
       repoPath,
@@ -219,6 +345,8 @@ async function runCommitPhase(
       missingFields: [],
       warnings,
       evidenceSummary: 'commit gate recorded manual fallback evidence and staged state is clean',
+      routing: routing ?? evidenceToFallbackRouting(evidence),
+      fallback,
     });
   }
 
@@ -226,6 +354,7 @@ async function runCommitPhase(
   if (isBlockedSpecStatus(evidence.specStatus)) {
     missingFields.push('ready_spec_gate_status');
   }
+  if (routingCheck) missingFields.push(...routingCheck.routing_mismatch);
 
   if (missingFields.length > 0) {
     return buildResult({
@@ -236,6 +365,8 @@ async function runCommitPhase(
       missingFields,
       warnings,
       evidenceSummary: `commit gate missing ${missingFields.join(', ')}`,
+      routing: routing ?? undefined,
+      fallback: routingCheck ?? undefined,
     });
   }
 
@@ -247,6 +378,8 @@ async function runCommitPhase(
     missingFields: [],
     warnings,
     evidenceSummary: 'commit gate passed: staged artifacts clean and PR body contains spec gate evidence',
+    routing: routing ?? undefined,
+    fallback: routingCheck ?? inferFallbackFromEvidence(evidence),
   });
 }
 
@@ -282,6 +415,7 @@ async function runMergePhase(
   }
 
   let evidence: PrBodyEvidence;
+  let routing: RoutingEvidence | null = null;
   try {
     evidence = await parsePrBodyEvidence(opts.prBody, opts.headSha);
   } catch (err) {
@@ -295,6 +429,19 @@ async function runMergePhase(
       evidenceSummary: 'merge gate failed: PR body evidence could not be read',
     });
   }
+  try {
+    routing = opts.routingEvidence ? await readRoutingEvidence(opts.routingEvidence) : null;
+  } catch (err) {
+    return buildResult({
+      phase: 'merge',
+      repoPath,
+      checkedAt,
+      status: 'fail',
+      missingFields: ['routing_evidence'],
+      warnings: [...warnings, `Could not read routing evidence: ${(err as Error).message}`],
+      evidenceSummary: 'merge gate failed: routing evidence could not be read',
+    });
+  }
 
   const missingFields = missingMergeFields(evidence, Boolean(opts.headSha));
   if (isBlockedSpecStatus(evidence.specStatus)) {
@@ -303,6 +450,8 @@ async function runMergePhase(
   if (evidence.headMatches === false) {
     missingFields.push('head_sha_freshness');
   }
+  const routingCheck = routing ? assessRoutingAlignment(routing, evidence, 'merge', opts.headSha) : null;
+  if (routingCheck) missingFields.push(...routingCheck.routing_mismatch);
 
   if (evidence.hasManualFallback && missingFields.length > 0 && !isBlockedSpecStatus(evidence.specStatus) && evidence.headMatches !== false) {
     return buildResult({
@@ -313,6 +462,8 @@ async function runMergePhase(
       missingFields,
       warnings,
       evidenceSummary: `merge gate requires manual fallback: missing ${missingFields.join(', ')}`,
+      routing: routing ?? evidenceToFallbackRouting(evidence),
+      fallback: routingCheck ?? assessFallback(routing ?? evidenceToFallbackRouting(evidence), evidence),
     });
   }
 
@@ -325,6 +476,8 @@ async function runMergePhase(
       missingFields,
       warnings,
       evidenceSummary: renderMergeFailureSummary(missingFields),
+      routing: routing ?? undefined,
+      fallback: routingCheck ?? undefined,
     });
   }
 
@@ -336,6 +489,8 @@ async function runMergePhase(
     missingFields: [],
     warnings,
     evidenceSummary: 'merge gate passed: final merge gate, spec evidence, and HEAD freshness are present',
+    routing: routing ?? undefined,
+    fallback: routingCheck ?? inferFallbackFromEvidence(evidence),
   });
 }
 
@@ -382,6 +537,11 @@ async function parsePrBodyEvidence(prBodyPath: string, expectedHeadSha?: string)
   const body = await fs.readFile(path.resolve(prBodyPath), 'utf8');
   const statusMatch = body.match(SPEC_STATUS_PATTERN);
   const specStatus = statusMatch?.[1]?.toLowerCase() as PrBodyEvidence['specStatus'] | undefined;
+  const rawRoutingStatus = parseTextField(body, 'routing_evidence_status') ?? parseTextField(body, 'routing evidence status') ?? null;
+  const routingStatus = parseRoutingStatus(rawRoutingStatus);
+  const routingRef = parseTextField(body, 'routing_evidence_ref') ??
+    parseTextField(body, 'routing evidence ref') ??
+    parseTextField(body, 'routing_ref');
   const hasLatestHead = Boolean(expectedHeadSha)
     ? body.includes(expectedHeadSha as string)
     : LATEST_HEAD_PATTERN.test(body);
@@ -394,6 +554,46 @@ async function parsePrBodyEvidence(prBodyPath: string, expectedHeadSha?: string)
     hasFinalMergeGate: FINAL_MERGE_GATE_PATTERN.test(body),
     hasLatestHead,
     headMatches: expectedHeadSha ? body.includes(expectedHeadSha) : null,
+    hasAutonomousSignal: AUTONOMOUS_SIGNAL_PATTERN.test(body),
+    hasRoutingStatus: Boolean(rawRoutingStatus),
+    routingStatus: routingStatus ?? null,
+    hasRoutingRef: Boolean(routingRef),
+    routingRef,
+    hasDelegationLog: /\bDelegation Execution Log\b/i.test(body),
+    hasSparkEvidence: hasEvidenceRefValue(body, 'ops_spark readback evidence') ||
+      hasEvidenceRefValue(body, 'spark_readback_evidence') ||
+      hasEvidenceRefValue(body, 'spark readback evidence'),
+    hasWorker54Evidence: hasEvidenceRefValue(body, 'worker_5_4 evidence') ||
+      hasEvidenceRefValue(body, 'worker_5_4_evidence') ||
+      hasEvidenceRefValue(body, '5.4 worker evidence'),
+    claimsControllerOnly: CONTROLLER_ONLY_PATTERN.test(body),
+    controllerFallback: parseAllowedDeniedField(body, 'controller_fallback') ?? parseAllowedDeniedField(body, 'controller fallback'),
+    controllerFallbackReason: parseTextField(body, 'controller_fallback_reason') ?? parseTextField(body, 'fallback_reason'),
+  };
+}
+
+async function readRoutingEvidence(routingEvidencePath: string): Promise<RoutingEvidence> {
+  const raw = JSON.parse(await fs.readFile(path.resolve(routingEvidencePath), 'utf8')) as Record<string, unknown>;
+  const routingTaskClass = requiredEnum(
+    raw.routing_task_class ?? raw.task_class,
+    ['trivial_readonly', 'metadata_readback', 'small_docs_template_test', 'workflow_policy', 'product_behavior', 'merge_gate', 'unknown', 'n/a'],
+    'routing_task_class'
+  ) as RoutingEvidence['routing_task_class'];
+  return {
+    source_status: requiredEnum(raw.status, ['pass', 'fail', 'manual', 'skipped'], 'status') as WorkflowStatus,
+    source_missing_fields: readStringArray(raw.missing_fields, 'missing_fields'),
+    routing_mode: requiredEnum(raw.routing_mode, ['hybrid_awp', 'strict_awp', 'controller_fallback', 'n/a'], 'routing_mode'),
+    routing_task_class: routingTaskClass,
+    spark_required: requiredEnum(raw.spark_required, ['yes', 'no', 'n/a'], 'spark_required') as RoutingEvidence['spark_required'],
+    worker_5_4_required: requiredEnum(raw.worker_5_4_required, ['yes', 'no', 'n/a'], 'worker_5_4_required') as RoutingEvidence['worker_5_4_required'],
+    controller_role: String(raw.controller_role ?? 'n/a'),
+    controller_fallback: requiredEnum(raw.controller_fallback, ['allowed', 'denied', 'n/a'], 'controller_fallback') as RoutingEvidence['controller_fallback'],
+    controller_fallback_reason: String(raw.controller_fallback_reason ?? raw.fallback_reason ?? 'n/a'),
+    delegation_threshold: String(raw.delegation_threshold ?? 'n/a'),
+    routing_evidence_ref: requiredEvidenceRef(raw.routing_evidence_ref ?? raw.evidence_ref, 'routing_evidence_ref'),
+    head_sha: typeof raw.head_sha === 'string' ? raw.head_sha : undefined,
+    spark_readback_evidence: typeof raw.spark_readback_evidence === 'string' ? raw.spark_readback_evidence : undefined,
+    worker_5_4_evidence: typeof raw.worker_5_4_evidence === 'string' ? raw.worker_5_4_evidence : undefined,
   };
 }
 
@@ -429,8 +629,10 @@ function buildResult(input: {
   missingFields: string[];
   warnings: string[];
   evidenceSummary: string;
+  routing?: RoutingEvidence;
+  fallback?: FallbackAssessment;
 }): WorkflowCheckResult {
-  return {
+  const result: WorkflowCheckResult = {
     phase: input.phase,
     status: input.status,
     repo: input.repoPath,
@@ -440,6 +642,23 @@ function buildResult(input: {
     warnings: unique(input.warnings),
     evidence_summary: input.evidenceSummary,
   };
+  if (input.routing) {
+    result.routing_mode = input.routing.routing_mode;
+    result.routing_task_class = input.routing.routing_task_class;
+    result.spark_required = input.routing.spark_required;
+    result.worker_5_4_required = input.routing.worker_5_4_required;
+    result.controller_role = input.routing.controller_role;
+    result.controller_fallback = input.routing.controller_fallback;
+    result.controller_fallback_reason = input.routing.controller_fallback_reason;
+    result.delegation_threshold = input.routing.delegation_threshold;
+    result.routing_evidence_ref = input.routing.routing_evidence_ref;
+  }
+  if (input.fallback) {
+    result.fallback_status = input.fallback.fallback_status;
+    result.fallback_reason_quality = input.fallback.fallback_reason_quality;
+    result.routing_mismatch = input.fallback.routing_mismatch.length > 0 ? input.fallback.routing_mismatch.join(',') : 'none';
+  }
+  return result;
 }
 
 function getHeadSha(repoPath: string): string {
@@ -462,6 +681,270 @@ function printResult(result: WorkflowCheckResult, format: OutputFormat): void {
   console.log(`missing_fields=${result.missing_fields.length > 0 ? result.missing_fields.join(',') : 'none'}`);
   console.log(`warnings=${result.warnings.length > 0 ? result.warnings.join(' | ') : 'none'}`);
   console.log(`evidence_summary=${result.evidence_summary}`);
+  for (const key of [
+    'routing_mode',
+    'routing_task_class',
+    'spark_required',
+    'worker_5_4_required',
+    'controller_role',
+    'controller_fallback',
+    'controller_fallback_reason',
+    'delegation_threshold',
+    'routing_evidence_ref',
+    'fallback_status',
+    'fallback_reason_quality',
+    'routing_mismatch',
+  ] as const) {
+    if (result[key]) console.log(`${key}=${result[key]}`);
+  }
+}
+
+function classifyRouting(issue: Issue): RoutingEvidence {
+  const text = `${issue.title}\n${issue.body}\n${issue.labels.join('\n')}`;
+  if (!AUTONOMOUS_SIGNAL_PATTERN.test(text)) return noRoutingEvidence();
+
+  const taskClass = classifyRoutingTaskClass(text);
+  if (taskClass === 'unknown') {
+    return {
+      routing_mode: 'hybrid_awp',
+      routing_task_class: 'unknown',
+      spark_required: 'n/a',
+      worker_5_4_required: 'n/a',
+      controller_role: 'scope|review',
+      controller_fallback: 'denied',
+      controller_fallback_reason: 'n/a',
+      delegation_threshold: 'manual review required because deterministic routing could not classify the task',
+      routing_evidence_ref: `workflow-check:start:issue-${issue.number}`,
+    };
+  }
+
+  const defaults = routingDefaults(taskClass);
+  return {
+    ...defaults,
+    routing_mode: defaults.controller_fallback === 'allowed' ? 'controller_fallback' : 'hybrid_awp',
+    routing_task_class: taskClass,
+    controller_fallback_reason: defaults.controller_fallback === 'allowed' ? 'n/a' : 'n/a',
+    routing_evidence_ref: `workflow-check:start:issue-${issue.number}`,
+  };
+}
+
+function classifyRoutingTaskClass(text: string): RoutingTaskClass {
+  if (/\b(?:merge gate|final merge|review finding|head sha|merge readiness)\b/i.test(text)) return 'merge_gate';
+  if (/\breadback\b/i.test(text) || (/\b(?:GitHub|issue metadata|PR metadata|CI|review-thread|connector|CodeRabbit)\b/i.test(text) && /\b(?:metadata|readback|checks?|status)\b/i.test(text))) return 'metadata_readback';
+  if (/\b(?:Scope Police|workflow policy|workflow governance|routing policy|guardrail|workflow-check|CI workflow)\b/i.test(text)) return 'workflow_policy';
+  if (/\b(?:docs?|README|template|fixture|test)\b/i.test(text) && /\b(?:small|narrow|docs?|template|fixture|test)\b/i.test(text)) return 'small_docs_template_test';
+  if (/\b(?:backend|frontend|runtime|auth|database|user-visible|product behavior)\b/i.test(text)) return 'product_behavior';
+  if (/\b(?:trivial|0-3 minute|read-only)\b/i.test(text)) return 'trivial_readonly';
+  return 'unknown';
+}
+
+function routingDefaults(
+  taskClass: Exclude<RoutingTaskClass, 'unknown'>
+): Omit<RoutingEvidence, 'routing_mode' | 'routing_task_class' | 'routing_evidence_ref' | 'controller_fallback_reason'> {
+  const defaults: Record<Exclude<RoutingTaskClass, 'unknown'>, Omit<RoutingEvidence, 'routing_mode' | 'routing_task_class' | 'routing_evidence_ref' | 'controller_fallback_reason'>> = {
+    trivial_readonly: {
+      spark_required: 'no',
+      worker_5_4_required: 'no',
+      controller_role: 'fallback_executor',
+      controller_fallback: 'allowed',
+      delegation_threshold: '0-3 minute read-only checks may use controller fallback with an explicit bounded reason',
+    },
+    metadata_readback: {
+      spark_required: 'yes',
+      worker_5_4_required: 'no',
+      controller_role: 'review',
+      controller_fallback: 'denied',
+      delegation_threshold: 'routine GitHub, CI, PR, issue, or review readback should route to ops / Spark evidence',
+    },
+    small_docs_template_test: {
+      spark_required: 'no',
+      worker_5_4_required: 'yes',
+      controller_role: 'scope|review',
+      controller_fallback: 'allowed',
+      delegation_threshold: 'narrow docs, template, fixture, or workflow-test patches should use a bounded worker when available',
+    },
+    workflow_policy: {
+      spark_required: 'no',
+      worker_5_4_required: 'yes',
+      controller_role: 'scope|architecture|review',
+      controller_fallback: 'denied',
+      delegation_threshold: 'workflow policy changes need controller scope and review with bounded implementation worker support',
+    },
+    product_behavior: {
+      spark_required: 'no',
+      worker_5_4_required: 'yes',
+      controller_role: 'architecture|review',
+      controller_fallback: 'denied',
+      delegation_threshold: 'product behavior needs controller architecture ownership and bounded implementation slices',
+    },
+    merge_gate: {
+      spark_required: 'yes',
+      worker_5_4_required: 'no',
+      controller_role: 'merge_gate',
+      controller_fallback: 'denied',
+      delegation_threshold: 'merge readiness decisions stay controller-owned while routine readback can be delegated',
+    },
+  };
+  return defaults[taskClass];
+}
+
+function assessRoutingAlignment(
+  routing: RoutingEvidence,
+  evidence: PrBodyEvidence,
+  phase: WorkflowPhase,
+  expectedHeadSha?: string
+): FallbackAssessment {
+  const mismatch: string[] = [];
+  if (routing.source_status && routing.source_status !== 'pass') mismatch.push('ready_routing_evidence_status');
+  for (const field of routing.source_missing_fields ?? []) mismatch.push(`routing_evidence.${field}`);
+  if (!evidence.hasRoutingStatus) mismatch.push('routing_evidence_status');
+  if (isBlockedRoutingStatus(evidence.routingStatus)) mismatch.push('ready_routing_evidence_status');
+  if (!evidence.hasRoutingRef) mismatch.push('routing_evidence_ref');
+  if (routing.routing_evidence_ref !== 'n/a' && evidence.routingRef !== routing.routing_evidence_ref) mismatch.push('routing_evidence_ref_match');
+  if (!evidence.hasDelegationLog) mismatch.push('delegation_execution_log');
+  if (routing.spark_required === 'yes' && !evidence.hasSparkEvidence && !isEvidenceRefValue(routing.spark_readback_evidence)) mismatch.push('spark_readback_evidence');
+  if (routing.worker_5_4_required === 'yes' && !evidence.hasWorker54Evidence && !isEvidenceRefValue(routing.worker_5_4_evidence)) mismatch.push('worker_5_4_evidence');
+  if (routing.controller_fallback === 'denied' && evidence.claimsControllerOnly) mismatch.push('controller_fallback_denied');
+  if (phase === 'merge' && expectedHeadSha && routing.head_sha && routing.head_sha !== expectedHeadSha) mismatch.push('routing_evidence_freshness');
+
+  const fallback = assessFallback(routing, evidence);
+  if (fallback.fallback_status === 'fail' || fallback.fallback_status === 'manual') mismatch.push('controller_fallback_reason');
+  return {
+    fallback_status: mismatch.length > 0 || fallback.fallback_status === 'fail' || fallback.fallback_status === 'manual' ? 'fail' : fallback.fallback_status,
+    fallback_reason_quality: fallback.fallback_reason_quality,
+    routing_mismatch: unique(mismatch),
+  };
+}
+
+function assessFallback(routing: RoutingEvidence, evidence?: PrBodyEvidence): FallbackAssessment {
+  const fallbackUsed = Boolean(
+    evidence?.controllerFallback === 'allowed' ||
+      evidence?.claimsControllerOnly ||
+      evidence?.hasManualFallback
+  );
+  if (!fallbackUsed) {
+    return noFallbackAssessment();
+  }
+  const reason = evidence?.controllerFallbackReason ?? routing.controller_fallback_reason;
+  const quality = fallbackReasonQuality(reason);
+  if (quality === 'strong') {
+    return { fallback_status: 'pass', fallback_reason_quality: 'strong', routing_mismatch: [] };
+  }
+  return {
+    fallback_status: quality === 'missing' ? 'manual' : 'fail',
+    fallback_reason_quality: quality,
+    routing_mismatch: ['controller_fallback_reason'],
+  };
+}
+
+function isBlockedRoutingStatus(status: PrBodyEvidence['routingStatus']): boolean {
+  return status === 'fail' || status === 'pending' || status === 'unknown';
+}
+
+function inferFallbackFromEvidence(evidence: PrBodyEvidence): FallbackAssessment | undefined {
+  if (evidence.controllerFallback !== 'allowed' && !evidence.hasManualFallback) return undefined;
+  return assessFallback(evidenceToFallbackRouting(evidence), evidence);
+}
+
+function evidenceToFallbackRouting(evidence: PrBodyEvidence): RoutingEvidence {
+  return {
+    routing_mode: evidence.hasAutonomousSignal ? 'controller_fallback' : 'n/a',
+    routing_task_class: 'n/a',
+    spark_required: 'n/a',
+    worker_5_4_required: 'n/a',
+    controller_role: 'fallback_executor',
+    controller_fallback: evidence.controllerFallback ?? (evidence.hasManualFallback ? 'allowed' : 'n/a'),
+    controller_fallback_reason: evidence.controllerFallbackReason ?? 'n/a',
+    delegation_threshold: 'manual checklist fallback evidence supplied in PR body',
+    routing_evidence_ref: 'n/a',
+  };
+}
+
+function fallbackReasonQuality(reason: string | null | undefined): FallbackAssessment['fallback_reason_quality'] {
+  const normalized = String(reason ?? '').trim().toLowerCase();
+  if (!normalized || normalized === 'n/a') return 'missing';
+  if (WEAK_FALLBACK_REASONS.has(normalized)) return 'weak';
+  return normalized.length >= 12 ? 'strong' : 'weak';
+}
+
+function noRoutingEvidence(): RoutingEvidence {
+  return {
+    routing_mode: 'n/a',
+    routing_task_class: 'n/a',
+    spark_required: 'n/a',
+    worker_5_4_required: 'n/a',
+    controller_role: 'n/a',
+    controller_fallback: 'n/a',
+    controller_fallback_reason: 'n/a',
+    delegation_threshold: 'n/a',
+    routing_evidence_ref: 'n/a',
+  };
+}
+
+function noFallbackAssessment(): FallbackAssessment {
+  return {
+    fallback_status: 'n/a',
+    fallback_reason_quality: 'n/a',
+    routing_mismatch: [],
+  };
+}
+
+function parseAllowedDeniedField(body: string, fieldName: string): 'allowed' | 'denied' | null {
+  const value = parseTextField(body, fieldName);
+  if (!value) return null;
+  const normalized = value.toLowerCase();
+  if (normalized.startsWith('allowed')) return 'allowed';
+  if (normalized.startsWith('denied')) return 'denied';
+  return null;
+}
+
+function parseTextField(body: string, fieldName: string): string | null {
+  const escaped = fieldName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const match = body.match(new RegExp(`(?:^|\\n)\\s*(?:[-*]\\s*)?${escaped}\\s*[:=]\\s*([^\\n\\r]+)`, 'i'));
+  return match?.[1]?.trim() ?? null;
+}
+
+function hasEvidenceRefValue(body: string, fieldName: string): boolean {
+  return isEvidenceRefValue(parseTextField(body, fieldName));
+}
+
+function isEvidenceRefValue(value: string | null | undefined): boolean {
+  if (!value) return false;
+  const normalized = value.trim().toLowerCase();
+  if (WEAK_FALLBACK_REASONS.has(normalized)) return false;
+  if (['missing', 'pending', 'unknown', 'fail', 'failed'].includes(normalized)) return false;
+  return /^https?:\/\//i.test(value) || /^workflow-check:/i.test(value) || /#issuecomment-\d+/.test(value);
+}
+
+function requiredEnum(value: unknown, allowed: string[], fieldName: string): string {
+  if (typeof value !== 'string' || !allowed.includes(value)) {
+    throw new Error(`${fieldName} must be one of ${allowed.join('|')}`);
+  }
+  return value;
+}
+
+function readStringArray(value: unknown, fieldName: string): string[] {
+  if (value === undefined) return [];
+  if (!Array.isArray(value) || value.some((entry) => typeof entry !== 'string')) {
+    throw new Error(`${fieldName} must be an array of strings`);
+  }
+  return value;
+}
+
+function requiredEvidenceRef(value: unknown, fieldName: string): string {
+  if (typeof value !== 'string' || !isEvidenceRefValue(value)) {
+    throw new Error(`${fieldName} must be a URL or workflow-check evidence ref`);
+  }
+  return value;
+}
+
+function parseRoutingStatus(value: string | null): PrBodyEvidence['routingStatus'] {
+  if (value === null) return null;
+  const normalized = value.trim().toLowerCase();
+  if (['pass', 'fail', 'manual', 'skipped', 'pending', 'unknown'].includes(normalized)) {
+    return normalized as PrBodyEvidence['routingStatus'];
+  }
+  return 'unknown';
 }
 
 async function captureConsole(fn: () => Promise<void>): Promise<{ ok: true; warnings: string[] } | { ok: false; warnings: string[]; error: string }> {

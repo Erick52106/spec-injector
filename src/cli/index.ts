@@ -154,11 +154,12 @@ program
   .option('--issue <number-or-url>', 'Issue number or URL for start-phase dry-run bounded context checks')
   .option('--pr-body <path>', 'Path to a local PR body markdown file for commit/merge evidence checks')
   .option('--head-sha <sha>', 'Expected latest head SHA for merge evidence freshness checks')
+  .option('--routing-evidence <path>', 'Path to local Hybrid AWP start-gate routing evidence JSON')
   .addHelpText('after', `
 Checks:
   - start: validate config; with --issue, dry-run bounded context generation without writing a task package
-  - commit: detect staged .spec-injector/spec output/private context artifacts and optional PR body spec evidence
-  - merge: require final merge gate, spec gate status/ref, and latest HEAD evidence in the local PR body
+  - commit: detect staged .spec-injector/spec output/private context artifacts and optional PR body spec/routing evidence
+  - merge: require final merge gate, spec gate status/ref, routing evidence alignment, and latest HEAD evidence in the local PR body
 
 Safety:
   Local-only workflow gate. Prints to stdout by default.
@@ -171,6 +172,7 @@ Safety:
     issue?: string;
     prBody?: string;
     headSha?: string;
+    routingEvidence?: string;
   }) => {
     const { workflowCheck } = await import('./workflow-check.js');
     await workflowCheck(opts);
