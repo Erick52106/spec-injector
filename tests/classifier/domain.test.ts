@@ -420,6 +420,110 @@ test('dogfood-shaped add-to-cart issue keeps frontend signal without database or
   assert.ok(!result.evidence.some((e) => e.domain === 'tooling'), `Expected no tooling evidence, got ${JSON.stringify(result.evidence)}`);
 });
 
+test('zh-TW auth database docs and ci keywords classify with deterministic evidence', () => {
+  const result = classifyDomainsWithEvidence(issue({
+    title: '補齊登入權限與資料庫遷移文件',
+    body: [
+      '新增說明文件，記錄資料表欄位和查詢行為。',
+      '修正 GitHub Actions 持續整合的建置步驟。',
+      '登入、授權、角色和憑證行為都要保留。',
+    ].join('\n'),
+    labels: [],
+  }));
+
+  assert.ok(result.domains.includes('auth'), `Expected auth in ${result.domains.join(', ')}`);
+  assert.ok(result.domains.includes('database'), `Expected database in ${result.domains.join(', ')}`);
+  assert.ok(result.domains.includes('docs'), `Expected docs in ${result.domains.join(', ')}`);
+  assert.ok(result.domains.includes('ci'), `Expected ci in ${result.domains.join(', ')}`);
+  assert.ok(result.evidence.some((e) =>
+    e.domain === 'auth' && e.term === '登入' && e.source === 'title'
+  ));
+  assert.ok(result.evidence.some((e) =>
+    e.domain === 'database' && e.term === '資料庫' && e.source === 'title'
+  ));
+  assert.ok(result.evidence.some((e) =>
+    e.domain === 'docs' && e.term === '說明文件' && e.source === 'body'
+  ));
+  assert.ok(result.evidence.some((e) =>
+    e.domain === 'ci' && e.term === '持續整合' && e.source === 'body'
+  ));
+});
+
+test('zh-TW frontend backend api and i18n keywords classify without semantic matching', () => {
+  const result = classifyDomainsWithEvidence(issue({
+    title: '前端畫面串接後端端點與多語系翻譯',
+    body: [
+      '使用者介面元件需要呼叫後端服務的路由。',
+      '請求與回應格式要穩定，語系切換和在地化文案也要保留。',
+    ].join('\n'),
+    labels: [],
+  }));
+
+  assert.ok(result.domains.includes('frontend'), `Expected frontend in ${result.domains.join(', ')}`);
+  assert.ok(result.domains.includes('backend'), `Expected backend in ${result.domains.join(', ')}`);
+  assert.ok(result.domains.includes('api'), `Expected api in ${result.domains.join(', ')}`);
+  assert.ok(result.domains.includes('i18n'), `Expected i18n in ${result.domains.join(', ')}`);
+  assert.ok(result.evidence.some((e) =>
+    e.domain === 'frontend' && e.term === '前端' && e.source === 'title'
+  ));
+  assert.ok(result.evidence.some((e) =>
+    e.domain === 'backend' && e.term === '後端' && e.source === 'title'
+  ));
+  assert.ok(result.evidence.some((e) =>
+    e.domain === 'api' && e.term === '端點' && e.source === 'title'
+  ));
+  assert.ok(result.evidence.some((e) =>
+    e.domain === 'i18n' && e.term === '多語系' && e.source === 'title'
+  ));
+});
+
+test('zh-TW workflow metadata stays out of runtime domains without explicit signals', () => {
+  const result = classifyDomainsWithEvidence(issue({
+    title: '整理 PR body 與 issue evidence comment',
+    body: [
+      '請使用繁體中文回覆，保留 commands、file paths 和 raw output。',
+      '更新 closeout 紀錄並確認 reviewers 已讀回最新狀態。',
+      '這是流程紀錄，不是功能修正。',
+    ].join('\n'),
+    labels: ['area:workflow'],
+  }));
+
+  assert.ok(!result.domains.includes('auth'), `Expected auth to be absent from ${result.domains.join(', ')}`);
+  assert.ok(!result.domains.includes('database'), `Expected database to be absent from ${result.domains.join(', ')}`);
+  assert.ok(!result.domains.includes('frontend'), `Expected frontend to be absent from ${result.domains.join(', ')}`);
+  assert.ok(!result.domains.includes('backend'), `Expected backend to be absent from ${result.domains.join(', ')}`);
+  assert.ok(!result.domains.includes('api'), `Expected api to be absent from ${result.domains.join(', ')}`);
+  assert.ok(!result.domains.includes('i18n'), `Expected i18n to be absent from ${result.domains.join(', ')}`);
+});
+
+test('zh-TW generic model and file wording does not imply database', () => {
+  const result = classifyDomainsWithEvidence(issue({
+    title: '整理 AI 模型回覆文件',
+    body: [
+      '調整本機檔案說明，只處理提示文字和工作紀錄。',
+      '模型這個詞指的是 AI 回覆設定，不是產品資料設計。',
+    ].join('\n'),
+    labels: ['docs'],
+  }));
+
+  assert.ok(result.domains.includes('docs'), `Expected docs in ${result.domains.join(', ')}`);
+  assert.ok(!result.domains.includes('database'), `Expected database to be absent from ${result.domains.join(', ')}`);
+});
+
+test('zh-TW generic service wording does not imply backend', () => {
+  const result = classifyDomainsWithEvidence(issue({
+    title: '更新客服服務品質與服務條款文件',
+    body: [
+      '這是產品文案和支援流程調整。',
+      '沒有 runtime 程式碼或部署設定變更。',
+    ].join('\n'),
+    labels: ['docs'],
+  }));
+
+  assert.ok(result.domains.includes('docs'), `Expected docs in ${result.domains.join(', ')}`);
+  assert.ok(!result.domains.includes('backend'), `Expected backend to be absent from ${result.domains.join(', ')}`);
+});
+
 test('classification evidence and rejected reasons keep deterministic shape and ordering', () => {
   const sampleIssue = issue({
     title: 'Dashboard endpoint route transaction review',
