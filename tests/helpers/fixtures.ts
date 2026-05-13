@@ -50,10 +50,11 @@ type EvidenceCheckFixtureOptions = {
   headSha?: string;
   expectedPrRef?: string;
   isDraft?: boolean;
-  checks?: Array<{ name: string; state?: string; conclusion?: string; bucket?: string }>;
+  checks?: Array<{ name: string; state?: string; conclusion?: string; bucket?: string; status?: string; completedAt?: string; startedAt?: string }>;
   checksCommand?: { exitCode?: number; stdout?: string; stderr?: string };
   reviews?: Array<{ author?: { login?: string }; body?: string; state?: string; submittedAt?: string }>;
   reviewThreads?: Array<{ isResolved?: boolean; isOutdated?: boolean }>;
+  forbiddenChecksJsonFields?: string[];
 };
 
 type LabelAuditFixture = {
@@ -323,6 +324,7 @@ export async function createEvidenceCheckFixture(
     ],
     reviewThreads: options.reviewThreads ?? [],
     checksCommand: options.checksCommand,
+    forbiddenChecksJsonFields: options.forbiddenChecksJsonFields,
     expectedPrRef: options.expectedPrRef ?? String(prNumber),
   });
 
@@ -535,6 +537,7 @@ async function createFakeEvidenceGh(
     checks: Array<Record<string, unknown>>;
     reviewThreads?: Array<Record<string, unknown>>;
     checksCommand?: { exitCode?: number; stdout?: string; stderr?: string };
+    forbiddenChecksJsonFields?: string[];
     expectedPrRef: string;
   }
 ): Promise<{
@@ -592,6 +595,14 @@ if (args[0] === 'pr' && args[1] === 'checks') {
   if (args[2] !== payload.expectedPrRef) {
     console.error('Unexpected checks PR ref: ' + args[2]);
     process.exit(1);
+  }
+  const jsonFlagIndex = args.indexOf('--json');
+  const requestedFields = String(args[jsonFlagIndex + 1] ?? '').split(',').map((value) => value.trim()).filter(Boolean);
+  for (const forbiddenField of payload.forbiddenChecksJsonFields ?? []) {
+    if (requestedFields.includes(forbiddenField)) {
+      console.error('Unsupported checks json field requested: ' + forbiddenField);
+      process.exit(1);
+    }
   }
   if (payload.checksCommand) {
     if (payload.checksCommand.stdout !== undefined) {

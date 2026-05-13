@@ -683,7 +683,7 @@ async function runMergeCloseoutPhase(
     '--repo',
     context.repo,
     '--json',
-    'name,state,bucket,link,conclusion',
+    'name,state,bucket,link,startedAt,completedAt',
   ]);
   const threadsRead = readReviewThreads(context.prRef, context.repo);
 
@@ -717,7 +717,9 @@ async function runMergeCloseoutPhase(
     readWarnings.push(threadsRead.error);
   }
 
-  const checksStatus = checksRead.error ? 'manual' : summarizeChecksStatus(checks);
+  const checksSummary = checksRead.error ? { status: 'manual' as WorkflowStatus, warnings: [] } : summarizeChecks(checks);
+  readWarnings.push(...checksSummary.warnings);
+  const checksStatus = checksSummary.status;
   const unresolvedCount = threadsRead.value === null
     ? null
     : threadsRead.value.filter((thread) => thread.isResolved !== true).length;
@@ -741,7 +743,7 @@ async function runMergeCloseoutPhase(
       ? 'fail'
       : 'manual';
 
-  if (checksStatus === 'fail') missingFields.push('checks_status');
+  if (checksStatus !== 'pass') missingFields.push('checks_status');
   if (sourceIssueEvidenceStatus !== 'pass') missingFields.push('source_issue_evidence');
   if (specGateStatus !== 'pass') missingFields.push('spec_gate_status');
   if (routingEvidenceStatus !== 'pass') missingFields.push('routing_evidence_status');
@@ -1524,10 +1526,44 @@ function manualCloseout(missingFields: string[], warnings: string[]): CloseoutRe
 }
 
 function summarizeChecksStatus(checks: Array<Record<string, unknown>>): WorkflowStatus {
-  if (checks.length === 0) return 'manual';
-  if (checks.some((check) => /fail|failure|cancel|timed_out|action_required/i.test(`${check.bucket ?? ''} ${check.conclusion ?? ''} ${check.state ?? ''}`))) return 'fail';
-  if (checks.some((check) => /pending|queued|in_progress|waiting|requested/i.test(`${check.bucket ?? ''} ${check.conclusion ?? ''} ${check.state ?? ''}`))) return 'manual';
-  return 'pass';
+  return summarizeChecks(checks).status;
+}
+
+function summarizeChecks(checks: Array<Record<string, unknown>>): { status: WorkflowStatus; warnings: string[] } {
+  if (checks.length === 0) return { status: 'manual', warnings: ['checks_status manual fallback: no checks were returned.'] };
+  const warnings: string[] = [];
+  let hasManual = false;
+
+  for (const check of checks) {
+    const statusText = checkStatusText(check);
+    if (/fail|failure|cancel|cancelled|timed_out|action_required|startup_failure/i.test(statusText)) {
+      return { status: 'fail', warnings };
+    }
+    if (/pending|queued|in_progress|waiting|requested/i.test(statusText)) {
+      hasManual = true;
+      warnings.push(`checks_status manual fallback: ${checkName(check)} is not complete (${statusText || 'unknown status'}).`);
+      continue;
+    }
+    if (!/\b(?:pass|passed|success|successful|skipped|skipping|neutral)\b/i.test(statusText)) {
+      hasManual = true;
+      warnings.push(`checks_status manual fallback: ${checkName(check)} did not include a recognized status field.`);
+    }
+  }
+
+  return { status: hasManual ? 'manual' : 'pass', warnings };
+}
+
+function checkStatusText(check: Record<string, unknown>): string {
+  return [
+    check.bucket,
+    check.conclusion,
+    check.state,
+    check.status,
+  ].map((value) => String(value ?? '').trim()).filter(Boolean).join(' ');
+}
+
+function checkName(check: Record<string, unknown>): string {
+  return String(check.name ?? check.context ?? 'unnamed check');
 }
 
 function summarizeNamedAutomationStatus(

@@ -2245,6 +2245,166 @@ test('spec workflow-check merge closeout returns manual when mocked gh readback 
   assertNoGhMutationCommands(ghLog);
 });
 
+test('spec workflow-check merge closeout does not request drift-prone conclusion check fields', async (t) => {
+  const repoDir = await createTempRepo(t, 'spec-injector-workflow-closeout-no-conclusion-');
+  await writeConfig(repoDir, { version: 2, guardrails: [] });
+  await initCleanGitRepo(repoDir);
+  const headSha = 'eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee';
+  const fixture = await createEvidenceCheckFixture(t, {
+    issueNumber: 247,
+    headSha,
+    forbiddenChecksJsonFields: ['conclusion'],
+    prBody: [
+      'Closes #247',
+      '',
+      '## Spec gate evidence',
+      '- spec gate status: pass',
+      '- spec evidence ref: https://github.com/Erick52106/spec-injector/issues/247#issuecomment-1001',
+      '- routing evidence status: pass',
+      '- routing evidence ref: workflow-check:start:247',
+      '- finding disposition status: pass',
+      '',
+      '## Implementation Evidence',
+      '- Issue evidence: https://github.com/Erick52106/spec-injector/issues/247#issuecomment-1001',
+      `- Commit: ${headSha}`,
+      '',
+      '## Final merge gate',
+      `- latest head SHA: ${headSha}`,
+      '- ready_to_merge: yes',
+    ].join('\n'),
+    reviews: [{ author: { login: 'chatgpt-codex-connector' }, body: 'No actionable findings.', state: 'COMMENTED' }],
+    reviewThreads: [],
+    checks: [
+      { name: 'build', state: 'COMPLETED', bucket: 'pass', completedAt: '2026-05-13T19:56:36Z' },
+      { name: 'CodeRabbit', state: 'SUCCESS', bucket: 'pass', completedAt: '0001-01-01T00:00:00Z' },
+    ],
+  });
+
+  const result = await runSpec([
+    'workflow-check',
+    '--repo', repoDir,
+    '--phase', 'merge',
+    '--pr', `https://github.com/${fixture.repo}/pull/${fixture.prNumber}`,
+    '--format', 'json',
+  ], { env: fixture.env });
+
+  assert.equal(result.code, 0, result.stderr);
+  const parsed = JSON.parse(result.stdout) as Record<string, unknown>;
+  assert.equal(parsed.status, 'pass');
+  assert.equal(parsed.checks_status, 'pass');
+  const ghLog = (await readGhLog(fixture.ghLogPath)).join('\n');
+  assert.match(ghLog, /pr checks/);
+  assert.doesNotMatch(ghLog, /conclusion/);
+  assertNoGhMutationCommands(ghLog);
+});
+
+test('spec workflow-check merge closeout treats alternate queued check status as manual fallback', async (t) => {
+  const repoDir = await createTempRepo(t, 'spec-injector-workflow-closeout-status-queued-');
+  await writeConfig(repoDir, { version: 2, guardrails: [] });
+  await initCleanGitRepo(repoDir);
+  const headSha = 'ffffffffffffffffffffffffffffffffffffffff';
+  const fixture = await createEvidenceCheckFixture(t, {
+    issueNumber: 247,
+    headSha,
+    prBody: [
+      'Closes #247',
+      '',
+      '## Spec gate evidence',
+      '- spec gate status: pass',
+      '- spec evidence ref: https://github.com/Erick52106/spec-injector/issues/247#issuecomment-1001',
+      '- routing evidence status: pass',
+      '- routing evidence ref: workflow-check:start:247',
+      '- finding disposition status: pass',
+      '',
+      '## Implementation Evidence',
+      '- Issue evidence: https://github.com/Erick52106/spec-injector/issues/247#issuecomment-1001',
+      `- Commit: ${headSha}`,
+      '',
+      '## Final merge gate',
+      `- latest head SHA: ${headSha}`,
+      '- ready_to_merge: yes',
+    ].join('\n'),
+    reviews: [{ author: { login: 'chatgpt-codex-connector' }, body: 'No actionable findings.', state: 'COMMENTED' }],
+    reviewThreads: [],
+    checks: [
+      { name: 'build', status: 'queued' },
+      { name: 'CodeRabbit', state: 'SUCCESS', bucket: 'pass' },
+    ],
+  });
+
+  const result = await runSpec([
+    'workflow-check',
+    '--repo', repoDir,
+    '--phase', 'merge',
+    '--pr', `https://github.com/${fixture.repo}/pull/${fixture.prNumber}`,
+    '--format', 'json',
+  ], { env: fixture.env });
+
+  assert.equal(result.code, 0, result.stderr);
+  const parsed = JSON.parse(result.stdout) as Record<string, unknown>;
+  assert.equal(parsed.status, 'manual');
+  assert.equal(parsed.checks_status, 'manual');
+  assert.equal(parsed.ready_to_merge, 'manual');
+  assert.ok((parsed.missing_fields as string[]).includes('checks_status'));
+  assert.match((parsed.warnings as string[]).join('\n'), /manual fallback/i);
+  assert.match((parsed.warnings as string[]).join('\n'), /build/i);
+  const ghLog = (await readGhLog(fixture.ghLogPath)).join('\n');
+  assertNoGhMutationCommands(ghLog);
+});
+
+test('spec workflow-check merge closeout reports manual fallback for checks missing status fields', async (t) => {
+  const repoDir = await createTempRepo(t, 'spec-injector-workflow-closeout-checks-unknown-');
+  await writeConfig(repoDir, { version: 2, guardrails: [] });
+  await initCleanGitRepo(repoDir);
+  const headSha = '1212121212121212121212121212121212121212';
+  const fixture = await createEvidenceCheckFixture(t, {
+    issueNumber: 247,
+    headSha,
+    prBody: [
+      'Closes #247',
+      '',
+      '## Spec gate evidence',
+      '- spec gate status: pass',
+      '- spec evidence ref: https://github.com/Erick52106/spec-injector/issues/247#issuecomment-1001',
+      '- routing evidence status: pass',
+      '- routing evidence ref: workflow-check:start:247',
+      '- finding disposition status: pass',
+      '',
+      '## Implementation Evidence',
+      '- Issue evidence: https://github.com/Erick52106/spec-injector/issues/247#issuecomment-1001',
+      `- Commit: ${headSha}`,
+      '',
+      '## Final merge gate',
+      `- latest head SHA: ${headSha}`,
+      '- ready_to_merge: yes',
+    ].join('\n'),
+    reviews: [{ author: { login: 'chatgpt-codex-connector' }, body: 'No actionable findings.', state: 'COMMENTED' }],
+    reviewThreads: [],
+    checks: [
+      { name: 'build', state: 'COMPLETED' },
+      { name: 'CodeRabbit', state: 'SUCCESS', bucket: 'pass' },
+    ],
+  });
+
+  const result = await runSpec([
+    'workflow-check',
+    '--repo', repoDir,
+    '--phase', 'merge',
+    '--pr', `https://github.com/${fixture.repo}/pull/${fixture.prNumber}`,
+    '--format', 'json',
+  ], { env: fixture.env });
+
+  assert.equal(result.code, 0, result.stderr);
+  const parsed = JSON.parse(result.stdout) as Record<string, unknown>;
+  assert.equal(parsed.status, 'manual');
+  assert.equal(parsed.checks_status, 'manual');
+  assert.ok((parsed.missing_fields as string[]).includes('checks_status'));
+  assert.match((parsed.warnings as string[]).join('\n'), /manual fallback/i);
+  assert.match((parsed.warnings as string[]).join('\n'), /build/i);
+  const ghLog = (await readGhLog(fixture.ghLogPath)).join('\n');
+  assertNoGhMutationCommands(ghLog);
+});
+
 test('spec workflow-check merge closeout omits unknown review thread counts', async (t) => {
   const repoDir = await createTempRepo(t, 'spec-injector-workflow-closeout-no-repo-');
   await writeConfig(repoDir, { version: 2, guardrails: [] });
