@@ -1,0 +1,6 @@
+{
+  "autonomous_signal": "yes",
+  "batch_id": "batch-missing-sha",
+  "current_head_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "findings": []
+}

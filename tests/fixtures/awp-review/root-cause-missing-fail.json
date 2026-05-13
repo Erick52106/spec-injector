@@ -1,0 +1,60 @@
+{
+  "autonomous_signal": "yes",
+  "batch_id": "batch-root-cause-missing",
+  "review_head_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "current_head_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "patch_budget": {
+    "base_changed_lines": 100,
+    "followup_changed_lines": 20,
+    "budget_ratio": 0.2,
+    "split_assessment": "n/a"
+  },
+  "findings": [
+    {
+      "finding_id": "coderabbit-parser-a",
+      "source": "coderabbit",
+      "head_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "category": "normalization_gap",
+      "adoption_decision": "adopt",
+      "fix_strategy": "local_patch",
+      "risk_if_local_patch": "high",
+      "validation_required": "pnpm test",
+      "finding_fingerprint": "parser-state-a",
+      "is_outdated": "no",
+      "duplicate_of": "n/a",
+      "module": "src/cli/workflow-check.ts",
+      "concept_key": "routing_parser",
+      "finding_count_for_concept": 1,
+      "root_cause_assessment": "n/a",
+      "state_model_required": "no",
+      "matrix_tests_required": "no",
+      "disposition": "adopted",
+      "rationale": "n/a",
+      "validation": "pnpm test",
+      "evidence_ref": "workflow-check:review:parser-a"
+    },
+    {
+      "finding_id": "codex-parser-b",
+      "source": "codex",
+      "head_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "category": "normalization_gap",
+      "adoption_decision": "adopt",
+      "fix_strategy": "local_patch",
+      "risk_if_local_patch": "high",
+      "validation_required": "pnpm test",
+      "finding_fingerprint": "parser-state-b",
+      "is_outdated": "no",
+      "duplicate_of": "n/a",
+      "module": "src/cli/workflow-check.ts",
+      "concept_key": "routing_parser",
+      "finding_count_for_concept": 1,
+      "root_cause_assessment": "n/a",
+      "state_model_required": "no",
+      "matrix_tests_required": "no",
+      "disposition": "adopted",
+      "rationale": "n/a",
+      "validation": "pnpm test",
+      "evidence_ref": "workflow-check:review:parser-b"
+    }
+  ]
+}

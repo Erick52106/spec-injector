@@ -1,0 +1,31 @@
+{
+  "autonomous_signal": "yes",
+  "batch_id": "batch-missing-triage",
+  "review_head_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "current_head_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "patch_budget": {
+    "base_changed_lines": 100,
+    "followup_changed_lines": 10,
+    "budget_ratio": 0.1,
+    "split_assessment": "n/a"
+  },
+  "findings": [
+    {
+      "finding_id": "missing-triage",
+      "head_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "category": "correctness",
+      "adoption_decision": "adopt",
+      "fix_strategy": "local_patch",
+      "risk_if_local_patch": "low",
+      "validation_required": "pnpm test",
+      "is_outdated": "no",
+      "duplicate_of": "n/a",
+      "module": "src/cli/awp-review-check.ts",
+      "concept_key": "triage_fields",
+      "disposition": "adopted",
+      "rationale": "n/a",
+      "validation": "pnpm test",
+      "evidence_ref": "workflow-check:review:missing-triage"
+    }
+  ]
+}

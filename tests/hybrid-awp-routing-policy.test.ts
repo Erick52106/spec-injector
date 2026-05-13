@@ -26,3 +26,30 @@ test('Hybrid AWP routing policy remains linked from workflow-check docs', async 
   assert.match(englishReadme, /\[Hybrid AWP routing policy\]\(docs\/hybrid-awp-routing-policy\.md\)/);
   assert.match(workflow, /\[Hybrid AWP routing policy\]\(hybrid-awp-routing-policy\.md\)/);
 });
+
+test('AWP review triage gate policy remains linked from CLI docs', async () => {
+  const policyPath = path.join(repoRoot, 'docs', 'awp-review-triage-gates.md');
+  const readmePath = path.join(repoRoot, 'README.md');
+  const englishReadmePath = path.join(repoRoot, 'README.en.md');
+  const workflowPath = path.join(repoRoot, 'docs', 'workflow.md');
+
+  const [policy, readme, englishReadme, workflow] = await Promise.all([
+    fs.readFile(policyPath, 'utf8'),
+    fs.readFile(readmePath, 'utf8'),
+    fs.readFile(englishReadmePath, 'utf8'),
+    fs.readFile(workflowPath, 'utf8'),
+  ]);
+
+  assert.match(policy, /AWP Review Triage and Root-Cause Gates/);
+  assert.match(policy, /finding_id=.*source=.*head_sha/s);
+  assert.match(policy, /root_cause_assessment/);
+  assert.match(policy, /patch budget/i);
+  assert.match(policy, /closeout ledger/i);
+  assert.match(policy, /Non-autonomous/);
+
+  assert.match(readme, /spec awp-review-check --repo \. --evidence/);
+  assert.match(readme, /\[AWP review triage gates\]\(docs\/awp-review-triage-gates\.md\)/);
+  assert.match(englishReadme, /spec awp-review-check --repo \. --evidence/);
+  assert.match(englishReadme, /\[AWP review triage gates\]\(docs\/awp-review-triage-gates\.md\)/);
+  assert.match(workflow, /\[AWP review triage gates\]\(awp-review-triage-gates\.md\)/);
+});

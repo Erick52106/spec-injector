@@ -1,0 +1,60 @@
+{
+  "autonomous_signal": "yes",
+  "batch_id": "batch-fresh-duplicate",
+  "review_head_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "current_head_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "patch_budget": {
+    "base_changed_lines": 200,
+    "followup_changed_lines": 30,
+    "budget_ratio": 0.15,
+    "split_assessment": "n/a"
+  },
+  "findings": [
+    {
+      "finding_id": "coderabbit-routing-status",
+      "source": "coderabbit",
+      "head_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "category": "normalization_gap",
+      "adoption_decision": "adopt",
+      "fix_strategy": "normalize_state_model",
+      "risk_if_local_patch": "medium",
+      "validation_required": "pnpm test",
+      "finding_fingerprint": "routing-status-direct-enum",
+      "is_outdated": "no",
+      "duplicate_of": "n/a",
+      "module": "src/cli/workflow-check.ts",
+      "concept_key": "routing_status",
+      "finding_count_for_concept": 1,
+      "root_cause_assessment": "normalize direct routing evidence status before alignment",
+      "state_model_required": "yes",
+      "matrix_tests_required": "yes",
+      "disposition": "adopted",
+      "rationale": "n/a",
+      "validation": "pnpm test",
+      "evidence_ref": "https://github.com/Erick52106/spec-injector/pull/231#issuecomment-1"
+    },
+    {
+      "finding_id": "codex-routing-status",
+      "source": "codex",
+      "head_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "category": "normalization_gap",
+      "adoption_decision": "adopt",
+      "fix_strategy": "normalize_state_model",
+      "risk_if_local_patch": "medium",
+      "validation_required": "pnpm test",
+      "finding_fingerprint": "routing-status-direct-enum",
+      "is_outdated": "no",
+      "duplicate_of": "coderabbit-routing-status",
+      "module": "src/cli/workflow-check.ts",
+      "concept_key": "routing_status",
+      "finding_count_for_concept": 1,
+      "root_cause_assessment": "normalize direct routing evidence status before alignment",
+      "state_model_required": "yes",
+      "matrix_tests_required": "yes",
+      "disposition": "superseded",
+      "rationale": "duplicate of coderabbit-routing-status",
+      "validation": "pnpm test",
+      "evidence_ref": "https://github.com/Erick52106/spec-injector/pull/231#issuecomment-1"
+    }
+  ]
+}

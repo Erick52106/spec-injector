@@ -141,6 +141,26 @@ async function createStatusFailingGitEnv(
   };
 }
 
+const AWP_REVIEW_FIXTURE_HEAD = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+const AWP_REVIEW_STALE_HEAD = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
+
+async function writeAwpReviewFixture(
+  repoDir: string,
+  fixtureName: string,
+  replacements?: Record<string, string>
+): Promise<string> {
+  const headSha = (await runCommand('git', ['rev-parse', 'HEAD'], repoDir)).stdout.trim();
+  const sourcePath = path.join(repoRoot, 'tests', 'fixtures', 'awp-review', fixtureName);
+  let content = await fs.readFile(sourcePath, 'utf8');
+  const effectiveReplacements = replacements ?? { [AWP_REVIEW_FIXTURE_HEAD]: headSha };
+  for (const [from, to] of Object.entries(effectiveReplacements)) {
+    content = content.replaceAll(from, to);
+  }
+  const evidencePath = path.join(repoDir, fixtureName);
+  await fs.writeFile(evidencePath, content, 'utf8');
+  return evidencePath;
+}
+
 test('classifier does not treat dashboard transactions endpoint wording as wallet evidence', () => {
   const domains = classifyDomains({
     number: 77,
@@ -1606,6 +1626,327 @@ test('spec workflow-check accepts manual checklist fallback for downstream repos
   assert.equal(parsed.status, 'manual');
   assert.equal(parsed.fallback_status, 'pass');
   assert.equal(parsed.fallback_reason_quality, 'strong');
+});
+
+test('spec awp-review-check accepts fresh review batch and collapses duplicate findings', async (t) => {
+  const repoDir = await createTempRepo(t, 'spec-injector-awp-review-fresh-');
+  await writeConfig(repoDir, { version: 2, guardrails: [] });
+  await initCleanGitRepo(repoDir);
+  const evidencePath = await writeAwpReviewFixture(repoDir, 'fresh-duplicate-pass.json');
+
+  const result = await runSpec([
+    'awp-review-check',
+    '--repo', repoDir,
+    '--evidence', evidencePath,
+    '--format', 'json',
+  ]);
+
+  assert.equal(result.code, 0, result.stderr);
+  const parsed = JSON.parse(result.stdout) as Record<string, unknown>;
+  assert.equal(parsed.status, 'pass');
+  assert.equal(parsed.batch_id, 'batch-fresh-duplicate');
+  assert.equal(parsed.actionable_findings, 1);
+  assert.equal(parsed.duplicate_findings, 1);
+  assert.equal(parsed.review_batch_status, 'pass');
+  assert.equal(parsed.root_cause_status, 'pass');
+  assert.equal(parsed.patch_budget_status, 'pass');
+  assert.equal(parsed.closeout_ledger_status, 'pass');
+});
+
+test('spec awp-review-check fails stale review head evidence before patching', async (t) => {
+  const repoDir = await createTempRepo(t, 'spec-injector-awp-review-stale-');
+  await writeConfig(repoDir, { version: 2, guardrails: [] });
+  await initCleanGitRepo(repoDir);
+  const headSha = (await runCommand('git', ['rev-parse', 'HEAD'], repoDir)).stdout.trim();
+  const evidencePath = await writeAwpReviewFixture(repoDir, 'stale-review-head-fail.json', { [AWP_REVIEW_STALE_HEAD]: headSha });
+
+  const result = await runSpec([
+    'awp-review-check',
+    '--repo', repoDir,
+    '--evidence', evidencePath,
+    '--format', 'json',
+  ]);
+
+  assert.notEqual(result.code, 0);
+  const parsed = JSON.parse(result.stdout) as Record<string, unknown>;
+  assert.equal(parsed.status, 'fail');
+  assert.equal(parsed.review_batch_status, 'fail');
+  assert.ok((parsed.missing_fields as string[]).includes('review_head_freshness'));
+});
+
+test('spec awp-review-check fails when evidence current head differs from repo HEAD', async (t) => {
+  const repoDir = await createTempRepo(t, 'spec-injector-awp-review-current-head-stale-');
+  await writeConfig(repoDir, { version: 2, guardrails: [] });
+  await initCleanGitRepo(repoDir);
+  const evidencePath = await writeAwpReviewFixture(repoDir, 'fresh-duplicate-pass.json', {});
+
+  const result = await runSpec([
+    'awp-review-check',
+    '--repo', repoDir,
+    '--evidence', evidencePath,
+    '--format', 'json',
+  ]);
+
+  assert.notEqual(result.code, 0);
+  const parsed = JSON.parse(result.stdout) as Record<string, unknown>;
+  assert.equal(parsed.status, 'fail');
+  assert.equal(parsed.review_batch_status, 'fail');
+  assert.ok((parsed.missing_fields as string[]).includes('current_head_sha_freshness'));
+});
+
+test('spec awp-review-check fails autonomous evidence when repo HEAD cannot be read', async (t) => {
+  const repoDir = await createTempRepo(t, 'spec-injector-awp-review-non-git-');
+  await writeConfig(repoDir, { version: 2, guardrails: [] });
+  const evidencePath = path.join(repoRoot, 'tests', 'fixtures', 'awp-review', 'fresh-duplicate-pass.json');
+
+  const result = await runSpec([
+    'awp-review-check',
+    '--repo', repoDir,
+    '--evidence', evidencePath,
+    '--format', 'json',
+  ]);
+
+  assert.notEqual(result.code, 0);
+  const parsed = JSON.parse(result.stdout) as Record<string, unknown>;
+  assert.equal(parsed.status, 'fail');
+  assert.equal(parsed.review_batch_status, 'fail');
+  assert.equal(parsed.head_sha, 'n/a');
+  assert.ok((parsed.missing_fields as string[]).includes('repo_head_sha'));
+});
+
+test('spec awp-review-check returns manual when review head evidence is missing', async (t) => {
+  const repoDir = await createTempRepo(t, 'spec-injector-awp-review-missing-sha-');
+  await writeConfig(repoDir, { version: 2, guardrails: [] });
+  await initCleanGitRepo(repoDir);
+  const evidencePath = await writeAwpReviewFixture(repoDir, 'missing-sha-manual.json');
+
+  const result = await runSpec([
+    'awp-review-check',
+    '--repo', repoDir,
+    '--evidence', evidencePath,
+    '--format', 'json',
+  ]);
+
+  assert.equal(result.code, 0, result.stderr);
+  const parsed = JSON.parse(result.stdout) as Record<string, unknown>;
+  assert.equal(parsed.status, 'manual');
+  assert.equal(parsed.review_batch_status, 'manual');
+  assert.ok((parsed.missing_fields as string[]).includes('review_head_sha'));
+});
+
+test('spec awp-review-check returns manual when triage fields are incomplete', async (t) => {
+  const repoDir = await createTempRepo(t, 'spec-injector-awp-review-missing-triage-');
+  await writeConfig(repoDir, { version: 2, guardrails: [] });
+  await initCleanGitRepo(repoDir);
+  const evidencePath = await writeAwpReviewFixture(repoDir, 'missing-triage-fields-manual.json');
+
+  const result = await runSpec([
+    'awp-review-check',
+    '--repo', repoDir,
+    '--evidence', evidencePath,
+    '--format', 'json',
+  ]);
+
+  assert.equal(result.code, 0, result.stderr);
+  const parsed = JSON.parse(result.stdout) as Record<string, unknown>;
+  assert.equal(parsed.status, 'manual');
+  assert.equal(parsed.review_batch_status, 'manual');
+  assert.ok((parsed.missing_fields as string[]).includes('source'));
+  assert.ok((parsed.missing_fields as string[]).includes('finding_fingerprint'));
+});
+
+test('spec awp-review-check skips non-autonomous evidence without failing ordinary workflows', async (t) => {
+  const repoDir = await createTempRepo(t, 'spec-injector-awp-review-non-auto-');
+  await writeConfig(repoDir, { version: 2, guardrails: [] });
+  await initCleanGitRepo(repoDir);
+  const evidencePath = await writeAwpReviewFixture(repoDir, 'non-autonomous-skipped.json');
+
+  const result = await runSpec([
+    'awp-review-check',
+    '--repo', repoDir,
+    '--evidence', evidencePath,
+    '--format', 'json',
+  ]);
+
+  assert.equal(result.code, 0, result.stderr);
+  const parsed = JSON.parse(result.stdout) as Record<string, unknown>;
+  assert.equal(parsed.status, 'skipped');
+  assert.deepEqual(parsed.missing_fields, []);
+});
+
+test('spec awp-review-check fails repeated concept findings without root-cause evidence', async (t) => {
+  const repoDir = await createTempRepo(t, 'spec-injector-awp-review-root-missing-');
+  await writeConfig(repoDir, { version: 2, guardrails: [] });
+  await initCleanGitRepo(repoDir);
+  const evidencePath = await writeAwpReviewFixture(repoDir, 'root-cause-missing-fail.json');
+
+  const result = await runSpec([
+    'awp-review-check',
+    '--repo', repoDir,
+    '--evidence', evidencePath,
+    '--format', 'json',
+  ]);
+
+  assert.notEqual(result.code, 0);
+  const parsed = JSON.parse(result.stdout) as Record<string, unknown>;
+  assert.equal(parsed.status, 'fail');
+  assert.equal(parsed.root_cause_status, 'fail');
+  assert.ok((parsed.missing_fields as string[]).includes('root_cause_assessment'));
+  assert.ok((parsed.missing_fields as string[]).includes('matrix_tests_required'));
+});
+
+test('spec awp-review-check ignores outdated and deferred findings for repeated concept root-cause gate', async (t) => {
+  const repoDir = await createTempRepo(t, 'spec-injector-awp-review-root-inactive-');
+  await writeConfig(repoDir, { version: 2, guardrails: [] });
+  await initCleanGitRepo(repoDir);
+  const evidencePath = await writeAwpReviewFixture(repoDir, 'root-cause-missing-fail.json');
+  const raw = JSON.parse(await fs.readFile(evidencePath, 'utf8')) as Record<string, unknown>;
+  const findings = raw.findings as Array<Record<string, unknown>>;
+  findings[0] = {
+    ...findings[0],
+    is_outdated: 'yes',
+    adoption_decision: 'defer',
+    disposition: 'deferred',
+    rationale: 'superseded by current head evidence',
+  };
+  findings[1] = {
+    ...findings[1],
+    adoption_decision: 'defer',
+    disposition: 'deferred',
+    rationale: 'tracked in a later batch',
+  };
+  await fs.writeFile(evidencePath, `${JSON.stringify(raw, null, 2)}\n`, 'utf8');
+
+  const result = await runSpec([
+    'awp-review-check',
+    '--repo', repoDir,
+    '--evidence', evidencePath,
+    '--format', 'json',
+  ]);
+
+  assert.equal(result.code, 0, result.stderr);
+  const parsed = JSON.parse(result.stdout) as Record<string, unknown>;
+  assert.equal(parsed.status, 'pass');
+  assert.equal(parsed.root_cause_status, 'pass');
+});
+
+test('spec awp-review-check fails collapsed repeated concept without root-cause evidence', async (t) => {
+  const repoDir = await createTempRepo(t, 'spec-injector-awp-review-collapsed-root-missing-');
+  await writeConfig(repoDir, { version: 2, guardrails: [] });
+  await initCleanGitRepo(repoDir);
+  const evidencePath = await writeAwpReviewFixture(repoDir, 'root-cause-count-missing-fail.json');
+
+  const result = await runSpec([
+    'awp-review-check',
+    '--repo', repoDir,
+    '--evidence', evidencePath,
+    '--format', 'json',
+  ]);
+
+  assert.notEqual(result.code, 0);
+  const parsed = JSON.parse(result.stdout) as Record<string, unknown>;
+  assert.equal(parsed.status, 'fail');
+  assert.equal(parsed.root_cause_status, 'fail');
+  assert.ok((parsed.missing_fields as string[]).includes('root_cause_assessment'));
+});
+
+test('spec awp-review-check fails oversized follow-up patches without split assessment', async (t) => {
+  const repoDir = await createTempRepo(t, 'spec-injector-awp-review-budget-fail-');
+  await writeConfig(repoDir, { version: 2, guardrails: [] });
+  await initCleanGitRepo(repoDir);
+  const evidencePath = await writeAwpReviewFixture(repoDir, 'patch-budget-over-fail.json');
+
+  const result = await runSpec([
+    'awp-review-check',
+    '--repo', repoDir,
+    '--evidence', evidencePath,
+    '--format', 'json',
+  ]);
+
+  assert.notEqual(result.code, 0);
+  const parsed = JSON.parse(result.stdout) as Record<string, unknown>;
+  assert.equal(parsed.status, 'fail');
+  assert.equal(parsed.patch_budget_status, 'fail');
+  assert.ok((parsed.missing_fields as string[]).includes('split_assessment'));
+});
+
+test('spec awp-review-check accepts patch budget exactly at threshold', async (t) => {
+  const repoDir = await createTempRepo(t, 'spec-injector-awp-review-budget-threshold-');
+  await writeConfig(repoDir, { version: 2, guardrails: [] });
+  await initCleanGitRepo(repoDir);
+  const evidencePath = await writeAwpReviewFixture(repoDir, 'patch-budget-threshold-pass.json');
+
+  const result = await runSpec([
+    'awp-review-check',
+    '--repo', repoDir,
+    '--evidence', evidencePath,
+    '--format', 'json',
+  ]);
+
+  assert.equal(result.code, 0, result.stderr);
+  const parsed = JSON.parse(result.stdout) as Record<string, unknown>;
+  assert.equal(parsed.status, 'pass');
+  assert.equal(parsed.patch_budget_status, 'pass');
+});
+
+test('spec awp-review-check fails closeout ledger dispositions that need rationale', async (t) => {
+  const repoDir = await createTempRepo(t, 'spec-injector-awp-review-ledger-rationale-');
+  await writeConfig(repoDir, { version: 2, guardrails: [] });
+  await initCleanGitRepo(repoDir);
+  const evidencePath = await writeAwpReviewFixture(repoDir, 'ledger-rationale-missing-fail.json');
+
+  const result = await runSpec([
+    'awp-review-check',
+    '--repo', repoDir,
+    '--evidence', evidencePath,
+    '--format', 'json',
+  ]);
+
+  assert.notEqual(result.code, 0);
+  const parsed = JSON.parse(result.stdout) as Record<string, unknown>;
+  assert.equal(parsed.status, 'fail');
+  assert.equal(parsed.closeout_ledger_status, 'fail');
+  assert.ok((parsed.missing_fields as string[]).includes('ledger_rationale'));
+});
+
+test('spec awp-review-check fails actionable findings without closeout disposition', async (t) => {
+  const repoDir = await createTempRepo(t, 'spec-injector-awp-review-ledger-missing-');
+  await writeConfig(repoDir, { version: 2, guardrails: [] });
+  await initCleanGitRepo(repoDir);
+  const evidencePath = await writeAwpReviewFixture(repoDir, 'ledger-missing-disposition-fail.json');
+
+  const result = await runSpec([
+    'awp-review-check',
+    '--repo', repoDir,
+    '--evidence', evidencePath,
+    '--format', 'json',
+  ]);
+
+  assert.notEqual(result.code, 0);
+  const parsed = JSON.parse(result.stdout) as Record<string, unknown>;
+  assert.equal(parsed.status, 'fail');
+  assert.equal(parsed.closeout_ledger_status, 'fail');
+  assert.ok((parsed.missing_fields as string[]).includes('ledger_disposition'));
+});
+
+test('spec awp-review-check fails actionable closeout entries without validation evidence', async (t) => {
+  const repoDir = await createTempRepo(t, 'spec-injector-awp-review-ledger-validation-');
+  await writeConfig(repoDir, { version: 2, guardrails: [] });
+  await initCleanGitRepo(repoDir);
+  const evidencePath = await writeAwpReviewFixture(repoDir, 'ledger-validation-missing-fail.json');
+
+  const result = await runSpec([
+    'awp-review-check',
+    '--repo', repoDir,
+    '--evidence', evidencePath,
+    '--format', 'json',
+  ]);
+
+  assert.notEqual(result.code, 0);
+  const parsed = JSON.parse(result.stdout) as Record<string, unknown>;
+  assert.equal(parsed.status, 'fail');
+  assert.equal(parsed.closeout_ledger_status, 'fail');
+  assert.ok((parsed.missing_fields as string[]).includes('ledger_validation'));
 });
 
 test('spec label-audit forwards --limit to gh issue and pr list', async (t) => {
