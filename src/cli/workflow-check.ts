@@ -102,8 +102,10 @@ async function runPhase(
 
   const staged = readStagedPaths(repoPath, config);
   warnings.push(...staged.warnings);
-  const dirtyWarning = getDirtyUnstagedWarning(repoPath);
-  if (dirtyWarning) warnings.push(dirtyWarning);
+  if (!hasStagedInspectionFailure(staged.forbidden)) {
+    const dirtyWarning = getDirtyUnstagedWarning(repoPath);
+    if (dirtyWarning) warnings.push(dirtyWarning);
+  }
 
   if (phase === 'commit') {
     return runCommitPhase(repoPath, opts, checkedAt, warnings, staged.forbidden);
@@ -193,7 +195,21 @@ async function runCommitPhase(
     });
   }
 
-  const evidence = await parsePrBodyEvidence(opts.prBody, opts.headSha);
+  let evidence: PrBodyEvidence;
+  try {
+    evidence = await parsePrBodyEvidence(opts.prBody, opts.headSha);
+  } catch (err) {
+    return buildResult({
+      phase: 'commit',
+      repoPath,
+      checkedAt,
+      status: 'fail',
+      missingFields: ['pr_body'],
+      warnings: [...warnings, `Could not read PR body: ${(err as Error).message}`],
+      evidenceSummary: 'commit gate failed: PR body evidence could not be read',
+    });
+  }
+
   if (evidence.hasManualFallback && !isBlockedSpecStatus(evidence.specStatus)) {
     return buildResult({
       phase: 'commit',
@@ -265,7 +281,21 @@ async function runMergePhase(
     });
   }
 
-  const evidence = await parsePrBodyEvidence(opts.prBody, opts.headSha);
+  let evidence: PrBodyEvidence;
+  try {
+    evidence = await parsePrBodyEvidence(opts.prBody, opts.headSha);
+  } catch (err) {
+    return buildResult({
+      phase: 'merge',
+      repoPath,
+      checkedAt,
+      status: 'fail',
+      missingFields: ['pr_body'],
+      warnings: [...warnings, `Could not read PR body: ${(err as Error).message}`],
+      evidenceSummary: 'merge gate failed: PR body evidence could not be read',
+    });
+  }
+
   const missingFields = missingMergeFields(evidence, Boolean(opts.headSha));
   if (isBlockedSpecStatus(evidence.specStatus)) {
     missingFields.push('ready_spec_gate_status');
@@ -313,14 +343,18 @@ function readStagedPaths(repoPath: string, config: Config): { forbidden: string[
   const result = run(['git', 'diff', '--cached', '--name-only', '--diff-filter=ACMR', '-z'], { cwd: repoPath });
   if (result.exitCode !== 0) {
     return {
-      forbidden: [],
-      warnings: [`Could not inspect staged files with git diff --cached: ${formatShellError(result)}`],
+      forbidden: [`could not inspect staged files with git diff --cached: ${formatShellError(result)}`],
+      warnings: [],
     };
   }
 
   const stagedPaths = result.stdout.split('\0').filter(Boolean).map(normalizeGitPath);
   const forbidden = stagedPaths.filter((stagedPath) => isForbiddenArtifactPath(stagedPath, config));
   return { forbidden, warnings: [] };
+}
+
+function hasStagedInspectionFailure(forbiddenStagedPaths: string[]): boolean {
+  return forbiddenStagedPaths.some((entry) => entry.startsWith('could not inspect staged files with git diff --cached:'));
 }
 
 function getDirtyUnstagedWarning(repoPath: string): string | null {

@@ -779,6 +779,59 @@ test('spec workflow-check fails commit phase when .spec-injector artifacts are s
   assert.match(parsed.evidence_summary, /\.spec-injector\/out\/issue-224-task-package\.md/);
 });
 
+test('spec workflow-check fails commit phase when staged artifact inspection cannot run', async (t) => {
+  const repoDir = await createTempRepo(t, 'spec-injector-workflow-git-fail-');
+  await writeConfig(repoDir, { version: 2, guardrails: [] });
+  const prBodyPath = path.join(path.dirname(repoDir), `${path.basename(repoDir)}-pr-body.md`);
+  t.after(async () => {
+    await fs.rm(prBodyPath, { force: true });
+  });
+  await fs.writeFile(prBodyPath, [
+    '## Spec workflow gate',
+    '- spec gate status: pass',
+    '- spec evidence ref: workflow-check:start:manual',
+  ].join('\n'), 'utf8');
+  const env = await createFailingGitEnv(t, process.env);
+
+  const result = await runSpec([
+    'workflow-check',
+    '--repo', repoDir,
+    '--phase', 'commit',
+    '--pr-body', prBodyPath,
+    '--format', 'json',
+  ], { env });
+
+  assert.notEqual(result.code, 0);
+  assert.equal(result.stderr, '');
+  const parsed = JSON.parse(result.stdout) as { status: string; missing_fields: string[]; warnings: string[]; evidence_summary: string };
+  assert.equal(parsed.status, 'fail');
+  assert.ok(parsed.missing_fields.includes('staged_forbidden_artifacts'));
+  assert.deepEqual(parsed.warnings, []);
+  assert.match(parsed.evidence_summary, /could not inspect staged files/i);
+});
+
+test('spec workflow-check returns structured failure when commit PR body cannot be read', async (t) => {
+  const repoDir = await createTempRepo(t, 'spec-injector-workflow-pr-body-missing-');
+  await writeConfig(repoDir, { version: 2, guardrails: [] });
+  await initCleanGitRepo(repoDir);
+
+  const result = await runSpec([
+    'workflow-check',
+    '--repo', repoDir,
+    '--phase', 'commit',
+    '--pr-body', path.join(repoDir, 'missing-pr-body.md'),
+    '--format', 'json',
+  ]);
+
+  assert.notEqual(result.code, 0);
+  assert.equal(result.stderr, '');
+  const parsed = JSON.parse(result.stdout) as { status: string; missing_fields: string[]; warnings: string[]; evidence_summary: string };
+  assert.equal(parsed.status, 'fail');
+  assert.ok(parsed.missing_fields.includes('pr_body'));
+  assert.match(parsed.warnings.join('\n'), /Could not read PR body/i);
+  assert.match(parsed.evidence_summary, /PR body evidence could not be read/i);
+});
+
 test('spec workflow-check fails merge phase when spec evidence ref is missing from PR body', async (t) => {
   const repoDir = await createTempRepo(t, 'spec-injector-workflow-merge-');
   await writeConfig(repoDir, { version: 2, guardrails: [] });
@@ -807,6 +860,29 @@ test('spec workflow-check fails merge phase when spec evidence ref is missing fr
   assert.equal(parsed.status, 'fail');
   assert.ok(parsed.missing_fields.includes('spec_evidence_ref'));
   assert.match(parsed.evidence_summary, /missing spec evidence ref/i);
+});
+
+test('spec workflow-check returns structured failure when merge PR body cannot be read', async (t) => {
+  const repoDir = await createTempRepo(t, 'spec-injector-workflow-merge-pr-body-missing-');
+  await writeConfig(repoDir, { version: 2, guardrails: [] });
+  await initCleanGitRepo(repoDir);
+
+  const result = await runSpec([
+    'workflow-check',
+    '--repo', repoDir,
+    '--phase', 'merge',
+    '--pr-body', path.join(repoDir, 'missing-pr-body.md'),
+    '--head-sha', '1234567',
+    '--format', 'json',
+  ]);
+
+  assert.notEqual(result.code, 0);
+  assert.equal(result.stderr, '');
+  const parsed = JSON.parse(result.stdout) as { status: string; missing_fields: string[]; warnings: string[]; evidence_summary: string };
+  assert.equal(parsed.status, 'fail');
+  assert.ok(parsed.missing_fields.includes('pr_body'));
+  assert.match(parsed.warnings.join('\n'), /Could not read PR body/i);
+  assert.match(parsed.evidence_summary, /PR body evidence could not be read/i);
 });
 
 test('spec workflow-check returns manual fallback when commit phase has no PR body', async (t) => {
