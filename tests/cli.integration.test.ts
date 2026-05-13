@@ -2346,6 +2346,8 @@ test('spec workflow-check merge closeout treats alternate queued check status as
   assert.equal(parsed.checks_status, 'manual');
   assert.equal(parsed.ready_to_merge, 'manual');
   assert.ok((parsed.missing_fields as string[]).includes('checks_status'));
+  assert.match((parsed.warnings as string[]).join('\n'), /manual fallback/i);
+  assert.match((parsed.warnings as string[]).join('\n'), /build/i);
   const ghLog = (await readGhLog(fixture.ghLogPath)).join('\n');
   assertNoGhMutationCommands(ghLog);
 });
@@ -2379,7 +2381,7 @@ test('spec workflow-check merge closeout reports manual fallback for checks miss
     reviews: [{ author: { login: 'chatgpt-codex-connector' }, body: 'No actionable findings.', state: 'COMMENTED' }],
     reviewThreads: [],
     checks: [
-      { name: 'build' },
+      { name: 'build', state: 'COMPLETED' },
       { name: 'CodeRabbit', state: 'SUCCESS', bucket: 'pass' },
     ],
   });
@@ -2399,6 +2401,8 @@ test('spec workflow-check merge closeout reports manual fallback for checks miss
   assert.ok((parsed.missing_fields as string[]).includes('checks_status'));
   assert.match((parsed.warnings as string[]).join('\n'), /manual fallback/i);
   assert.match((parsed.warnings as string[]).join('\n'), /build/i);
+  const ghLog = (await readGhLog(fixture.ghLogPath)).join('\n');
+  assertNoGhMutationCommands(ghLog);
 });
 
 test('spec workflow-check merge closeout omits unknown review thread counts', async (t) => {

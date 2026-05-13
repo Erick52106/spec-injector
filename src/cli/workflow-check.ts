@@ -1544,7 +1544,7 @@ function summarizeChecks(checks: Array<Record<string, unknown>>): { status: Work
       warnings.push(`checks_status manual fallback: ${checkName(check)} is not complete (${statusText || 'unknown status'}).`);
       continue;
     }
-    if (!/\b(?:pass|passed|success|successful|completed|skipped|neutral)\b/i.test(statusText)) {
+    if (!/\b(?:pass|passed|success|successful|skipped|skipping|neutral)\b/i.test(statusText)) {
       hasManual = true;
       warnings.push(`checks_status manual fallback: ${checkName(check)} did not include a recognized status field.`);
     }
