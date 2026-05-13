@@ -1863,6 +1863,8 @@ test('spec workflow-check merge phase collects closeout readback evidence with m
   assert.equal(parsed.status, 'pass');
   assert.equal(parsed.closeout_readback_status, 'pass');
   assert.equal(parsed.ready_to_merge, 'yes');
+  assert.equal(parsed.human_review_status, 'pass');
+  assert.equal(parsed.draft_status, 'pass');
   assert.equal(parsed.unresolved_review_threads_count, 0);
   assert.equal(parsed.coderabbit_status, 'pass');
   assert.equal(parsed.codex_connector_status, 'pass');
@@ -1924,6 +1926,114 @@ test('spec workflow-check merge closeout fails when PR body readback is not read
   assertNoGhMutationCommands(ghLog);
 });
 
+test('spec workflow-check merge closeout fails human changes-requested reviews', async (t) => {
+  const repoDir = await createTempRepo(t, 'spec-injector-workflow-closeout-changes-requested-');
+  await writeConfig(repoDir, { version: 2, guardrails: [] });
+  await initCleanGitRepo(repoDir);
+  const headSha = 'cccccccccccccccccccccccccccccccccccccccc';
+  const fixture = await createEvidenceCheckFixture(t, {
+    issueNumber: 239,
+    headSha,
+    prBody: [
+      'Closes #239',
+      '',
+      '## Spec gate evidence',
+      '- spec gate status: pass',
+      '- spec evidence ref: https://github.com/Erick52106/spec-injector/issues/239#issuecomment-1001',
+      '- routing evidence status: pass',
+      '- routing evidence ref: workflow-check:start:239',
+      '- finding disposition status: pass',
+      '',
+      '## Implementation Evidence',
+      '- Issue evidence: https://github.com/Erick52106/spec-injector/issues/239#issuecomment-1001',
+      `- Commit: ${headSha}`,
+      '',
+      '## Final merge gate',
+      `- latest head SHA: ${headSha}`,
+      '- ready_to_merge: yes',
+    ].join('\n'),
+    reviews: [
+      { author: { login: 'human-reviewer' }, body: 'Needs changes.', state: 'CHANGES_REQUESTED', submittedAt: '2026-05-13T18:30:00Z' },
+      { author: { login: 'chatgpt-codex-connector' }, body: 'No actionable findings.', state: 'COMMENTED' },
+    ],
+    reviewThreads: [],
+    checks: [
+      { name: 'build', state: 'COMPLETED', conclusion: 'SUCCESS', bucket: 'pass' },
+      { name: 'CodeRabbit', state: 'SUCCESS', conclusion: 'SUCCESS', bucket: 'pass' },
+    ],
+  });
+
+  const result = await runSpec([
+    'workflow-check',
+    '--repo', repoDir,
+    '--phase', 'merge',
+    '--pr', `https://github.com/${fixture.repo}/pull/${fixture.prNumber}`,
+    '--format', 'json',
+  ], { env: fixture.env });
+
+  assert.notEqual(result.code, 0);
+  const parsed = JSON.parse(result.stdout) as Record<string, unknown>;
+  assert.equal(parsed.status, 'fail');
+  assert.equal(parsed.human_review_status, 'fail');
+  assert.equal(parsed.ready_to_merge, 'no');
+  assert.ok((parsed.missing_fields as string[]).includes('human_review_status'));
+  const ghLog = (await readGhLog(fixture.ghLogPath)).join('\n');
+  assertNoGhMutationCommands(ghLog);
+});
+
+test('spec workflow-check merge closeout fails draft PRs', async (t) => {
+  const repoDir = await createTempRepo(t, 'spec-injector-workflow-closeout-draft-');
+  await writeConfig(repoDir, { version: 2, guardrails: [] });
+  await initCleanGitRepo(repoDir);
+  const headSha = 'dddddddddddddddddddddddddddddddddddddddd';
+  const fixture = await createEvidenceCheckFixture(t, {
+    issueNumber: 239,
+    headSha,
+    isDraft: true,
+    prBody: [
+      'Closes #239',
+      '',
+      '## Spec gate evidence',
+      '- spec gate status: pass',
+      '- spec evidence ref: https://github.com/Erick52106/spec-injector/issues/239#issuecomment-1001',
+      '- routing evidence status: pass',
+      '- routing evidence ref: workflow-check:start:239',
+      '- finding disposition status: pass',
+      '',
+      '## Implementation Evidence',
+      '- Issue evidence: https://github.com/Erick52106/spec-injector/issues/239#issuecomment-1001',
+      `- Commit: ${headSha}`,
+      '',
+      '## Final merge gate',
+      `- latest head SHA: ${headSha}`,
+      '- ready_to_merge: yes',
+    ].join('\n'),
+    reviews: [{ author: { login: 'chatgpt-codex-connector' }, body: 'No actionable findings.', state: 'COMMENTED' }],
+    reviewThreads: [],
+    checks: [
+      { name: 'build', state: 'COMPLETED', conclusion: 'SUCCESS', bucket: 'pass' },
+      { name: 'CodeRabbit', state: 'SUCCESS', conclusion: 'SUCCESS', bucket: 'pass' },
+    ],
+  });
+
+  const result = await runSpec([
+    'workflow-check',
+    '--repo', repoDir,
+    '--phase', 'merge',
+    '--pr', `https://github.com/${fixture.repo}/pull/${fixture.prNumber}`,
+    '--format', 'json',
+  ], { env: fixture.env });
+
+  assert.notEqual(result.code, 0);
+  const parsed = JSON.parse(result.stdout) as Record<string, unknown>;
+  assert.equal(parsed.status, 'fail');
+  assert.equal(parsed.draft_status, 'fail');
+  assert.equal(parsed.ready_to_merge, 'no');
+  assert.ok((parsed.missing_fields as string[]).includes('draft_pr'));
+  const ghLog = (await readGhLog(fixture.ghLogPath)).join('\n');
+  assertNoGhMutationCommands(ghLog);
+});
+
 test('spec workflow-check merge closeout returns manual when mocked gh readback fails', async (t) => {
   const repoDir = await createTempRepo(t, 'spec-injector-workflow-closeout-gh-fail-');
   await writeConfig(repoDir, { version: 2, guardrails: [] });
@@ -1946,9 +2056,32 @@ test('spec workflow-check merge closeout returns manual when mocked gh readback 
   assert.equal(parsed.status, 'manual');
   assert.equal(parsed.closeout_readback_status, 'manual');
   assert.equal(parsed.ready_to_merge, 'manual');
+  assert.notEqual(parsed.unresolved_review_threads_count, -1);
   assert.ok((parsed.missing_fields as string[]).includes('checks_status'));
   const ghLog = (await readGhLog(fixture.ghLogPath)).join('\n');
   assertNoGhMutationCommands(ghLog);
+});
+
+test('spec workflow-check merge closeout omits unknown review thread counts', async (t) => {
+  const repoDir = await createTempRepo(t, 'spec-injector-workflow-closeout-no-repo-');
+  await writeConfig(repoDir, { version: 2, guardrails: [] });
+  await initCleanGitRepo(repoDir);
+
+  const result = await runSpec([
+    'workflow-check',
+    '--repo', repoDir,
+    '--phase', 'merge',
+    '--pr', '1091',
+    '--format', 'json',
+  ]);
+
+  assert.equal(result.code, 0, result.stderr);
+  const parsed = JSON.parse(result.stdout) as Record<string, unknown>;
+  assert.equal(parsed.status, 'manual');
+  assert.equal(parsed.closeout_readback_status, 'manual');
+  assert.equal(parsed.ready_to_merge, 'manual');
+  assert.equal(Object.hasOwn(parsed, 'unresolved_review_threads_count'), false);
+  assert.ok((parsed.missing_fields as string[]).includes('github_repo'));
 });
 
 test('spec awp-review-check accepts fresh review batch and collapses duplicate findings', async (t) => {

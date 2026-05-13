@@ -57,6 +57,8 @@ type WorkflowCheckResult = {
   unresolved_review_threads_count?: number;
   coderabbit_status?: string;
   codex_connector_status?: string;
+  human_review_status?: string;
+  draft_status?: string;
   source_issue_evidence_status?: string;
   spec_gate_status?: string;
   routing_evidence_status?: string;
@@ -161,6 +163,8 @@ type CloseoutReadback = {
   unresolvedReviewThreadsCount: number | null;
   coderabbitStatus: WorkflowStatus | 'skipped';
   codexConnectorStatus: WorkflowStatus | 'skipped';
+  humanReviewStatus: WorkflowStatus;
+  draftStatus: WorkflowStatus;
   sourceIssueEvidenceStatus: WorkflowStatus;
   specGateStatus: WorkflowStatus;
   routingEvidenceStatus: WorkflowStatus;
@@ -721,6 +725,8 @@ async function runMergeCloseoutPhase(
 
   const coderabbitStatus = summarizeNamedAutomationStatus(checks, pr, /coderabbit/i);
   const codexConnectorStatus = summarizeCodexConnectorStatus(pr);
+  const humanReviewStatus = summarizeHumanReviewStatus(pr);
+  const draftStatus: WorkflowStatus = pr.isDraft === true ? 'fail' : 'pass';
   const sourceIssueEvidenceStatus = /https:\/\/github\.com\/[^\s]+\/issues\/\d+#issuecomment-\d+/i.test(body) ? 'pass' : 'manual';
   const specGateStatus = prBodyEvidence.specStatus === 'pass' ? 'pass' : isBlockedSpecStatus(prBodyEvidence.specStatus) ? 'fail' : 'manual';
   const routingEvidenceStatus = prBodyEvidence.routingStatus === 'pass' ? 'pass' : isBlockedRoutingStatus(prBodyEvidence.routingStatus) ? 'fail' : 'manual';
@@ -741,9 +747,11 @@ async function runMergeCloseoutPhase(
   if (routingEvidenceStatus !== 'pass') missingFields.push('routing_evidence_status');
   if (findingDispositionStatus === 'fail') missingFields.push('finding_disposition_status');
   if (readyToMergeStatus !== 'pass') missingFields.push('ready_to_merge');
+  if (humanReviewStatus === 'fail') missingFields.push('human_review_status');
+  if (draftStatus === 'fail') missingFields.push('draft_pr');
   if (headSha && !body.includes(headSha)) missingFields.push('head_sha_freshness');
 
-  const hasFail = [checksStatus, specGateStatus, routingEvidenceStatus, findingDispositionStatus, readyToMergeStatus].includes('fail') ||
+  const hasFail = [checksStatus, specGateStatus, routingEvidenceStatus, findingDispositionStatus, readyToMergeStatus, humanReviewStatus, draftStatus].includes('fail') ||
     (unresolvedCount ?? 0) > 0;
   const hasManual = missingFields.length > 0 ||
     checksStatus === 'manual' ||
@@ -762,6 +770,8 @@ async function runMergeCloseoutPhase(
     unresolvedReviewThreadsCount: unresolvedCount,
     coderabbitStatus,
     codexConnectorStatus,
+    humanReviewStatus,
+    draftStatus,
     sourceIssueEvidenceStatus,
     specGateStatus,
     routingEvidenceStatus,
@@ -1083,9 +1093,13 @@ function buildResult(input: {
   if (input.closeout) {
     result.closeout_readback_status = input.closeout.status;
     result.checks_status = input.closeout.checksStatus;
-    result.unresolved_review_threads_count = input.closeout.unresolvedReviewThreadsCount ?? -1;
+    if (input.closeout.unresolvedReviewThreadsCount !== null) {
+      result.unresolved_review_threads_count = input.closeout.unresolvedReviewThreadsCount;
+    }
     result.coderabbit_status = input.closeout.coderabbitStatus;
     result.codex_connector_status = input.closeout.codexConnectorStatus;
+    result.human_review_status = input.closeout.humanReviewStatus;
+    result.draft_status = input.closeout.draftStatus;
     result.source_issue_evidence_status = input.closeout.sourceIssueEvidenceStatus;
     result.spec_gate_status = input.closeout.specGateStatus;
     result.routing_evidence_status = input.closeout.routingEvidenceStatus;
@@ -1138,6 +1152,8 @@ function printResult(result: WorkflowCheckResult, format: OutputFormat): void {
     'checks_status',
     'coderabbit_status',
     'codex_connector_status',
+    'human_review_status',
+    'draft_status',
     'source_issue_evidence_status',
     'spec_gate_status',
     'routing_evidence_status',
@@ -1497,6 +1513,8 @@ function manualCloseout(missingFields: string[], warnings: string[]): CloseoutRe
     unresolvedReviewThreadsCount: null,
     coderabbitStatus: 'skipped',
     codexConnectorStatus: 'skipped',
+    humanReviewStatus: 'manual',
+    draftStatus: 'manual',
     sourceIssueEvidenceStatus: 'manual',
     specGateStatus: 'manual',
     routingEvidenceStatus: 'manual',
@@ -1530,6 +1548,30 @@ function summarizeCodexConnectorStatus(pr: Record<string, unknown>): WorkflowSta
   return reviews.some((review) => /chatgpt-codex-connector/i.test(String((review as { author?: { login?: string } }).author?.login ?? '')))
     ? 'pass'
     : 'skipped';
+}
+
+function summarizeHumanReviewStatus(pr: Record<string, unknown>): WorkflowStatus {
+  const reviews = Array.isArray(pr.reviews) ? pr.reviews : [];
+  const latestByAuthor = new Map<string, { state: string; submittedAt: string }>();
+  for (const review of reviews) {
+    const typedReview = review as { author?: { login?: string }; state?: string; submittedAt?: string };
+    const login = String(typedReview.author?.login ?? '').toLowerCase();
+    if (!login || isAutomationReviewLogin(login)) continue;
+    const state = normalize(typedReview.state);
+    if (!state) continue;
+    const submittedAt = String(typedReview.submittedAt ?? '');
+    const previous = latestByAuthor.get(login);
+    if (!previous || submittedAt >= previous.submittedAt) {
+      latestByAuthor.set(login, { state, submittedAt });
+    }
+  }
+  return [...latestByAuthor.values()].some((review) => review.state === 'changes_requested')
+    ? 'fail'
+    : 'pass';
+}
+
+function isAutomationReviewLogin(login: string): boolean {
+  return /(?:coderabbit|chatgpt-codex-connector|github-actions|dependabot)/i.test(login);
 }
 
 async function captureConsole(fn: () => Promise<void>): Promise<{ ok: true; warnings: string[] } | { ok: false; warnings: string[]; error: string }> {
