@@ -87,6 +87,8 @@ spec workflow-check --repo . --phase merge --pr-body /tmp/pr.md --routing-eviden
 
 The routing evidence file is local input only. The CLI does not fetch or mutate GitHub to resolve routing evidence refs.
 
+If a workflow needs stronger auditability for whether delegation actually occurred, use the design-only [optional AWP delegation evidence manifest](awp-delegation-evidence-manifest.md). That manifest records worker profile, model, reasoning, assigned scope, result summary, closeout status, and controller fallback reason as local evidence shape. It remains optional, does not apply to non-AWP PRs, and does not make `spec-injector` spawn or orchestrate workers.
+
 ## Non-goals
 
 This policy does not:
