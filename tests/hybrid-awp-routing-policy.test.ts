@@ -167,3 +167,30 @@ test('optional AWP delegation evidence manifest remains linked from policy docs 
   assert.match(readme, /\[docs\/awp-delegation-evidence-manifest\.md\]\(docs\/awp-delegation-evidence-manifest\.md\)/);
   assert.match(englishReadme, /\[docs\/awp-delegation-evidence-manifest\.md\]\(docs\/awp-delegation-evidence-manifest\.md\)/);
 });
+
+test('release versioning policy documents patch, minor, major, and no-publish boundaries', async () => {
+  const releasePath = path.join(repoRoot, 'docs', 'release.md');
+  const readmePath = path.join(repoRoot, 'README.md');
+  const englishReadmePath = path.join(repoRoot, 'README.en.md');
+
+  const [release, readme, englishReadme] = await Promise.all([
+    fs.readFile(releasePath, 'utf8'),
+    fs.readFile(readmePath, 'utf8'),
+    fs.readFile(englishReadmePath, 'utf8'),
+  ]);
+
+  assert.match(release, /Versioning Policy/);
+  assert.match(release, /Patch version: default bump for merged deliverable changes/);
+  assert.match(release, /CLI behavior, flags, output, error handling, or command routing/);
+  assert.match(release, /No Patch Bump Needed/);
+  assert.match(release, /capability checks/i);
+  assert.match(release, /Minor bumps require human or high-level reviewer assessment/);
+  assert.match(release, /Major bumps require explicit product-level approval/);
+  assert.match(release, /simplified manual release PR/);
+  assert.match(release, /No `pnpm publish`/);
+  assert.match(release, /Anti-Churn Rules/);
+  assert.match(release, /does not auto-publish npm packages/);
+
+  assert.match(readme, /\[docs\/release\.md\]\(docs\/release\.md\)/);
+  assert.match(englishReadme, /\[docs\/release\.md\]\(docs\/release\.md\)/);
+});

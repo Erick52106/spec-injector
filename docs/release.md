@@ -15,6 +15,107 @@ The current goal is to let developers and AI implementers get the `spec` CLI thr
 - CI already exists and runs `pnpm test`.
 - `pnpm test` runs `pnpm build` first, then executes CLI integration tests.
 
+## Versioning Policy
+
+`spec-injector` uses a SemVer-like package version policy even before a stable npm release exists. The package version is still useful for local runners, target repo capability audits, implementation evidence, and future release notes.
+
+Current policy:
+
+- Patch version: default bump for merged deliverable changes.
+- Minor version: human-reviewed milestone decision.
+- Major version: human-reviewed product-stability decision.
+
+Version bumps should happen through a normal reviewed PR. This project does not currently use Changesets and does not auto-publish npm packages.
+
+## Patch Version Bump
+
+Patch is the third number, for example `0.1.0 -> 0.1.1`.
+
+After an implementation PR merges, the next release-maintenance PR should bump patch by default when the merge changed any shipped or user-facing deliverable:
+
+- CLI behavior, flags, output, error handling, or command routing
+- `spec workflow-check`, `spec evidence-check`, `spec awp-review-check`, `spec doctor`, or other checker behavior
+- bug fix, parser fix, classifier fix, reference collection fix, or config loader fix
+- tests that protect shipped CLI / workflow behavior
+- docs that define target repo adoption contracts, release/install behavior, AWP evidence gates, or other workflow contracts that downstream repos can rely on
+- package metadata or install instructions that affect how users invoke the tool
+
+Patch bump can be batched across multiple merged PRs. It does not need to happen inside every feature PR, but it should not be skipped when downstream repos would otherwise see the same version for materially different capabilities.
+
+## No Patch Bump Needed
+
+Some changes can use capability checks, issue evidence, or docs notes without bumping package version immediately:
+
+- comment-only GitHub closeout or metadata-only label/milestone repair
+- typo-only docs that do not change a contract, command, install path, or downstream expectation
+- planning docs explicitly marked future / design-only and not used as current capability
+- internal audit reports that do not change user-facing behavior or adopted workflow policy
+- worktree cleanup, branch cleanup, or evidence readback with no repo diff
+
+If uncertain, prefer recording the uncertainty in the PR body and leave the minor/major/patch decision to a release-maintenance PR instead of changing version ad hoc.
+
+## Minor Version Gate
+
+Minor is the second number, for example `0.1.x -> 0.2.0`.
+
+Minor bumps require human or high-level reviewer assessment. Good candidates include:
+
+- a coherent workflow generation is complete, such as a full AWP evidence gate set moving from experimental docs to adopted CLI behavior
+- downstream repos have adopted the contract and compatibility fixtures are stable
+- release notes can describe a meaningful capability set rather than a single patch
+- the compatibility boundary is understood and documented
+- known safety non-goals remain explicit
+
+AI implementers should stop and request human release review before changing the minor version.
+
+## Major Version Gate
+
+Major is the first number, for example `0.x -> 1.0.0`.
+
+Major bumps require explicit product-level approval. A major release should wait until the project can make stable public commitments about:
+
+- CLI compatibility and deprecation policy
+- install path and package distribution
+- target repo mutation boundaries
+- workflow-check / evidence-check authority limits
+- security and private-context handling
+- release notes and changelog expectations
+
+No AI workflow should infer a major bump from merged implementation work alone.
+
+## Release Checklist
+
+Until a separate issue adopts Changesets or release automation, use a simplified manual release PR:
+
+```markdown
+## Release checklist
+
+- [ ] Source PRs / issues listed
+- [ ] Version bump type: patch / minor / major
+- [ ] Reason for bump type
+- [ ] `package.json` version updated
+- [ ] `pnpm-lock.yaml` updated only if package metadata requires it
+- [ ] Capability notes or changelog summary updated, if applicable
+- [ ] `pnpm install --frozen-lockfile`
+- [ ] `pnpm build`
+- [ ] `pnpm test`
+- [ ] `git diff --check`
+- [ ] No `pnpm publish`
+- [ ] No npm token or registry setting changed
+```
+
+Patch release PRs may be opened by an AI implementer when the source issue explicitly scopes release maintenance or when the user asks to prepare the release PR. Minor and major release PRs require explicit human authorization in the issue or prompt.
+
+## Anti-Churn Rules
+
+Avoid meaningless version churn:
+
+- Do not bump version for every comment-only or label-only closeout.
+- Do not bump version twice for the same merged capability batch.
+- Do not bump minor or major to make a PR look more important.
+- Do not publish to npm as part of a version bump unless a separate issue explicitly authorizes publication.
+- Do not treat capability checks such as `spec doctor --workflow awp --format json` as a substitute for package version forever; they are a compatibility bridge, not the release policy.
+
 ## Phase 1: Local development install
 
 ```bash
