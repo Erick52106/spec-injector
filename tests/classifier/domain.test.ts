@@ -510,6 +510,20 @@ test('zh-TW generic model and file wording does not imply database', () => {
   assert.ok(!result.domains.includes('database'), `Expected database to be absent from ${result.domains.join(', ')}`);
 });
 
+test('zh-TW generic service wording does not imply backend', () => {
+  const result = classifyDomainsWithEvidence(issue({
+    title: '更新客服服務品質與服務條款文件',
+    body: [
+      '這是產品文案和支援流程調整。',
+      '沒有 runtime 程式碼或部署設定變更。',
+    ].join('\n'),
+    labels: ['docs'],
+  }));
+
+  assert.ok(result.domains.includes('docs'), `Expected docs in ${result.domains.join(', ')}`);
+  assert.ok(!result.domains.includes('backend'), `Expected backend to be absent from ${result.domains.join(', ')}`);
+});
+
 test('classification evidence and rejected reasons keep deterministic shape and ordering', () => {
   const sampleIssue = issue({
     title: 'Dashboard endpoint route transaction review',

@@ -23,7 +23,7 @@ export interface DomainClassificationResult {
 
 const DOMAIN_KEYWORDS: Record<string, string[]> = {
   frontend: ['frontend', 'ui', 'component', 'client component', 'server action', 'add-to-cart', 'form action', 'pdp', 'render', 'css', 'style', 'react', 'vue', 'angular', 'svelte', 'button', 'form', 'page', 'layout', 'responsive', 'animation', 'dom', 'html', 'tailwind', 'visual', 'design', '前端', '使用者介面', '畫面', '元件', '表單', '樣式', '版面', '響應式'],
-  backend: ['server', 'service', 'handler', 'controller', 'middleware', 'worker', 'daemon', 'queue', 'job', 'cron', 'scheduler', 'grpc', 'rpc', '後端', '伺服器', '服務', '處理器', '控制器', '中介層', '排程'],
+  backend: ['server', 'service', 'handler', 'controller', 'middleware', 'worker', 'daemon', 'queue', 'job', 'cron', 'scheduler', 'grpc', 'rpc', '後端', '伺服器', '後端服務', '處理器', '控制器', '中介層', '排程'],
   api: ['api', 'endpoint', 'rest', 'graphql', 'http', 'route', 'swagger', 'openapi', 'webhook', 'request', 'response', '端點', '路由', '請求', '回應', '介接'],
   auth: ['auth', 'authentication', 'authorization', 'authorize', 'authorized', 'login', 'logout', 'token', 'jwt', 'oauth', 'session', 'password', 'credential', 'permission', 'role', 'access', 'signup', 'register', '登入', '登出', '授權', '權限', '角色', '憑證', '密碼', '權杖', '存取控制'],
   database: ['database', 'db', 'sql', 'query', 'queries', 'migration', 'schema', 'table', 'column', 'model', 'data model', 'orm', 'repository layer', 'persistence', 'persisted', 'record storage', 'postgres', 'postgresql', 'mysql', 'sqlite', 'mongo', 'redis', 'index', 'prisma', 'drizzle', 'gorm', '資料庫', '資料表', '欄位', '查詢', '遷移', '結構描述', '索引', '持久化'],
