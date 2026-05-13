@@ -132,3 +132,38 @@ test('AWP dogfood outcome ledger remains linked from dogfood docs and README', a
   assert.match(readme, /\[docs\/awp-dogfood-outcome-ledger\.md\]\(docs\/awp-dogfood-outcome-ledger\.md\)/);
   assert.match(englishReadme, /\[docs\/awp-dogfood-outcome-ledger\.md\]\(docs\/awp-dogfood-outcome-ledger\.md\)/);
 });
+
+test('optional AWP delegation evidence manifest remains linked from policy docs and README', async () => {
+  const manifestPath = path.join(repoRoot, 'docs', 'awp-delegation-evidence-manifest.md');
+  const policyPath = path.join(repoRoot, 'docs', 'hybrid-awp-routing-policy.md');
+  const readmePath = path.join(repoRoot, 'README.md');
+  const englishReadmePath = path.join(repoRoot, 'README.en.md');
+
+  const [manifest, policy, readme, englishReadme] = await Promise.all([
+    fs.readFile(manifestPath, 'utf8'),
+    fs.readFile(policyPath, 'utf8'),
+    fs.readFile(readmePath, 'utf8'),
+    fs.readFile(englishReadmePath, 'utf8'),
+  ]);
+
+  assert.match(manifest, /Optional AWP Delegation Evidence Manifest/);
+  assert.match(manifest, /worker profile/i);
+  assert.match(manifest, /model/i);
+  assert.match(manifest, /reasoning/i);
+  assert.match(manifest, /assigned_scope/);
+  assert.match(manifest, /result_summary/);
+  assert.match(manifest, /closeout_status/);
+  assert.match(manifest, /fallback_reason/);
+  assert.match(manifest, /AI controller manual entry/);
+  assert.match(manifest, /Agent wrapper \/ local runner/);
+  assert.match(manifest, /Target repo local script/);
+  assert.match(manifest, /only validate shape and readback consistency/i);
+  assert.match(manifest, /must not:\n\n- spawn, close, or manage subagents/);
+  assert.match(manifest, /cannot prove/);
+  assert.match(manifest, /separate implementation issue/);
+  assert.match(manifest, /Do not require non-AWP users to adopt this manifest/);
+
+  assert.match(policy, /\[optional AWP delegation evidence manifest\]\(awp-delegation-evidence-manifest\.md\)/);
+  assert.match(readme, /\[docs\/awp-delegation-evidence-manifest\.md\]\(docs\/awp-delegation-evidence-manifest\.md\)/);
+  assert.match(englishReadme, /\[docs\/awp-delegation-evidence-manifest\.md\]\(docs\/awp-delegation-evidence-manifest\.md\)/);
+});
