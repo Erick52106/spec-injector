@@ -53,3 +53,20 @@ test('AWP review triage gate policy remains linked from CLI docs', async () => {
   assert.match(englishReadme, /\[AWP review triage gates\]\(docs\/awp-review-triage-gates\.md\)/);
   assert.match(workflow, /\[AWP review triage gates\]\(awp-review-triage-gates\.md\)/);
 });
+
+test('target repo adoption contract remains linked from workflow docs', async () => {
+  const contractPath = path.join(repoRoot, 'docs', 'target-repo-adoption-contract.md');
+  const workflowPath = path.join(repoRoot, 'docs', 'workflow.md');
+
+  const [contract, workflow] = await Promise.all([
+    fs.readFile(contractPath, 'utf8'),
+    fs.readFile(workflowPath, 'utf8'),
+  ]);
+
+  assert.match(contract, /Target Repo Adoption Contract/);
+  assert.match(contract, /tachigo/i);
+  assert.match(contract, /tachiya/i);
+  assert.match(contract, /Do not commit `.spec-injector\/out\/`/);
+  assert.match(contract, /does not mutate downstream repos/i);
+  assert.match(workflow, /\[target repo adoption contract\]\(target-repo-adoption-contract\.md\)/);
+});

@@ -18,6 +18,8 @@ Autonomous Worker Profiles / Codex autonomous PR work 的 start-gate routing sou
 
 Autonomous review follow-up 的 batching、freshness、duplicate collapse、root-cause escalation、patch budget 與 final closeout ledger source of truth 見 [AWP review triage gates](awp-review-triage-gates.md)。可用 `spec awp-review-check --repo . --evidence <path>` 檢查 local JSON evidence；該 checker 不讀寫 GitHub、不 resolve review threads、不 auto-fix、不 merge，也不要求 downstream Scope Police 解析完整 ledger。
 
+Downstream target repo 如何採用 `spec workflow-check` status/ref evidence、何時仍需要 target repo PR、以及 tachigo / tachiya thin-wiring examples，見 [target repo adoption contract](target-repo-adoption-contract.md)。該 contract 明確保留 local-only、read-only、no target repo mutation 邊界。
+
 Future companion / workflow observability status vocabulary 見 [status-event-schema.md](status-event-schema.md)。該 schema 是 Layer 4 design proposal，不代表 daemon、companion UI、CLI JSON output、watcher、merge bot 或 target repo automation 已實作。
 
 `spec label-audit` 是 repo-local、human-readable 的 read-only guardrail。它讀取 accepted taxonomy 與 `gh issue list` / `gh pr list` metadata，輸出 `PASS` / `WARNING` / `NEEDS-HUMAN-REVIEW`；它只 report，不建立 labels、不修改 labels、不修改 milestones、不修改 issue / PR metadata。`needs human review` 代表 stop-and-report，不代表 checker 自動替 human 做 metadata 決策。

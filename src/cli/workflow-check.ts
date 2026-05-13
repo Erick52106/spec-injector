@@ -17,9 +17,12 @@ type WorkflowCheckOptions = {
   phase: string;
   format?: string;
   issue?: string;
+  pr?: string;
   prBody?: string;
   headSha?: string;
   routingEvidence?: string;
+  findingDisposition?: string;
+  thresholdEvidence?: string;
 };
 
 type WorkflowCheckResult = {
@@ -43,6 +46,23 @@ type WorkflowCheckResult = {
   fallback_status?: string;
   fallback_reason_quality?: string;
   routing_mismatch?: string;
+  finding_disposition_status?: string;
+  threshold_calibration_status?: string;
+  closeout_readback_status?: string;
+  task_size?: string;
+  risk?: string;
+  delegation_decision?: string;
+  threshold_ledger_ref?: string;
+  checks_status?: string;
+  unresolved_review_threads_count?: number;
+  coderabbit_status?: string;
+  codex_connector_status?: string;
+  human_review_status?: string;
+  draft_status?: string;
+  source_issue_evidence_status?: string;
+  spec_gate_status?: string;
+  routing_evidence_status?: string;
+  ready_to_merge?: 'yes' | 'no' | 'manual';
 };
 
 type PrBodyEvidence = {
@@ -64,6 +84,15 @@ type PrBodyEvidence = {
   claimsControllerOnly: boolean;
   controllerFallback: 'allowed' | 'denied' | null;
   controllerFallbackReason: string | null;
+  hasThresholdStatus: boolean;
+  thresholdStatus: 'pass' | 'fail' | 'manual' | 'skipped' | 'pending' | 'unknown' | null;
+  hasThresholdRef: boolean;
+  thresholdRef: string | null;
+  hasFindingDispositionStatus: boolean;
+  findingDispositionStatus: 'pass' | 'fail' | 'manual' | 'skipped' | 'pending' | 'unknown' | null;
+  hasFindingDispositionRef: boolean;
+  findingDispositionRef: string | null;
+  readyToMerge: 'yes' | 'no' | 'manual' | null;
 };
 
 type RoutingTaskClass =
@@ -98,6 +127,51 @@ type FallbackAssessment = {
   routing_mismatch: string[];
 };
 
+type GateAssessment = {
+  status: WorkflowStatus;
+  missingFields: string[];
+  warnings: string[];
+};
+
+type FindingDispositionEvidence = {
+  findings: Array<{
+    finding_id?: string;
+    source?: string;
+    status?: string;
+    rationale_ref?: string;
+    resolved?: string;
+    follow_up_issue?: string;
+  }>;
+};
+
+type ThresholdEvidence = {
+  task_size?: string;
+  risk?: string;
+  delegation_decision?: string;
+  expected_delegation_cost?: string;
+  actual_friction?: string;
+  controller_direct_reason?: string;
+  threshold_ledger_ref?: string;
+  worker_evidence_ref?: string;
+};
+
+type CloseoutReadback = {
+  status: WorkflowStatus;
+  missingFields: string[];
+  warnings: string[];
+  checksStatus: WorkflowStatus;
+  unresolvedReviewThreadsCount: number | null;
+  coderabbitStatus: WorkflowStatus | 'skipped';
+  codexConnectorStatus: WorkflowStatus | 'skipped';
+  humanReviewStatus: WorkflowStatus;
+  draftStatus: WorkflowStatus;
+  sourceIssueEvidenceStatus: WorkflowStatus;
+  specGateStatus: WorkflowStatus;
+  routingEvidenceStatus: WorkflowStatus;
+  findingDispositionStatus: WorkflowStatus;
+  readyToMerge: 'yes' | 'no' | 'manual';
+};
+
 const PHASES = new Set<WorkflowPhase>(['start', 'commit', 'merge']);
 const FORMATS = new Set<OutputFormat>(['text', 'json']);
 const SPEC_STATUS_PATTERN = /\b(?:spec(?:[-_ ](?:gate|workflow|workflow-check|evidence))?|workflow-check|spec_evidence_status)\b[^\n\r]{0,120}\b(pass|fail|manual|skipped|pending|unknown)\b/i;
@@ -106,11 +180,19 @@ const MANUAL_FALLBACK_PATTERN = /\bmanual(?: checklist)? fallback\b|\bmanual spe
 const FINAL_MERGE_GATE_PATTERN = /\bfinal merge gate\b|\bmerge gate\b/i;
 const LATEST_HEAD_PATTERN = /\b(?:latest head|head sha|commit hash|head)\b[^\n\r]{0,80}\b[0-9a-f]{7,40}\b/i;
 const ROUTING_STATUS_PATTERN = /\b(?:routing[_ -]evidence[_ -]status|routing status)\b\s*[:=]\s*(pass|fail|manual|skipped|pending|unknown)\s*$/im;
+const GENERIC_STATUS_VALUES = ['pass', 'fail', 'manual', 'skipped', 'pending', 'unknown'] as const;
 const AUTONOMOUS_SIGNAL_PATTERN = /\b(?:Autonomous Worker Profiles|Hybrid AWP|AWP|Codex autonomous PR|autonomous worker-routing|controller_fallback|Delegation Execution Log)\b/i;
 const SPARK_EVIDENCE_PATTERN = /\b(?:ops_spark|spark(?: \/ ops)? worker|ops worker|spark_readback_evidence|readback evidence)\b/i;
 const WORKER_54_EVIDENCE_PATTERN = /\b(?:worker_5_4|5\.4 worker|implementation worker|bounded implementation worker)\b/i;
 const CONTROLLER_ONLY_PATTERN = /\b(?:controller-only|controller only|controller_fallback\s*[:=]\s*allowed|controller fallback\s*[:=]\s*allowed)\b/i;
 const WEAK_FALLBACK_REASONS = new Set(['', 'n/a', 'na', 'none', 'small', 'done', 'ok', 'trivial']);
+const FINDING_SOURCES = ['coderabbit', 'chatgpt-codex-connector', 'human', 'self-review'];
+const FINDING_STATUSES = ['adopted', 'not_adopted', 'deferred_follow_up', 'blocked', 'noise'];
+const THRESHOLD_TASK_SIZES = ['tiny', 'small', 'medium', 'large'];
+const THRESHOLD_RISKS = ['low', 'medium', 'high'];
+const THRESHOLD_DECISIONS = ['spawned', 'controller_direct', 'manual'];
+const THRESHOLD_COSTS = ['low', 'medium', 'high'];
+const THRESHOLD_FRICTION = ['none', 'minor', 'major'];
 
 export async function workflowCheck(opts: WorkflowCheckOptions): Promise<void> {
   const phase = parsePhase(opts.phase);
@@ -184,6 +266,25 @@ async function runStartPhase(
   checkedAt: string,
   warnings: string[]
 ): Promise<WorkflowCheckResult> {
+  const threshold = await readOptionalThresholdAssessment(opts.thresholdEvidence, warnings);
+  if (!opts.issue && threshold) {
+    return buildResult({
+      phase: 'start',
+      repoPath,
+      checkedAt,
+      status: threshold.status,
+      missingFields: threshold.missingFields,
+      warnings: [...warnings, ...threshold.warnings],
+      evidenceSummary: threshold.status === 'pass'
+        ? 'start gate passed: threshold calibration evidence is valid'
+        : `start gate threshold calibration ${threshold.status}: ${threshold.missingFields.join(', ')}`,
+      routing: noRoutingEvidence(),
+      fallback: noFallbackAssessment(),
+      threshold: threshold.evidence,
+      thresholdAssessment: threshold,
+    });
+  }
+
   if (!opts.issue) {
     return buildResult({
       phase: 'start',
@@ -195,6 +296,8 @@ async function runStartPhase(
       evidenceSummary: 'start gate requires manual fallback because --issue was not provided',
       routing: noRoutingEvidence(),
       fallback: noFallbackAssessment(),
+      threshold: threshold?.evidence,
+      thresholdAssessment: threshold,
     });
   }
 
@@ -212,6 +315,8 @@ async function runStartPhase(
       evidenceSummary: `start gate could not read issue for routing: ${(err as Error).message}`,
       routing: noRoutingEvidence(),
       fallback: noFallbackAssessment(),
+      threshold: threshold?.evidence,
+      thresholdAssessment: threshold,
     });
   }
 
@@ -235,6 +340,8 @@ async function runStartPhase(
       evidenceSummary: `start gate could not generate bounded context: ${dryRun.error}`,
       routing: issue ? classifyRouting(issue) : noRoutingEvidence(),
       fallback: noFallbackAssessment(),
+      threshold: threshold?.evidence,
+      thresholdAssessment: threshold,
     });
   }
 
@@ -243,7 +350,11 @@ async function runStartPhase(
   const missingFields: string[] = [];
   if (routing.routing_task_class === 'unknown') missingFields.push('routing_task_class');
   if (fallback.fallback_status === 'fail') missingFields.push('controller_fallback_reason');
-  const status: WorkflowStatus = missingFields.length > 0 || fallback.fallback_status === 'manual' ? 'manual' : 'pass';
+  if (threshold) missingFields.push(...threshold.missingFields);
+  const status: WorkflowStatus = summarizeWorkflowStatus([
+    missingFields.length > 0 || fallback.fallback_status === 'manual' ? 'manual' : 'pass',
+    threshold?.status ?? 'pass',
+  ]);
 
   return buildResult({
     phase: 'start',
@@ -257,6 +368,8 @@ async function runStartPhase(
       : 'start gate requires manual fallback: bounded context generated but routing needs review',
     routing,
     fallback,
+    threshold: threshold?.evidence,
+    thresholdAssessment: threshold,
   });
 }
 
@@ -293,6 +406,8 @@ async function runCommitPhase(
 
   let evidence: PrBodyEvidence;
   let routing: RoutingEvidence | null = null;
+  const findingDisposition = await readOptionalFindingDispositionAssessment(opts.findingDisposition, warnings);
+  const threshold = await readOptionalThresholdAssessment(opts.thresholdEvidence, warnings);
   try {
     evidence = await parsePrBodyEvidence(opts.prBody, opts.headSha);
   } catch (err) {
@@ -335,18 +450,28 @@ async function runCommitPhase(
         evidenceSummary: `commit gate routing alignment failed: ${routingCheck.routing_mismatch.join(', ')}`,
         routing: routing ?? evidenceToFallbackRouting(evidence),
         fallback: routingCheck,
+        findingDispositionAssessment: findingDisposition,
+        threshold: threshold?.evidence,
+        thresholdAssessment: threshold,
       });
     }
+    const manualMissingFields = [
+      ...(findingDisposition?.missingFields ?? []),
+      ...(threshold?.missingFields ?? []),
+    ];
     return buildResult({
       phase: 'commit',
       repoPath,
       checkedAt,
-      status: 'manual',
-      missingFields: [],
-      warnings,
+      status: summarizeWorkflowStatus(['manual', findingDisposition?.status ?? 'pass', threshold?.status ?? 'pass']),
+      missingFields: manualMissingFields,
+      warnings: [...warnings, ...(findingDisposition?.warnings ?? []), ...(threshold?.warnings ?? [])],
       evidenceSummary: 'commit gate recorded manual fallback evidence and staged state is clean',
       routing: routing ?? evidenceToFallbackRouting(evidence),
       fallback,
+      findingDispositionAssessment: findingDisposition,
+      threshold: threshold?.evidence,
+      thresholdAssessment: threshold,
     });
   }
 
@@ -355,6 +480,8 @@ async function runCommitPhase(
     missingFields.push('ready_spec_gate_status');
   }
   if (routingCheck) missingFields.push(...routingCheck.routing_mismatch);
+  if (findingDisposition) missingFields.push(...findingDisposition.missingFields);
+  if (threshold) missingFields.push(...threshold.missingFields);
 
   if (missingFields.length > 0) {
     return buildResult({
@@ -363,10 +490,13 @@ async function runCommitPhase(
       checkedAt,
       status: 'fail',
       missingFields,
-      warnings,
+      warnings: [...warnings, ...(findingDisposition?.warnings ?? []), ...(threshold?.warnings ?? [])],
       evidenceSummary: `commit gate missing ${missingFields.join(', ')}`,
       routing: routing ?? undefined,
       fallback: routingCheck ?? undefined,
+      findingDispositionAssessment: findingDisposition,
+      threshold: threshold?.evidence,
+      thresholdAssessment: threshold,
     });
   }
 
@@ -376,10 +506,13 @@ async function runCommitPhase(
     checkedAt,
     status: 'pass',
     missingFields: [],
-    warnings,
+    warnings: [...warnings, ...(findingDisposition?.warnings ?? []), ...(threshold?.warnings ?? [])],
     evidenceSummary: 'commit gate passed: staged artifacts clean and PR body contains spec gate evidence',
     routing: routing ?? undefined,
     fallback: routingCheck ?? inferFallbackFromEvidence(evidence),
+    findingDispositionAssessment: findingDisposition,
+    threshold: threshold?.evidence,
+    thresholdAssessment: threshold,
   });
 }
 
@@ -390,6 +523,10 @@ async function runMergePhase(
   warnings: string[],
   forbiddenStagedPaths: string[]
 ): Promise<WorkflowCheckResult> {
+  if (opts.pr) {
+    return runMergeCloseoutPhase(repoPath, opts, checkedAt, warnings);
+  }
+
   if (forbiddenStagedPaths.length > 0) {
     return buildResult({
       phase: 'merge',
@@ -416,6 +553,8 @@ async function runMergePhase(
 
   let evidence: PrBodyEvidence;
   let routing: RoutingEvidence | null = null;
+  const findingDisposition = await readOptionalFindingDispositionAssessment(opts.findingDisposition, warnings);
+  const threshold = await readOptionalThresholdAssessment(opts.thresholdEvidence, warnings);
   try {
     evidence = await parsePrBodyEvidence(opts.prBody, opts.headSha);
   } catch (err) {
@@ -452,6 +591,8 @@ async function runMergePhase(
   }
   const routingCheck = routing ? assessRoutingAlignment(routing, evidence, 'merge', opts.headSha) : null;
   if (routingCheck) missingFields.push(...routingCheck.routing_mismatch);
+  if (findingDisposition) missingFields.push(...findingDisposition.missingFields);
+  if (threshold) missingFields.push(...threshold.missingFields);
 
   if (evidence.hasManualFallback && missingFields.length > 0 && !isBlockedSpecStatus(evidence.specStatus) && evidence.headMatches !== false) {
     return buildResult({
@@ -460,10 +601,13 @@ async function runMergePhase(
       checkedAt,
       status: 'manual',
       missingFields,
-      warnings,
+      warnings: [...warnings, ...(findingDisposition?.warnings ?? []), ...(threshold?.warnings ?? [])],
       evidenceSummary: `merge gate requires manual fallback: missing ${missingFields.join(', ')}`,
       routing: routing ?? evidenceToFallbackRouting(evidence),
       fallback: routingCheck ?? assessFallback(routing ?? evidenceToFallbackRouting(evidence), evidence),
+      findingDispositionAssessment: findingDisposition,
+      threshold: threshold?.evidence,
+      thresholdAssessment: threshold,
     });
   }
 
@@ -474,10 +618,13 @@ async function runMergePhase(
       checkedAt,
       status: 'fail',
       missingFields,
-      warnings,
+      warnings: [...warnings, ...(findingDisposition?.warnings ?? []), ...(threshold?.warnings ?? [])],
       evidenceSummary: renderMergeFailureSummary(missingFields),
       routing: routing ?? undefined,
       fallback: routingCheck ?? undefined,
+      findingDispositionAssessment: findingDisposition,
+      threshold: threshold?.evidence,
+      thresholdAssessment: threshold,
     });
   }
 
@@ -487,10 +634,162 @@ async function runMergePhase(
     checkedAt,
     status: 'pass',
     missingFields: [],
-    warnings,
+    warnings: [...warnings, ...(findingDisposition?.warnings ?? []), ...(threshold?.warnings ?? [])],
     evidenceSummary: 'merge gate passed: final merge gate, spec evidence, and HEAD freshness are present',
     routing: routing ?? undefined,
     fallback: routingCheck ?? inferFallbackFromEvidence(evidence),
+    findingDispositionAssessment: findingDisposition,
+    threshold: threshold?.evidence,
+    thresholdAssessment: threshold,
+  });
+}
+
+async function runMergeCloseoutPhase(
+  repoPath: string,
+  opts: WorkflowCheckOptions,
+  checkedAt: string,
+  warnings: string[]
+): Promise<WorkflowCheckResult> {
+  const context = resolvePrReadbackContext(opts.pr as string, repoPath);
+  if (!context.repo) {
+    const closeout = manualCloseout(['github_repo'], ['Could not infer GitHub owner/name for --pr readback.']);
+    return buildResult({
+      phase: 'merge',
+      repoPath,
+      checkedAt,
+      status: 'manual',
+      missingFields: closeout.missingFields,
+      warnings: [...warnings, ...closeout.warnings],
+      evidenceSummary: 'merge closeout readback requires manual fallback: GitHub repo could not be inferred',
+      closeout,
+    });
+  }
+
+  const prRead = readGhJsonResult<Record<string, unknown>>([
+    'gh',
+    'pr',
+    'view',
+    context.prRef,
+    '--repo',
+    context.repo,
+    '--json',
+    'number,url,body,headRefOid,isDraft,reviews,statusCheckRollup,closingIssuesReferences',
+  ]);
+  const checksRead = readGhJsonResult<Array<Record<string, unknown>>>([
+    'gh',
+    'pr',
+    'checks',
+    context.prRef,
+    '--repo',
+    context.repo,
+    '--json',
+    'name,state,bucket,link,conclusion',
+  ]);
+  const threadsRead = readReviewThreads(context.prRef, context.repo);
+
+  if (!prRead.value) {
+    const closeout = manualCloseout(['pr_readback'], [prRead.error ?? 'Could not read PR metadata.']);
+    return buildResult({
+      phase: 'merge',
+      repoPath,
+      checkedAt,
+      status: 'manual',
+      missingFields: closeout.missingFields,
+      warnings: [...warnings, ...closeout.warnings],
+      evidenceSummary: 'merge closeout readback requires manual fallback: PR metadata could not be read',
+      closeout,
+    });
+  }
+
+  const pr = prRead.value;
+  const body = String(pr.body ?? '');
+  const headSha = typeof pr.headRefOid === 'string' ? pr.headRefOid : undefined;
+  const prBodyEvidence = parsePrBodyEvidenceText(body, headSha);
+  const checks = checksRead.value ?? [];
+  const missingFields: string[] = [];
+  const readWarnings: string[] = [];
+  if (checksRead.error) {
+    missingFields.push('checks_status');
+    readWarnings.push(checksRead.error);
+  }
+  if (threadsRead.error) {
+    missingFields.push('review_threads');
+    readWarnings.push(threadsRead.error);
+  }
+
+  const checksStatus = checksRead.error ? 'manual' : summarizeChecksStatus(checks);
+  const unresolvedCount = threadsRead.value === null
+    ? null
+    : threadsRead.value.filter((thread) => thread.isResolved !== true).length;
+  if (unresolvedCount !== null && unresolvedCount > 0) missingFields.push('unresolved_review_threads');
+
+  const coderabbitStatus = summarizeNamedAutomationStatus(checks, pr, /coderabbit/i);
+  const codexConnectorStatus = summarizeCodexConnectorStatus(pr);
+  const humanReviewStatus = summarizeHumanReviewStatus(pr);
+  const draftStatus: WorkflowStatus = pr.isDraft === true ? 'fail' : 'pass';
+  const sourceIssueEvidenceStatus = /https:\/\/github\.com\/[^\s]+\/issues\/\d+#issuecomment-\d+/i.test(body) ? 'pass' : 'manual';
+  const specGateStatus = prBodyEvidence.specStatus === 'pass' ? 'pass' : isBlockedSpecStatus(prBodyEvidence.specStatus) ? 'fail' : 'manual';
+  const routingEvidenceStatus = prBodyEvidence.routingStatus === 'pass' ? 'pass' : isBlockedRoutingStatus(prBodyEvidence.routingStatus) ? 'fail' : 'manual';
+  const findingDispositionStatus = prBodyEvidence.findingDispositionStatus === 'pass'
+    ? 'pass'
+    : isBlockedRoutingStatus(prBodyEvidence.findingDispositionStatus)
+      ? 'fail'
+      : 'manual';
+  const readyToMergeStatus = prBodyEvidence.readyToMerge === 'yes'
+    ? 'pass'
+    : prBodyEvidence.readyToMerge === 'no'
+      ? 'fail'
+      : 'manual';
+
+  if (checksStatus === 'fail') missingFields.push('checks_status');
+  if (sourceIssueEvidenceStatus !== 'pass') missingFields.push('source_issue_evidence');
+  if (specGateStatus !== 'pass') missingFields.push('spec_gate_status');
+  if (routingEvidenceStatus !== 'pass') missingFields.push('routing_evidence_status');
+  if (findingDispositionStatus === 'fail') missingFields.push('finding_disposition_status');
+  if (readyToMergeStatus !== 'pass') missingFields.push('ready_to_merge');
+  if (humanReviewStatus === 'fail') missingFields.push('human_review_status');
+  if (draftStatus === 'fail') missingFields.push('draft_pr');
+  if (headSha && !body.includes(headSha)) missingFields.push('head_sha_freshness');
+
+  const hasFail = [checksStatus, specGateStatus, routingEvidenceStatus, findingDispositionStatus, readyToMergeStatus, humanReviewStatus, draftStatus].includes('fail') ||
+    (unresolvedCount ?? 0) > 0;
+  const hasManual = missingFields.length > 0 ||
+    checksStatus === 'manual' ||
+    sourceIssueEvidenceStatus === 'manual' ||
+    specGateStatus === 'manual' ||
+    routingEvidenceStatus === 'manual' ||
+    findingDispositionStatus === 'manual' ||
+    readyToMergeStatus === 'manual' ||
+    unresolvedCount === null;
+  const status: WorkflowStatus = hasFail ? 'fail' : hasManual ? 'manual' : 'pass';
+  const closeout: CloseoutReadback = {
+    status,
+    missingFields: unique(missingFields),
+    warnings: readWarnings,
+    checksStatus,
+    unresolvedReviewThreadsCount: unresolvedCount,
+    coderabbitStatus,
+    codexConnectorStatus,
+    humanReviewStatus,
+    draftStatus,
+    sourceIssueEvidenceStatus,
+    specGateStatus,
+    routingEvidenceStatus,
+    findingDispositionStatus,
+    readyToMerge: status === 'pass' ? 'yes' : status === 'fail' ? 'no' : 'manual',
+  };
+
+  return buildResult({
+    phase: 'merge',
+    repoPath,
+    checkedAt,
+    status,
+    missingFields: closeout.missingFields,
+    warnings: [...warnings, ...readWarnings],
+    evidenceSummary: status === 'pass'
+      ? 'merge closeout readback passed: checks, review threads, evidence status, and HEAD freshness are ready'
+      : `merge closeout readback ${status}: ${closeout.missingFields.join(', ')}`,
+    closeout,
   });
 }
 
@@ -535,6 +834,10 @@ function configuredPrivateExcludes(config: Config): string[] {
 
 async function parsePrBodyEvidence(prBodyPath: string, expectedHeadSha?: string): Promise<PrBodyEvidence> {
   const body = await fs.readFile(path.resolve(prBodyPath), 'utf8');
+  return parsePrBodyEvidenceText(body, expectedHeadSha);
+}
+
+function parsePrBodyEvidenceText(body: string, expectedHeadSha?: string): PrBodyEvidence {
   const statusMatch = body.match(SPEC_STATUS_PATTERN);
   const specStatus = statusMatch?.[1]?.toLowerCase() as PrBodyEvidence['specStatus'] | undefined;
   const rawRoutingStatus = parseTextField(body, 'routing_evidence_status') ?? parseTextField(body, 'routing evidence status') ?? null;
@@ -542,6 +845,16 @@ async function parsePrBodyEvidence(prBodyPath: string, expectedHeadSha?: string)
   const routingRef = parseTextField(body, 'routing_evidence_ref') ??
     parseTextField(body, 'routing evidence ref') ??
     parseTextField(body, 'routing_ref');
+  const rawThresholdStatus = parseTextField(body, 'threshold_evidence_status') ?? parseTextField(body, 'threshold evidence status') ?? null;
+  const thresholdStatus = parseGenericStatus(rawThresholdStatus);
+  const thresholdRef = parseTextField(body, 'threshold_ledger_ref') ??
+    parseTextField(body, 'threshold ledger ref') ??
+    parseTextField(body, 'threshold_ref');
+  const rawFindingDispositionStatus = parseTextField(body, 'finding_disposition_status') ?? parseTextField(body, 'finding disposition status') ?? null;
+  const findingDispositionStatus = parseGenericStatus(rawFindingDispositionStatus);
+  const findingDispositionRef = parseTextField(body, 'finding_disposition_ref') ??
+    parseTextField(body, 'finding disposition ref');
+  const readyToMerge = parseReadyToMerge(body);
   const hasLatestHead = Boolean(expectedHeadSha)
     ? body.includes(expectedHeadSha as string)
     : LATEST_HEAD_PATTERN.test(body);
@@ -569,6 +882,15 @@ async function parsePrBodyEvidence(prBodyPath: string, expectedHeadSha?: string)
     claimsControllerOnly: CONTROLLER_ONLY_PATTERN.test(body),
     controllerFallback: parseAllowedDeniedField(body, 'controller_fallback') ?? parseAllowedDeniedField(body, 'controller fallback'),
     controllerFallbackReason: parseTextField(body, 'controller_fallback_reason') ?? parseTextField(body, 'fallback_reason'),
+    hasThresholdStatus: Boolean(rawThresholdStatus),
+    thresholdStatus,
+    hasThresholdRef: Boolean(thresholdRef),
+    thresholdRef,
+    hasFindingDispositionStatus: Boolean(rawFindingDispositionStatus),
+    findingDispositionStatus,
+    hasFindingDispositionRef: Boolean(findingDispositionRef),
+    findingDispositionRef,
+    readyToMerge,
   };
 }
 
@@ -595,6 +917,100 @@ async function readRoutingEvidence(routingEvidencePath: string): Promise<Routing
     spark_readback_evidence: typeof raw.spark_readback_evidence === 'string' ? raw.spark_readback_evidence : undefined,
     worker_5_4_evidence: typeof raw.worker_5_4_evidence === 'string' ? raw.worker_5_4_evidence : undefined,
   };
+}
+
+async function readOptionalFindingDispositionAssessment(
+  findingDispositionPath: string | undefined,
+  warnings: string[]
+): Promise<(GateAssessment & { evidence: FindingDispositionEvidence }) | null> {
+  if (!findingDispositionPath) return null;
+  try {
+    const raw = JSON.parse(await fs.readFile(path.resolve(findingDispositionPath), 'utf8')) as Record<string, unknown> | unknown[];
+    const evidence: FindingDispositionEvidence = {
+      findings: Array.isArray(raw) ? raw as FindingDispositionEvidence['findings'] : (raw.findings as FindingDispositionEvidence['findings'] ?? []),
+    };
+    return { ...assessFindingDisposition(evidence), evidence };
+  } catch (err) {
+    return {
+      status: 'fail',
+      missingFields: ['finding_disposition'],
+      warnings: [`Could not read finding disposition evidence: ${(err as Error).message}`],
+      evidence: { findings: [] },
+    };
+  }
+}
+
+function assessFindingDisposition(evidence: FindingDispositionEvidence): GateAssessment {
+  const missing: string[] = [];
+  const warnings: string[] = [];
+  if (!Array.isArray(evidence.findings) || evidence.findings.length === 0) {
+    return { status: 'manual', missingFields: ['finding_disposition'], warnings };
+  }
+
+  for (const finding of evidence.findings) {
+    if (!meaningful(finding.finding_id)) missing.push('finding_id');
+    if (!FINDING_SOURCES.includes(normalize(finding.source))) missing.push('finding_source');
+    const status = normalize(finding.status);
+    if (!FINDING_STATUSES.includes(status)) missing.push('finding_status');
+    if (!['yes', 'no', 'n/a'].includes(normalize(finding.resolved))) missing.push('finding_resolved');
+    if (status === 'blocked') missing.push('review_finding_blocked');
+    if (['not_adopted', 'blocked', 'noise'].includes(status) && !isEvidenceRefValue(finding.rationale_ref)) {
+      missing.push('finding_rationale_ref');
+    }
+    if (status === 'deferred_follow_up' && !isFollowUpRef(finding.follow_up_issue)) {
+      missing.push('finding_follow_up_issue');
+    }
+  }
+
+  return missing.length > 0
+    ? { status: 'fail', missingFields: unique(missing), warnings }
+    : { status: 'pass', missingFields: [], warnings };
+}
+
+async function readOptionalThresholdAssessment(
+  thresholdEvidencePath: string | undefined,
+  warnings: string[]
+): Promise<(GateAssessment & { evidence: ThresholdEvidence }) | null> {
+  if (!thresholdEvidencePath) return null;
+  try {
+    const evidence = JSON.parse(await fs.readFile(path.resolve(thresholdEvidencePath), 'utf8')) as ThresholdEvidence;
+    return { ...assessThresholdEvidence(evidence), evidence };
+  } catch (err) {
+    return {
+      status: 'fail',
+      missingFields: ['threshold_evidence'],
+      warnings: [`Could not read threshold evidence: ${(err as Error).message}`],
+      evidence: {},
+    };
+  }
+}
+
+function assessThresholdEvidence(evidence: ThresholdEvidence): GateAssessment {
+  const missing: string[] = [];
+  const taskSize = normalize(evidence.task_size);
+  const risk = normalize(evidence.risk);
+  const decision = normalize(evidence.delegation_decision);
+
+  if (!THRESHOLD_TASK_SIZES.includes(taskSize)) missing.push('task_size');
+  if (!THRESHOLD_RISKS.includes(risk)) missing.push('risk');
+  if (!THRESHOLD_DECISIONS.includes(decision)) missing.push('delegation_decision');
+  if (!THRESHOLD_COSTS.includes(normalize(evidence.expected_delegation_cost))) missing.push('expected_delegation_cost');
+  if (!THRESHOLD_FRICTION.includes(normalize(evidence.actual_friction))) missing.push('actual_friction');
+  if (!isEvidenceRefValue(evidence.threshold_ledger_ref)) missing.push('threshold_ledger_ref');
+
+  if (decision === 'controller_direct') {
+    if (fallbackReasonQuality(evidence.controller_direct_reason) !== 'strong') missing.push('controller_direct_reason');
+    if (!(taskSize === 'tiny' && risk === 'low') && !isEvidenceRefValue(evidence.worker_evidence_ref)) {
+      missing.push('worker_evidence_ref');
+    }
+  }
+  if (decision === 'spawned' && taskSize !== 'tiny' && !isEvidenceRefValue(evidence.worker_evidence_ref)) {
+    missing.push('worker_evidence_ref');
+  }
+
+  return missing.length > 0
+    ? { status: 'fail', missingFields: unique(missing), warnings: [] }
+    : { status: 'pass', missingFields: [], warnings: [] };
 }
 
 function missingCommitFields(evidence: PrBodyEvidence): string[] {
@@ -631,6 +1047,10 @@ function buildResult(input: {
   evidenceSummary: string;
   routing?: RoutingEvidence;
   fallback?: FallbackAssessment;
+  findingDispositionAssessment?: GateAssessment | null;
+  threshold?: ThresholdEvidence;
+  thresholdAssessment?: GateAssessment | null;
+  closeout?: CloseoutReadback;
 }): WorkflowCheckResult {
   const result: WorkflowCheckResult = {
     phase: input.phase,
@@ -657,6 +1077,34 @@ function buildResult(input: {
     result.fallback_status = input.fallback.fallback_status;
     result.fallback_reason_quality = input.fallback.fallback_reason_quality;
     result.routing_mismatch = input.fallback.routing_mismatch.length > 0 ? input.fallback.routing_mismatch.join(',') : 'none';
+  }
+  if (input.findingDispositionAssessment) {
+    result.finding_disposition_status = input.findingDispositionAssessment.status;
+  }
+  if (input.thresholdAssessment) {
+    result.threshold_calibration_status = input.thresholdAssessment.status;
+  }
+  if (input.threshold) {
+    result.task_size = String(input.threshold.task_size ?? 'n/a');
+    result.risk = String(input.threshold.risk ?? 'n/a');
+    result.delegation_decision = String(input.threshold.delegation_decision ?? 'n/a');
+    result.threshold_ledger_ref = String(input.threshold.threshold_ledger_ref ?? 'n/a');
+  }
+  if (input.closeout) {
+    result.closeout_readback_status = input.closeout.status;
+    result.checks_status = input.closeout.checksStatus;
+    if (input.closeout.unresolvedReviewThreadsCount !== null) {
+      result.unresolved_review_threads_count = input.closeout.unresolvedReviewThreadsCount;
+    }
+    result.coderabbit_status = input.closeout.coderabbitStatus;
+    result.codex_connector_status = input.closeout.codexConnectorStatus;
+    result.human_review_status = input.closeout.humanReviewStatus;
+    result.draft_status = input.closeout.draftStatus;
+    result.source_issue_evidence_status = input.closeout.sourceIssueEvidenceStatus;
+    result.spec_gate_status = input.closeout.specGateStatus;
+    result.routing_evidence_status = input.closeout.routingEvidenceStatus;
+    result.finding_disposition_status = input.closeout.findingDispositionStatus;
+    result.ready_to_merge = input.closeout.readyToMerge;
   }
   return result;
 }
@@ -694,8 +1142,27 @@ function printResult(result: WorkflowCheckResult, format: OutputFormat): void {
     'fallback_status',
     'fallback_reason_quality',
     'routing_mismatch',
+    'finding_disposition_status',
+    'threshold_calibration_status',
+    'closeout_readback_status',
+    'task_size',
+    'risk',
+    'delegation_decision',
+    'threshold_ledger_ref',
+    'checks_status',
+    'coderabbit_status',
+    'codex_connector_status',
+    'human_review_status',
+    'draft_status',
+    'source_issue_evidence_status',
+    'spec_gate_status',
+    'routing_evidence_status',
+    'ready_to_merge',
   ] as const) {
     if (result[key]) console.log(`${key}=${result[key]}`);
+  }
+  if (result.unresolved_review_threads_count !== undefined) {
+    console.log(`unresolved_review_threads_count=${result.unresolved_review_threads_count}`);
   }
 }
 
@@ -941,10 +1408,170 @@ function requiredEvidenceRef(value: unknown, fieldName: string): string {
 function parseRoutingStatus(value: string | null): PrBodyEvidence['routingStatus'] {
   if (value === null) return null;
   const normalized = value.trim().toLowerCase();
-  if (['pass', 'fail', 'manual', 'skipped', 'pending', 'unknown'].includes(normalized)) {
+  if (GENERIC_STATUS_VALUES.includes(normalized as typeof GENERIC_STATUS_VALUES[number])) {
     return normalized as PrBodyEvidence['routingStatus'];
   }
   return 'unknown';
+}
+
+function parseGenericStatus(value: string | null): PrBodyEvidence['routingStatus'] {
+  return parseRoutingStatus(value);
+}
+
+function parseReadyToMerge(body: string): 'yes' | 'no' | 'manual' | null {
+  const value = parseTextField(body, 'ready_to_merge') ?? parseTextField(body, 'ready to merge');
+  const normalized = normalize(value);
+  if (['yes', 'no', 'manual'].includes(normalized)) return normalized as 'yes' | 'no' | 'manual';
+  return null;
+}
+
+function summarizeWorkflowStatus(statuses: WorkflowStatus[]): WorkflowStatus {
+  if (statuses.includes('fail')) return 'fail';
+  if (statuses.includes('manual')) return 'manual';
+  if (statuses.every((status) => status === 'skipped')) return 'skipped';
+  return 'pass';
+}
+
+function meaningful(value: unknown): boolean {
+  const normalized = normalize(value);
+  return normalized !== '' && normalized !== 'n/a' && normalized !== 'none' && normalized !== 'missing' && normalized !== 'unknown';
+}
+
+function normalize(value: unknown): string {
+  return String(value ?? '').trim().toLowerCase();
+}
+
+function isFollowUpRef(value: string | null | undefined): boolean {
+  if (!value) return false;
+  if (isEvidenceRefValue(value)) return true;
+  return /^#\d+$/.test(value.trim());
+}
+
+function resolvePrReadbackContext(pr: string, repoPath: string): { prRef: string; repo: string | null } {
+  const match = pr.match(/^https:\/\/github\.com\/([^/]+\/[^/]+)\/pull\/(\d+)/);
+  if (match) return { repo: match[1], prRef: match[2] };
+  return { prRef: pr, repo: inferGitHubRepo(repoPath) };
+}
+
+function inferGitHubRepo(repoPath: string): string | null {
+  const result = run(['git', 'remote', 'get-url', 'origin'], { cwd: repoPath });
+  if (result.exitCode !== 0) return null;
+  const value = result.stdout.trim();
+  const httpsMatch = value.match(/^https:\/\/github\.com\/([^/]+\/[^/.]+)(?:\.git)?$/);
+  if (httpsMatch) return httpsMatch[1];
+  const sshMatch = value.match(/^git@github\.com:([^/]+\/[^/.]+)(?:\.git)?$/);
+  return sshMatch?.[1] ?? null;
+}
+
+function readGhJsonResult<T>(argv: string[]): { value?: T; error?: string } {
+  const result = run(argv);
+  if (result.exitCode !== 0) return { error: formatShellError(result) };
+  try {
+    return { value: JSON.parse(result.stdout) as T };
+  } catch {
+    return { error: 'Unexpected JSON output from gh.' };
+  }
+}
+
+function readReviewThreads(prRef: string, repo: string): { value: Array<{ isResolved?: boolean }> | null; error?: string } {
+  const [owner, name] = repo.split('/');
+  const query = `query($owner:String!, $repo:String!, $number:Int!) {
+    repository(owner:$owner, name:$repo) {
+      pullRequest(number:$number) {
+        reviewThreads(first:100) { nodes { isResolved isOutdated } }
+      }
+    }
+  }`;
+  const result = run([
+    'gh',
+    'api',
+    'graphql',
+    '-f',
+    `owner=${owner}`,
+    '-f',
+    `repo=${name}`,
+    '-F',
+    `number=${prRef}`,
+    '-f',
+    `query=${query}`,
+  ]);
+  if (result.exitCode !== 0) return { value: null, error: formatShellError(result) };
+  try {
+    const parsed = JSON.parse(result.stdout) as { data?: { repository?: { pullRequest?: { reviewThreads?: { nodes?: Array<{ isResolved?: boolean }> } } } } };
+    return { value: parsed.data?.repository?.pullRequest?.reviewThreads?.nodes ?? [] };
+  } catch {
+    return { value: null, error: 'Unexpected JSON output from review thread readback.' };
+  }
+}
+
+function manualCloseout(missingFields: string[], warnings: string[]): CloseoutReadback {
+  return {
+    status: 'manual',
+    missingFields,
+    warnings,
+    checksStatus: 'manual',
+    unresolvedReviewThreadsCount: null,
+    coderabbitStatus: 'skipped',
+    codexConnectorStatus: 'skipped',
+    humanReviewStatus: 'manual',
+    draftStatus: 'manual',
+    sourceIssueEvidenceStatus: 'manual',
+    specGateStatus: 'manual',
+    routingEvidenceStatus: 'manual',
+    findingDispositionStatus: 'manual',
+    readyToMerge: 'manual',
+  };
+}
+
+function summarizeChecksStatus(checks: Array<Record<string, unknown>>): WorkflowStatus {
+  if (checks.length === 0) return 'manual';
+  if (checks.some((check) => /fail|failure|cancel|timed_out|action_required/i.test(`${check.bucket ?? ''} ${check.conclusion ?? ''} ${check.state ?? ''}`))) return 'fail';
+  if (checks.some((check) => /pending|queued|in_progress|waiting|requested/i.test(`${check.bucket ?? ''} ${check.conclusion ?? ''} ${check.state ?? ''}`))) return 'manual';
+  return 'pass';
+}
+
+function summarizeNamedAutomationStatus(
+  checks: Array<Record<string, unknown>>,
+  pr: Record<string, unknown>,
+  pattern: RegExp
+): WorkflowStatus | 'skipped' {
+  const matchingChecks = checks.filter((check) => pattern.test(String(check.name ?? check.context ?? '')));
+  if (matchingChecks.length === 0) {
+    const reviews = Array.isArray(pr.reviews) ? pr.reviews : [];
+    return reviews.some((review) => pattern.test(String((review as { author?: { login?: string } }).author?.login ?? ''))) ? 'pass' : 'skipped';
+  }
+  return summarizeChecksStatus(matchingChecks);
+}
+
+function summarizeCodexConnectorStatus(pr: Record<string, unknown>): WorkflowStatus | 'skipped' {
+  const reviews = Array.isArray(pr.reviews) ? pr.reviews : [];
+  return reviews.some((review) => /chatgpt-codex-connector/i.test(String((review as { author?: { login?: string } }).author?.login ?? '')))
+    ? 'pass'
+    : 'skipped';
+}
+
+function summarizeHumanReviewStatus(pr: Record<string, unknown>): WorkflowStatus {
+  const reviews = Array.isArray(pr.reviews) ? pr.reviews : [];
+  const latestByAuthor = new Map<string, { state: string; submittedAt: string }>();
+  for (const review of reviews) {
+    const typedReview = review as { author?: { login?: string }; state?: string; submittedAt?: string };
+    const login = String(typedReview.author?.login ?? '').toLowerCase();
+    if (!login || isAutomationReviewLogin(login)) continue;
+    const state = normalize(typedReview.state);
+    if (!state) continue;
+    const submittedAt = String(typedReview.submittedAt ?? '');
+    const previous = latestByAuthor.get(login);
+    if (!previous || submittedAt >= previous.submittedAt) {
+      latestByAuthor.set(login, { state, submittedAt });
+    }
+  }
+  return [...latestByAuthor.values()].some((review) => review.state === 'changes_requested')
+    ? 'fail'
+    : 'pass';
+}
+
+function isAutomationReviewLogin(login: string): boolean {
+  return /(?:coderabbit|chatgpt-codex-connector|github-actions|dependabot)/i.test(login);
 }
 
 async function captureConsole(fn: () => Promise<void>): Promise<{ ok: true; warnings: string[] } | { ok: false; warnings: string[]; error: string }> {
