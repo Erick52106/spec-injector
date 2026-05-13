@@ -144,6 +144,38 @@ Safety:
     await preflight(opts);
   });
 
+// workflow-check subcommand
+program
+  .command('workflow-check')
+  .description('Run local-only workflow gate checks for autonomous PR evidence')
+  .option('--repo <path>', 'Path to target repo (default: CWD)')
+  .requiredOption('--phase <phase>', 'Workflow phase: start|commit|merge')
+  .option('--format <format>', 'Output format: text or json (default: text)')
+  .option('--issue <number-or-url>', 'Issue number or URL for start-phase dry-run bounded context checks')
+  .option('--pr-body <path>', 'Path to a local PR body markdown file for commit/merge evidence checks')
+  .option('--head-sha <sha>', 'Expected latest head SHA for merge evidence freshness checks')
+  .addHelpText('after', `
+Checks:
+  - start: validate config; with --issue, dry-run bounded context generation without writing a task package
+  - commit: detect staged .spec-injector/spec output/private context artifacts and optional PR body spec evidence
+  - merge: require final merge gate, spec gate status/ref, and latest HEAD evidence in the local PR body
+
+Safety:
+  Local-only workflow gate. Prints to stdout by default.
+  Does not edit GitHub, add/commit files, write task packages, comment, merge, or mutate downstream repos.
+`)
+  .action(async (opts: {
+    repo?: string;
+    phase: string;
+    format?: string;
+    issue?: string;
+    prBody?: string;
+    headSha?: string;
+  }) => {
+    const { workflowCheck } = await import('./workflow-check.js');
+    await workflowCheck(opts);
+  });
+
 // evidence-check subcommand
 program
   .command('evidence-check')

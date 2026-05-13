@@ -166,6 +166,9 @@ spec init --repo .
 spec validate --repo .
 spec config suggest always-read --repo .
 spec plan <issue-number-or-url> --repo . --dry-run --format prompt --verbose
+spec workflow-check --repo . --phase start --issue <issue-number-or-url>
+spec workflow-check --repo . --phase commit --pr-body /path/to/pr-body.md
+spec workflow-check --repo . --phase merge --pr-body /path/to/pr-body.md --head-sha <sha>
 ```
 
 Notes:
@@ -175,6 +178,15 @@ Notes:
 - `spec config suggest always-read --repo .` prints deterministic suggestions only; it does not modify config.
 - `spec plan ... --dry-run --format prompt --verbose` is the recommended pre-implementation command for AI planning.
 - For a full generated task package file, omit `--dry-run`; output is written under `.spec-injector/out/`.
+- `spec workflow-check` is a local-only, stdout-first workflow gate for autonomous PR evidence. It does not edit GitHub, add/commit files, write task packages, comment, merge, or mutate downstream repos.
+- `spec workflow-check --format json` emits the same stable fields as text output: `phase`, `status`, `repo`, `head_sha`, `checked_at`, `missing_fields`, `warnings`, and `evidence_summary`.
+- Downstream repos such as `tachigo` / `tachiya` only need to copy or reference the workflow-check `status` and evidence `ref` in their PR body / ledger. Their Scope Police workflows should not parse full `spec plan` or task-package evidence.
+
+`spec workflow-check` phases:
+
+- `start`: validates repo config. With `--issue`, it performs a dry-run bounded context check through `spec plan --dry-run --format prompt --verbose` without writing a task package.
+- `commit`: checks staged files for `.spec-injector/`, generated task packages / spec output, and private context artifacts. With `--pr-body`, it also checks for spec gate status/ref or manual fallback evidence.
+- `merge`: checks a local PR body for final merge gate evidence, spec gate status/ref, and latest HEAD SHA. With `--head-sha`, stale or mismatched evidence fails.
 
 ## Optional live gh smoke test
 
