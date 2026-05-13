@@ -20,6 +20,18 @@ Classifier 不是 LLM、不是 architecture reviewer，也不是最終決策者�
 
 目前沒有 repo-local custom domains runtime，也沒有 hidden LLM / API / local model classifier。
 
+## Traditional Chinese Keyword Surface
+
+Classifier 也包含一小組 evidence-driven Traditional Chinese keyword surface，用來覆蓋常見 workflow / issue wording，例如：
+
+- `auth`: `登入`、`登出`、`授權`、`權限`、`憑證`、`密碼`
+- `database`: `資料庫`、`資料表`、`欄位`、`查詢`、`遷移`
+- `frontend`: `前端`、`使用者介面`、`畫面`、`元件`、`表單`
+- `backend` / `api`: `後端`、`伺服器`、`服務`、`端點`、`路由`、`請求`、`回應`
+- `docs` / `ci` / `i18n`: `說明文件`、`操作指南`、`持續整合`、`建置步驟`、`多語系`、`翻譯`
+
+這些 keywords 仍是 deterministic token / phrase boundary matching，不做斷詞、語意推論、LLM classifier、RAG 或 custom domain expansion。繁中 workflow metadata，例如「請用繁體中文回覆」或 PR evidence closeout wording，不應單獨觸發 runtime domains。
+
 ## What Counts As Evidence
 
 Classifier evidence 是 deterministic signal，不是 model reasoning。常見 evidence 來源包含：
