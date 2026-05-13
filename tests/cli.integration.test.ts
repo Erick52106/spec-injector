@@ -625,6 +625,7 @@ test('spec --help lists deterministic CLI purpose and available commands', async
   assert.match(result.stdout, /\bplan\b/);
   assert.match(result.stdout, /\bconfig\b/);
   assert.match(result.stdout, /\bclean\b/);
+  assert.match(result.stdout, /\bworkflow-check\b/);
   assert.match(result.stdout, /\bevidence-check\b/);
   assert.match(result.stdout, /\blabel-audit\b/);
   assert.match(result.stdout, /help \[command\]/i);
@@ -692,12 +693,241 @@ test('spec plan/config/clean help describe AI-facing usage and safety constraint
   assert.match(evidenceCheckHelp.stdout, /--expected-head <sha>/);
   assert.match(evidenceCheckHelp.stdout, /read-only guardrail/i);
 
+  const workflowCheckHelp = await runSpec(['workflow-check', '--help']);
+  assert.equal(workflowCheckHelp.code, 0, workflowCheckHelp.stderr);
+  assert.match(workflowCheckHelp.stdout, /local-only workflow gate/i);
+  assert.match(workflowCheckHelp.stdout, /--phase <phase>/);
+  assert.match(workflowCheckHelp.stdout, /start\|commit\|merge/);
+  assert.match(workflowCheckHelp.stdout, /--format <format>/);
+  assert.match(workflowCheckHelp.stdout, /stdout/i);
+  assert.match(workflowCheckHelp.stdout, /does not edit GitHub/i);
+
   const labelAuditHelp = await runSpec(['label-audit', '--help']);
   assert.equal(labelAuditHelp.code, 0, labelAuditHelp.stderr);
   assert.match(labelAuditHelp.stdout, /label and milestone metadata audit/i);
   assert.match(labelAuditHelp.stdout, /--repo <owner\/name>/);
   assert.match(labelAuditHelp.stdout, /reports only/i);
   assert.match(labelAuditHelp.stdout, /does not create, rename, delete, or mutate/i);
+});
+
+test('spec workflow-check rejects invalid phases before touching repo state', async () => {
+  const result = await runSpec(['workflow-check', '--repo', repoRoot, '--phase', 'review']);
+
+  assert.notEqual(result.code, 0);
+  assert.match(result.stderr, /Unsupported workflow-check phase/i);
+  assert.match(result.stderr, /start\|commit\|merge/);
+  assertNoRawStackTrace(result);
+});
+
+test('spec workflow-check emits stable JSON contract for commit phase PR body evidence', async (t) => {
+  const repoDir = await createTempRepo(t, 'spec-injector-workflow-json-');
+  await writeConfig(repoDir, { version: 2, guardrails: [] });
+  await initCleanGitRepo(repoDir);
+  const headSha = (await runCommand('git', ['rev-parse', 'HEAD'], repoDir)).stdout.trim();
+  const prBodyPath = path.join(path.dirname(repoDir), `${path.basename(repoDir)}-pr-body.md`);
+  t.after(async () => {
+    await fs.rm(prBodyPath, { force: true });
+  });
+  await fs.writeFile(prBodyPath, [
+    '## Spec workflow gate',
+    '- spec gate status: pass',
+    `- spec evidence ref: workflow-check:start:${headSha}`,
+  ].join('\n'), 'utf8');
+
+  const result = await runSpec([
+    'workflow-check',
+    '--repo', repoDir,
+    '--phase', 'commit',
+    '--pr-body', prBodyPath,
+    '--format', 'json',
+  ]);
+
+  assert.equal(result.code, 0, result.stderr);
+  assert.equal(result.stderr, '');
+  const parsed = JSON.parse(result.stdout) as Record<string, unknown>;
+  assert.equal(parsed.phase, 'commit');
+  assert.equal(parsed.status, 'pass');
+  assert.equal(parsed.repo, repoDir);
+  assert.equal(parsed.head_sha, headSha);
+  assert.match(String(parsed.checked_at), /^\d{4}-\d{2}-\d{2}T/);
+  assert.deepEqual(parsed.missing_fields, []);
+  assert.deepEqual(parsed.warnings, []);
+  assert.match(String(parsed.evidence_summary), /commit gate passed/i);
+});
+
+test('spec workflow-check fails commit phase when .spec-injector artifacts are staged', async (t) => {
+  const repoDir = await createTempRepo(t, 'spec-injector-workflow-staged-');
+  await writeConfig(repoDir, { version: 2, guardrails: [] });
+  await initCleanGitRepo(repoDir);
+  await writeRepoFiles(repoDir, {
+    '.spec-injector/out/issue-224-task-package.md': '# generated private context\n',
+  });
+  await runCommand('git', ['add', '.spec-injector/out/issue-224-task-package.md'], repoDir);
+
+  const result = await runSpec([
+    'workflow-check',
+    '--repo', repoDir,
+    '--phase', 'commit',
+    '--format', 'json',
+  ]);
+
+  assert.notEqual(result.code, 0);
+  assert.equal(result.stderr, '');
+  const parsed = JSON.parse(result.stdout) as { status: string; missing_fields: string[]; evidence_summary: string };
+  assert.equal(parsed.status, 'fail');
+  assert.ok(parsed.missing_fields.includes('staged_forbidden_artifacts'));
+  assert.match(parsed.evidence_summary, /\.spec-injector\/out\/issue-224-task-package\.md/);
+});
+
+test('spec workflow-check fails commit phase when staged artifact inspection cannot run', async (t) => {
+  const repoDir = await createTempRepo(t, 'spec-injector-workflow-git-fail-');
+  await writeConfig(repoDir, { version: 2, guardrails: [] });
+  const prBodyPath = path.join(path.dirname(repoDir), `${path.basename(repoDir)}-pr-body.md`);
+  t.after(async () => {
+    await fs.rm(prBodyPath, { force: true });
+  });
+  await fs.writeFile(prBodyPath, [
+    '## Spec workflow gate',
+    '- spec gate status: pass',
+    '- spec evidence ref: workflow-check:start:manual',
+  ].join('\n'), 'utf8');
+  const env = await createFailingGitEnv(t, process.env);
+
+  const result = await runSpec([
+    'workflow-check',
+    '--repo', repoDir,
+    '--phase', 'commit',
+    '--pr-body', prBodyPath,
+    '--format', 'json',
+  ], { env });
+
+  assert.notEqual(result.code, 0);
+  assert.equal(result.stderr, '');
+  const parsed = JSON.parse(result.stdout) as { status: string; missing_fields: string[]; warnings: string[]; evidence_summary: string };
+  assert.equal(parsed.status, 'fail');
+  assert.ok(parsed.missing_fields.includes('staged_forbidden_artifacts'));
+  assert.deepEqual(parsed.warnings, []);
+  assert.match(parsed.evidence_summary, /could not inspect staged files/i);
+});
+
+test('spec workflow-check returns structured failure when commit PR body cannot be read', async (t) => {
+  const repoDir = await createTempRepo(t, 'spec-injector-workflow-pr-body-missing-');
+  await writeConfig(repoDir, { version: 2, guardrails: [] });
+  await initCleanGitRepo(repoDir);
+
+  const result = await runSpec([
+    'workflow-check',
+    '--repo', repoDir,
+    '--phase', 'commit',
+    '--pr-body', path.join(repoDir, 'missing-pr-body.md'),
+    '--format', 'json',
+  ]);
+
+  assert.notEqual(result.code, 0);
+  assert.equal(result.stderr, '');
+  const parsed = JSON.parse(result.stdout) as { status: string; missing_fields: string[]; warnings: string[]; evidence_summary: string };
+  assert.equal(parsed.status, 'fail');
+  assert.ok(parsed.missing_fields.includes('pr_body'));
+  assert.match(parsed.warnings.join('\n'), /Could not read PR body/i);
+  assert.match(parsed.evidence_summary, /PR body evidence could not be read/i);
+});
+
+test('spec workflow-check fails merge phase when spec evidence ref is missing from PR body', async (t) => {
+  const repoDir = await createTempRepo(t, 'spec-injector-workflow-merge-');
+  await writeConfig(repoDir, { version: 2, guardrails: [] });
+  await initCleanGitRepo(repoDir);
+  const headSha = (await runCommand('git', ['rev-parse', 'HEAD'], repoDir)).stdout.trim();
+  const prBodyPath = path.join(repoDir, 'pr-body.md');
+  await fs.writeFile(prBodyPath, [
+    '## Final merge gate',
+    '- latest head SHA: ' + headSha,
+    '- validation: pass',
+    '- spec gate status: pass',
+  ].join('\n'), 'utf8');
+
+  const result = await runSpec([
+    'workflow-check',
+    '--repo', repoDir,
+    '--phase', 'merge',
+    '--pr-body', prBodyPath,
+    '--head-sha', headSha,
+    '--format', 'json',
+  ]);
+
+  assert.notEqual(result.code, 0);
+  assert.equal(result.stderr, '');
+  const parsed = JSON.parse(result.stdout) as { status: string; missing_fields: string[]; evidence_summary: string };
+  assert.equal(parsed.status, 'fail');
+  assert.ok(parsed.missing_fields.includes('spec_evidence_ref'));
+  assert.match(parsed.evidence_summary, /missing spec evidence ref/i);
+});
+
+test('spec workflow-check returns structured failure when merge PR body cannot be read', async (t) => {
+  const repoDir = await createTempRepo(t, 'spec-injector-workflow-merge-pr-body-missing-');
+  await writeConfig(repoDir, { version: 2, guardrails: [] });
+  await initCleanGitRepo(repoDir);
+
+  const result = await runSpec([
+    'workflow-check',
+    '--repo', repoDir,
+    '--phase', 'merge',
+    '--pr-body', path.join(repoDir, 'missing-pr-body.md'),
+    '--head-sha', '1234567',
+    '--format', 'json',
+  ]);
+
+  assert.notEqual(result.code, 0);
+  assert.equal(result.stderr, '');
+  const parsed = JSON.parse(result.stdout) as { status: string; missing_fields: string[]; warnings: string[]; evidence_summary: string };
+  assert.equal(parsed.status, 'fail');
+  assert.ok(parsed.missing_fields.includes('pr_body'));
+  assert.match(parsed.warnings.join('\n'), /Could not read PR body/i);
+  assert.match(parsed.evidence_summary, /PR body evidence could not be read/i);
+});
+
+test('spec workflow-check returns manual fallback when commit phase has no PR body', async (t) => {
+  const repoDir = await createTempRepo(t, 'spec-injector-workflow-manual-');
+  await writeConfig(repoDir, { version: 2, guardrails: [] });
+  await initCleanGitRepo(repoDir);
+
+  const result = await runSpec([
+    'workflow-check',
+    '--repo', repoDir,
+    '--phase', 'commit',
+  ]);
+
+  assert.equal(result.code, 0, result.stderr);
+  assert.match(result.stdout, /phase=commit/);
+  assert.match(result.stdout, /status=manual/);
+  assert.match(result.stdout, /PR body not provided/i);
+  assert.match(result.stdout, /missing_fields=pr_body/);
+});
+
+test('spec workflow-check start phase uses mocked gh read-only issue context and writes no task package', async (t) => {
+  const fixture = await createSpecPlanFixture(t);
+  await initCleanGitRepo(fixture.repoDir);
+  const before = await readDirectorySnapshot(fixture.repoDir);
+
+  const result = await runSpec([
+    'workflow-check',
+    '--repo', fixture.repoDir,
+    '--phase', 'start',
+    '--issue', fixture.issueUrl,
+    '--format', 'json',
+  ], { env: fixture.env });
+
+  assert.equal(result.code, 0, result.stderr);
+  assert.equal(result.stderr, '');
+  const parsed = JSON.parse(result.stdout) as { phase: string; status: string; missing_fields: string[]; evidence_summary: string };
+  assert.equal(parsed.phase, 'start');
+  assert.equal(parsed.status, 'pass');
+  assert.deepEqual(parsed.missing_fields, []);
+  assert.match(parsed.evidence_summary, /bounded context generated/i);
+  await assertFileMissing(fixture.taskPackagePath);
+  assert.deepEqual(await readDirectorySnapshot(fixture.repoDir), before);
+  const ghLog = (await readGhLog(fixture.ghLogPath)).join('\n');
+  assert.match(ghLog, /issue view/);
+  assertNoGhMutationCommands(ghLog);
 });
 
 test('spec label-audit forwards --limit to gh issue and pr list', async (t) => {
