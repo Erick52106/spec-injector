@@ -699,6 +699,7 @@ test('spec plan/config/clean help describe AI-facing usage and safety constraint
   assert.match(workflowCheckHelp.stdout, /--phase <phase>/);
   assert.match(workflowCheckHelp.stdout, /start\|commit\|merge/);
   assert.match(workflowCheckHelp.stdout, /--format <format>/);
+  assert.match(workflowCheckHelp.stdout, /--routing-evidence <path>/);
   assert.match(workflowCheckHelp.stdout, /stdout/i);
   assert.match(workflowCheckHelp.stdout, /does not edit GitHub/i);
 
@@ -928,6 +929,682 @@ test('spec workflow-check start phase uses mocked gh read-only issue context and
   const ghLog = (await readGhLog(fixture.ghLogPath)).join('\n');
   assert.match(ghLog, /issue view/);
   assertNoGhMutationCommands(ghLog);
+});
+
+test('spec workflow-check start phase emits Hybrid AWP routing fields for autonomous issues', async (t) => {
+  const fixture = await createSpecPlanFixture(t, {
+    issue: {
+      number: 227,
+      title: 'feat(workflow): emit Hybrid AWP routing plans from start gate',
+      body: [
+        'Autonomous Worker Profiles routing is required for this Codex autonomous PR.',
+        'Implement workflow policy guardrails for spec workflow-check start gate.',
+        'The controller keeps scope, architecture, and review ownership.',
+      ].join('\n'),
+      labels: [{ name: 'area:workflow' }, { name: 'area:agent' }, { name: 'area:cli' }],
+      url: 'https://github.com/Erick52106/spec-injector/issues/227',
+    },
+  });
+  await initCleanGitRepo(fixture.repoDir);
+
+  const result = await runSpec([
+    'workflow-check',
+    '--repo', fixture.repoDir,
+    '--phase', 'start',
+    '--issue', fixture.issueUrl,
+    '--format', 'json',
+  ], { env: fixture.env });
+
+  assert.equal(result.code, 0, result.stderr);
+  const parsed = JSON.parse(result.stdout) as Record<string, unknown>;
+  assert.equal(parsed.status, 'pass');
+  assert.equal(parsed.routing_mode, 'hybrid_awp');
+  assert.equal(parsed.routing_task_class, 'workflow_policy');
+  assert.equal(parsed.spark_required, 'no');
+  assert.equal(parsed.worker_5_4_required, 'yes');
+  assert.equal(parsed.controller_role, 'scope|architecture|review');
+  assert.equal(parsed.controller_fallback, 'denied');
+  assert.equal(parsed.controller_fallback_reason, 'n/a');
+  assert.equal(parsed.fallback_status, 'n/a');
+  assert.equal(parsed.fallback_reason_quality, 'n/a');
+  assert.equal(parsed.routing_mismatch, 'none');
+  await assertFileMissing(fixture.taskPackagePath);
+  const ghLog = (await readGhLog(fixture.ghLogPath)).join('\n');
+  assertNoGhMutationCommands(ghLog);
+});
+
+test('spec workflow-check start phase does not fail non-autonomous issues for missing AWP routing', async (t) => {
+  const fixture = await createSpecPlanFixture(t, {
+    issue: {
+      number: 231,
+      title: 'docs: update README wording',
+      body: 'Small human-authored README wording cleanup. No autonomous worker routing is requested.',
+      labels: [{ name: 'docs' }],
+      url: 'https://github.com/Erick52106/spec-injector/issues/231',
+    },
+  });
+  await initCleanGitRepo(fixture.repoDir);
+
+  const result = await runSpec([
+    'workflow-check',
+    '--repo', fixture.repoDir,
+    '--phase', 'start',
+    '--issue', fixture.issueUrl,
+    '--format', 'json',
+  ], { env: fixture.env });
+
+  assert.equal(result.code, 0, result.stderr);
+  const parsed = JSON.parse(result.stdout) as Record<string, unknown>;
+  assert.equal(parsed.status, 'pass');
+  assert.equal(parsed.routing_mode, 'n/a');
+  assert.equal(parsed.fallback_status, 'n/a');
+  assert.deepEqual(parsed.missing_fields, []);
+});
+
+test('spec workflow-check start phase routes autonomous metadata readback to Spark evidence', async (t) => {
+  const fixture = await createSpecPlanFixture(t, {
+    issue: {
+      number: 232,
+      title: 'Codex autonomous PR CI workflow status readback',
+      body: [
+        'Autonomous Worker Profiles routing is required.',
+        'Read GitHub PR checks, CI workflow status, issue metadata, and review-thread readback.',
+        'No implementation worker should be required for this metadata readback.',
+      ].join('\n'),
+      labels: [{ name: 'area:workflow' }, { name: 'area:agent' }],
+      url: 'https://github.com/Erick52106/spec-injector/issues/232',
+    },
+  });
+  await initCleanGitRepo(fixture.repoDir);
+
+  const result = await runSpec([
+    'workflow-check',
+    '--repo', fixture.repoDir,
+    '--phase', 'start',
+    '--issue', fixture.issueUrl,
+    '--format', 'json',
+  ], { env: fixture.env });
+
+  assert.equal(result.code, 0, result.stderr);
+  const parsed = JSON.parse(result.stdout) as Record<string, unknown>;
+  assert.equal(parsed.routing_task_class, 'metadata_readback');
+  assert.equal(parsed.spark_required, 'yes');
+  assert.equal(parsed.worker_5_4_required, 'no');
+  assert.equal(parsed.controller_role, 'review');
+});
+
+test('spec workflow-check commit phase rejects weak explicit controller fallback reasons', async (t) => {
+  const repoDir = await createTempRepo(t, 'spec-injector-workflow-fallback-weak-');
+  await writeConfig(repoDir, { version: 2, guardrails: [] });
+  await initCleanGitRepo(repoDir);
+  const headSha = (await runCommand('git', ['rev-parse', 'HEAD'], repoDir)).stdout.trim();
+  const prBodyPath = path.join(repoDir, 'pr-body.md');
+  const routingPath = path.join(repoDir, 'routing.json');
+  await fs.writeFile(prBodyPath, [
+    '## Spec gate evidence',
+    '- spec gate status: pass',
+    '- spec evidence ref: workflow-check:start:weak-fallback',
+    '## Delegation Execution Log',
+    '- routing evidence status: pass',
+    '- routing evidence ref: workflow-check:start:weak-fallback',
+    '- controller_fallback: allowed',
+    '- controller_fallback_reason: ok',
+  ].join('\n'), 'utf8');
+  await fs.writeFile(routingPath, JSON.stringify({
+    phase: 'start',
+    status: 'pass',
+    head_sha: headSha,
+    routing_mode: 'controller_fallback',
+    routing_task_class: 'small_docs_template_test',
+    spark_required: 'no',
+    worker_5_4_required: 'no',
+    controller_role: 'fallback_executor',
+    controller_fallback: 'allowed',
+    controller_fallback_reason: 'ok',
+    routing_evidence_ref: 'workflow-check:start:weak-fallback',
+  }), 'utf8');
+
+  const result = await runSpec([
+    'workflow-check',
+    '--repo', repoDir,
+    '--phase', 'commit',
+    '--pr-body', prBodyPath,
+    '--routing-evidence', routingPath,
+    '--format', 'json',
+  ]);
+
+  assert.notEqual(result.code, 0);
+  const parsed = JSON.parse(result.stdout) as Record<string, unknown>;
+  assert.equal(parsed.status, 'fail');
+  assert.equal(parsed.fallback_status, 'fail');
+  assert.equal(parsed.fallback_reason_quality, 'weak');
+  assert.ok((parsed.missing_fields as string[]).includes('controller_fallback_reason'));
+});
+
+test('spec workflow-check commit phase rejects missing explicit controller fallback reasons', async (t) => {
+  const repoDir = await createTempRepo(t, 'spec-injector-workflow-fallback-missing-');
+  await writeConfig(repoDir, { version: 2, guardrails: [] });
+  await initCleanGitRepo(repoDir);
+  const headSha = (await runCommand('git', ['rev-parse', 'HEAD'], repoDir)).stdout.trim();
+  const prBodyPath = path.join(repoDir, 'pr-body.md');
+  const routingPath = path.join(repoDir, 'routing.json');
+  await fs.writeFile(prBodyPath, [
+    '## Spec gate evidence',
+    '- spec gate status: pass',
+    '- spec evidence ref: workflow-check:start:missing-fallback',
+    '## Delegation Execution Log',
+    '- routing evidence status: pass',
+    '- routing evidence ref: workflow-check:start:missing-fallback',
+    '- controller_fallback: allowed',
+    '- controller_fallback_reason: n/a',
+  ].join('\n'), 'utf8');
+  await fs.writeFile(routingPath, JSON.stringify({
+    phase: 'start',
+    status: 'pass',
+    head_sha: headSha,
+    routing_mode: 'controller_fallback',
+    routing_task_class: 'small_docs_template_test',
+    spark_required: 'no',
+    worker_5_4_required: 'no',
+    controller_role: 'fallback_executor',
+    controller_fallback: 'allowed',
+    controller_fallback_reason: 'n/a',
+    routing_evidence_ref: 'workflow-check:start:missing-fallback',
+  }), 'utf8');
+
+  const result = await runSpec([
+    'workflow-check',
+    '--repo', repoDir,
+    '--phase', 'commit',
+    '--pr-body', prBodyPath,
+    '--routing-evidence', routingPath,
+    '--format', 'json',
+  ]);
+
+  assert.notEqual(result.code, 0);
+  const parsed = JSON.parse(result.stdout) as Record<string, unknown>;
+  assert.equal(parsed.status, 'fail');
+  assert.equal(parsed.fallback_status, 'fail');
+  assert.equal(parsed.fallback_reason_quality, 'missing');
+  assert.ok((parsed.missing_fields as string[]).includes('controller_fallback_reason'));
+});
+
+test('spec workflow-check commit phase reports missing Spark and 5.4 worker evidence against routing plan', async (t) => {
+  const repoDir = await createTempRepo(t, 'spec-injector-workflow-routing-missing-workers-');
+  await writeConfig(repoDir, { version: 2, guardrails: [] });
+  await initCleanGitRepo(repoDir);
+  const headSha = (await runCommand('git', ['rev-parse', 'HEAD'], repoDir)).stdout.trim();
+  const prBodyPath = path.join(repoDir, 'pr-body.md');
+  const routingPath = path.join(repoDir, 'routing.json');
+  await fs.writeFile(prBodyPath, [
+    '## Spec gate evidence',
+    '- spec gate status: pass',
+    '- spec evidence ref: workflow-check:start:routing',
+    '## Delegation Execution Log',
+    '- routing evidence status: pass',
+    '- routing evidence ref: workflow-check:start:routing',
+    '- controller_fallback: denied',
+  ].join('\n'), 'utf8');
+  await fs.writeFile(routingPath, JSON.stringify({
+    phase: 'start',
+    status: 'pass',
+    head_sha: headSha,
+    routing_mode: 'hybrid_awp',
+    routing_task_class: 'workflow_policy',
+    spark_required: 'yes',
+    worker_5_4_required: 'yes',
+    controller_role: 'scope|architecture|review',
+    controller_fallback: 'denied',
+    controller_fallback_reason: 'n/a',
+    routing_evidence_ref: 'workflow-check:start:routing',
+  }), 'utf8');
+
+  const result = await runSpec([
+    'workflow-check',
+    '--repo', repoDir,
+    '--phase', 'commit',
+    '--pr-body', prBodyPath,
+    '--routing-evidence', routingPath,
+    '--format', 'json',
+  ]);
+
+  assert.notEqual(result.code, 0);
+  const parsed = JSON.parse(result.stdout) as Record<string, unknown>;
+  assert.equal(parsed.status, 'fail');
+  assert.ok((parsed.missing_fields as string[]).includes('spark_readback_evidence'));
+  assert.ok((parsed.missing_fields as string[]).includes('worker_5_4_evidence'));
+  assert.match(String(parsed.routing_mismatch), /spark_readback_evidence/);
+  assert.match(String(parsed.routing_mismatch), /worker_5_4_evidence/);
+});
+
+test('spec workflow-check accepts downstream thin-wiring PR bodies with status/ref routing evidence', async (t) => {
+  const repoDir = await createTempRepo(t, 'spec-injector-workflow-thin-wiring-');
+  await writeConfig(repoDir, { version: 2, guardrails: [] });
+  await initCleanGitRepo(repoDir);
+  const headSha = (await runCommand('git', ['rev-parse', 'HEAD'], repoDir)).stdout.trim();
+  const prBodyPath = path.join(repoDir, 'pr-body.md');
+  const routingPath = path.join(repoDir, 'routing.json');
+  const thinBody = await fs.readFile(path.join(repoRoot, 'tests', 'fixtures', 'workflow', 'tachigo-thin-pr-body.md'), 'utf8');
+  assert.ok(!thinBody.includes('spawn_count'));
+  assert.ok(!thinBody.includes('ci_rerun_count'));
+  assert.ok(!thinBody.includes('threshold_decision'));
+  assert.ok(!thinBody.includes('ops_spark'));
+  assert.ok(!thinBody.includes('worker_5_4'));
+  await fs.writeFile(prBodyPath, thinBody.replaceAll('__HEAD_SHA__', headSha), 'utf8');
+  await fs.writeFile(routingPath, JSON.stringify({
+    phase: 'start',
+    status: 'pass',
+    head_sha: headSha,
+    routing_mode: 'hybrid_awp',
+    routing_task_class: 'workflow_policy',
+    spark_required: 'yes',
+    worker_5_4_required: 'yes',
+    controller_role: 'scope|architecture|review',
+    controller_fallback: 'denied',
+    controller_fallback_reason: 'n/a',
+    routing_evidence_ref: 'https://github.com/Erick52106/spec-injector/issues/229#issuecomment-1002',
+    spark_readback_evidence: 'https://github.com/Erick52106/spec-injector/pull/229#issuecomment-1003',
+    worker_5_4_evidence: 'https://github.com/Erick52106/spec-injector/pull/229#issuecomment-1004',
+  }), 'utf8');
+
+  const commitResult = await runSpec([
+    'workflow-check',
+    '--repo', repoDir,
+    '--phase', 'commit',
+    '--pr-body', prBodyPath,
+    '--routing-evidence', routingPath,
+    '--format', 'json',
+  ]);
+  assert.equal(commitResult.code, 0, commitResult.stderr);
+  assert.equal(JSON.parse(commitResult.stdout).status, 'pass');
+
+  const mergeResult = await runSpec([
+    'workflow-check',
+    '--repo', repoDir,
+    '--phase', 'merge',
+    '--pr-body', prBodyPath,
+    '--routing-evidence', routingPath,
+    '--head-sha', headSha,
+    '--format', 'json',
+  ]);
+  assert.equal(mergeResult.code, 0, mergeResult.stderr);
+  assert.equal(JSON.parse(mergeResult.stdout).status, 'pass');
+});
+
+test('spec workflow-check accepts fallback-allowed routing when delegation actually ran', async (t) => {
+  const repoDir = await createTempRepo(t, 'spec-injector-workflow-fallback-allowed-delegated-');
+  await writeConfig(repoDir, { version: 2, guardrails: [] });
+  await initCleanGitRepo(repoDir);
+  const headSha = (await runCommand('git', ['rev-parse', 'HEAD'], repoDir)).stdout.trim();
+  const prBodyPath = path.join(repoDir, 'pr-body.md');
+  const routingPath = path.join(repoDir, 'routing.json');
+  await fs.writeFile(prBodyPath, [
+    '## Spec gate evidence',
+    '- spec gate status: pass',
+    '- spec evidence ref: workflow-check:start:small-docs',
+    '## Delegation Execution Log',
+    '- routing evidence status: pass',
+    '- routing evidence ref: workflow-check:start:small-docs',
+    '- controller_fallback: denied',
+  ].join('\n'), 'utf8');
+  await fs.writeFile(routingPath, JSON.stringify({
+    phase: 'start',
+    status: 'pass',
+    missing_fields: [],
+    head_sha: headSha,
+    routing_mode: 'controller_fallback',
+    routing_task_class: 'small_docs_template_test',
+    spark_required: 'no',
+    worker_5_4_required: 'yes',
+    controller_role: 'scope|review',
+    controller_fallback: 'allowed',
+    controller_fallback_reason: 'n/a',
+    routing_evidence_ref: 'workflow-check:start:small-docs',
+    worker_5_4_evidence: 'https://github.com/Erick52106/spec-injector/pull/231#issuecomment-1010',
+  }), 'utf8');
+
+  const result = await runSpec([
+    'workflow-check',
+    '--repo', repoDir,
+    '--phase', 'commit',
+    '--pr-body', prBodyPath,
+    '--routing-evidence', routingPath,
+    '--format', 'json',
+  ]);
+
+  assert.equal(result.code, 0, result.stderr);
+  const parsed = JSON.parse(result.stdout) as Record<string, unknown>;
+  assert.equal(parsed.status, 'pass');
+  assert.equal(parsed.fallback_status, 'n/a');
+  assert.equal(parsed.fallback_reason_quality, 'n/a');
+});
+
+test('spec workflow-check merge phase fails stale routing evidence head SHA', async (t) => {
+  const repoDir = await createTempRepo(t, 'spec-injector-workflow-stale-routing-');
+  await writeConfig(repoDir, { version: 2, guardrails: [] });
+  await initCleanGitRepo(repoDir);
+  const headSha = (await runCommand('git', ['rev-parse', 'HEAD'], repoDir)).stdout.trim();
+  const prBodyPath = path.join(repoDir, 'pr-body.md');
+  const routingPath = path.join(repoDir, 'routing.json');
+  const thinBody = await fs.readFile(path.join(repoRoot, 'tests', 'fixtures', 'workflow', 'tachigo-thin-pr-body.md'), 'utf8');
+  await fs.writeFile(prBodyPath, thinBody.replaceAll('__HEAD_SHA__', headSha), 'utf8');
+  await fs.writeFile(routingPath, JSON.stringify({
+    phase: 'start',
+    status: 'pass',
+    head_sha: '1111111111111111111111111111111111111111',
+    routing_mode: 'hybrid_awp',
+    routing_task_class: 'workflow_policy',
+    spark_required: 'yes',
+    worker_5_4_required: 'yes',
+    controller_role: 'scope|architecture|review',
+    controller_fallback: 'denied',
+    controller_fallback_reason: 'n/a',
+    routing_evidence_ref: 'https://github.com/Erick52106/spec-injector/issues/229#issuecomment-1002',
+    spark_readback_evidence: 'https://github.com/Erick52106/spec-injector/pull/229#issuecomment-1003',
+    worker_5_4_evidence: 'https://github.com/Erick52106/spec-injector/pull/229#issuecomment-1004',
+  }), 'utf8');
+
+  const result = await runSpec([
+    'workflow-check',
+    '--repo', repoDir,
+    '--phase', 'merge',
+    '--pr-body', prBodyPath,
+    '--routing-evidence', routingPath,
+    '--head-sha', headSha,
+    '--format', 'json',
+  ]);
+
+  assert.notEqual(result.code, 0);
+  const parsed = JSON.parse(result.stdout) as Record<string, unknown>;
+  assert.equal(parsed.status, 'fail');
+  assert.ok((parsed.missing_fields as string[]).includes('routing_evidence_freshness'));
+});
+
+test('spec workflow-check commit phase rejects non-pass local routing evidence status', async (t) => {
+  const repoDir = await createTempRepo(t, 'spec-injector-workflow-local-routing-status-fail-');
+  await writeConfig(repoDir, { version: 2, guardrails: [] });
+  await initCleanGitRepo(repoDir);
+  const headSha = (await runCommand('git', ['rev-parse', 'HEAD'], repoDir)).stdout.trim();
+  const prBodyPath = path.join(repoDir, 'pr-body.md');
+  const routingPath = path.join(repoDir, 'routing.json');
+  await fs.writeFile(prBodyPath, [
+    '## Spec gate evidence',
+    '- spec gate status: pass',
+    '- spec evidence ref: workflow-check:start:local-fail',
+    '## Delegation Execution Log',
+    '- routing evidence status: pass',
+    '- routing evidence ref: workflow-check:start:local-fail',
+    '- controller_fallback: denied',
+  ].join('\n'), 'utf8');
+  await fs.writeFile(routingPath, JSON.stringify({
+    phase: 'start',
+    status: 'fail',
+    missing_fields: ['controller_fallback_reason'],
+    head_sha: headSha,
+    routing_mode: 'hybrid_awp',
+    routing_task_class: 'workflow_policy',
+    spark_required: 'no',
+    worker_5_4_required: 'no',
+    controller_role: 'scope|architecture|review',
+    controller_fallback: 'denied',
+    controller_fallback_reason: 'n/a',
+    routing_evidence_ref: 'workflow-check:start:local-fail',
+  }), 'utf8');
+
+  const result = await runSpec([
+    'workflow-check',
+    '--repo', repoDir,
+    '--phase', 'commit',
+    '--pr-body', prBodyPath,
+    '--routing-evidence', routingPath,
+    '--format', 'json',
+  ]);
+
+  assert.notEqual(result.code, 0);
+  const parsed = JSON.parse(result.stdout) as Record<string, unknown>;
+  assert.equal(parsed.status, 'fail');
+  assert.ok((parsed.missing_fields as string[]).includes('ready_routing_evidence_status'));
+  assert.ok((parsed.missing_fields as string[]).includes('routing_evidence.controller_fallback_reason'));
+});
+
+test('spec workflow-check commit phase rejects failed routing evidence status and mismatched refs', async (t) => {
+  const repoDir = await createTempRepo(t, 'spec-injector-workflow-routing-status-fail-');
+  await writeConfig(repoDir, { version: 2, guardrails: [] });
+  await initCleanGitRepo(repoDir);
+  const headSha = (await runCommand('git', ['rev-parse', 'HEAD'], repoDir)).stdout.trim();
+  const prBodyPath = path.join(repoDir, 'pr-body.md');
+  const routingPath = path.join(repoDir, 'routing.json');
+  await fs.writeFile(prBodyPath, [
+    '## Spec gate evidence',
+    '- spec gate status: pass',
+    '- spec evidence ref: workflow-check:start:routing-fail',
+    '## Delegation Execution Log',
+    '- routing evidence status: fail',
+    '- routing evidence ref: workflow-check:start:wrong-ref',
+    '- controller_fallback: denied',
+  ].join('\n'), 'utf8');
+  await fs.writeFile(routingPath, JSON.stringify({
+    phase: 'start',
+    status: 'pass',
+    head_sha: headSha,
+    routing_mode: 'hybrid_awp',
+    routing_task_class: 'workflow_policy',
+    spark_required: 'no',
+    worker_5_4_required: 'no',
+    controller_role: 'scope|architecture|review',
+    controller_fallback: 'denied',
+    controller_fallback_reason: 'n/a',
+    routing_evidence_ref: 'workflow-check:start:expected-ref',
+  }), 'utf8');
+
+  const result = await runSpec([
+    'workflow-check',
+    '--repo', repoDir,
+    '--phase', 'commit',
+    '--pr-body', prBodyPath,
+    '--routing-evidence', routingPath,
+    '--format', 'json',
+  ]);
+
+  assert.notEqual(result.code, 0);
+  const parsed = JSON.parse(result.stdout) as Record<string, unknown>;
+  assert.equal(parsed.status, 'fail');
+  assert.ok((parsed.missing_fields as string[]).includes('ready_routing_evidence_status'));
+  assert.ok((parsed.missing_fields as string[]).includes('routing_evidence_ref_match'));
+});
+
+test('spec workflow-check commit phase rejects malformed routing evidence JSON enums', async (t) => {
+  const repoDir = await createTempRepo(t, 'spec-injector-workflow-routing-malformed-');
+  await writeConfig(repoDir, { version: 2, guardrails: [] });
+  await initCleanGitRepo(repoDir);
+  const prBodyPath = path.join(repoDir, 'pr-body.md');
+  const routingPath = path.join(repoDir, 'routing.json');
+  await fs.writeFile(prBodyPath, [
+    '## Spec gate evidence',
+    '- spec gate status: pass',
+    '- spec evidence ref: workflow-check:start:routing',
+    '## Delegation Execution Log',
+    '- routing evidence status: pass',
+    '- routing evidence ref: workflow-check:start:routing',
+  ].join('\n'), 'utf8');
+	  await fs.writeFile(routingPath, JSON.stringify({
+	    status: 'pass',
+	    routing_mode: 'hybrid_awp',
+	    routing_task_class: 'surprise',
+	    spark_required: 'maybe',
+    worker_5_4_required: 'yes',
+    controller_role: 'scope|review',
+    controller_fallback: 'allowed',
+    controller_fallback_reason: 'bounded fallback reason',
+  }), 'utf8');
+
+  const result = await runSpec([
+    'workflow-check',
+    '--repo', repoDir,
+    '--phase', 'commit',
+    '--pr-body', prBodyPath,
+    '--routing-evidence', routingPath,
+    '--format', 'json',
+  ]);
+
+  assert.notEqual(result.code, 0);
+  const parsed = JSON.parse(result.stdout) as Record<string, unknown>;
+  assert.equal(parsed.status, 'fail');
+  assert.ok((parsed.missing_fields as string[]).includes('routing_evidence'));
+  assert.match((parsed.warnings as string[]).join('\n'), /routing_task_class/i);
+});
+
+test('spec workflow-check commit phase rejects missing routing evidence ref in JSON', async (t) => {
+  const repoDir = await createTempRepo(t, 'spec-injector-workflow-routing-missing-ref-');
+  await writeConfig(repoDir, { version: 2, guardrails: [] });
+  await initCleanGitRepo(repoDir);
+  const prBodyPath = path.join(repoDir, 'pr-body.md');
+  const routingPath = path.join(repoDir, 'routing.json');
+  await fs.writeFile(prBodyPath, [
+    '## Spec gate evidence',
+    '- spec gate status: pass',
+    '- spec evidence ref: workflow-check:start:routing',
+    '## Delegation Execution Log',
+    '- routing evidence status: pass',
+    '- routing evidence ref: workflow-check:start:any-pr-ref',
+    '- controller_fallback: denied',
+  ].join('\n'), 'utf8');
+	  await fs.writeFile(routingPath, JSON.stringify({
+	    status: 'pass',
+	    routing_mode: 'hybrid_awp',
+	    routing_task_class: 'workflow_policy',
+	    spark_required: 'no',
+    worker_5_4_required: 'no',
+    controller_role: 'scope|review',
+    controller_fallback: 'denied',
+    controller_fallback_reason: 'n/a',
+  }), 'utf8');
+
+  const result = await runSpec([
+    'workflow-check',
+    '--repo', repoDir,
+    '--phase', 'commit',
+    '--pr-body', prBodyPath,
+    '--routing-evidence', routingPath,
+    '--format', 'json',
+  ]);
+
+  assert.notEqual(result.code, 0);
+  const parsed = JSON.parse(result.stdout) as Record<string, unknown>;
+  assert.equal(parsed.status, 'fail');
+  assert.ok((parsed.missing_fields as string[]).includes('routing_evidence'));
+  assert.match((parsed.warnings as string[]).join('\n'), /routing_evidence_ref/i);
+});
+
+test('spec workflow-check commit phase rejects malformed routing status values', async (t) => {
+  const repoDir = await createTempRepo(t, 'spec-injector-workflow-routing-status-malformed-');
+  await writeConfig(repoDir, { version: 2, guardrails: [] });
+  await initCleanGitRepo(repoDir);
+  const prBodyPath = path.join(repoDir, 'pr-body.md');
+  const routingPath = path.join(repoDir, 'routing.json');
+  await fs.writeFile(prBodyPath, [
+    '## Spec gate evidence',
+    '- spec gate status: pass',
+    '- spec evidence ref: workflow-check:start:routing',
+    '## Delegation Execution Log',
+    '- routing evidence status: not pass',
+    '- routing evidence ref: workflow-check:start:routing',
+    '- controller_fallback: denied',
+  ].join('\n'), 'utf8');
+	  await fs.writeFile(routingPath, JSON.stringify({
+	    status: 'pass',
+	    routing_mode: 'hybrid_awp',
+	    routing_task_class: 'workflow_policy',
+	    spark_required: 'no',
+    worker_5_4_required: 'no',
+    controller_role: 'scope|review',
+    controller_fallback: 'denied',
+    controller_fallback_reason: 'n/a',
+    routing_evidence_ref: 'workflow-check:start:routing',
+  }), 'utf8');
+
+  const result = await runSpec([
+    'workflow-check',
+    '--repo', repoDir,
+    '--phase', 'commit',
+    '--pr-body', prBodyPath,
+    '--routing-evidence', routingPath,
+    '--format', 'json',
+  ]);
+
+  assert.notEqual(result.code, 0);
+  const parsed = JSON.parse(result.stdout) as Record<string, unknown>;
+  assert.equal(parsed.status, 'fail');
+  assert.ok((parsed.missing_fields as string[]).includes('ready_routing_evidence_status'));
+});
+
+test('spec workflow-check commit phase rejects non-ref worker evidence values', async (t) => {
+  const repoDir = await createTempRepo(t, 'spec-injector-workflow-worker-evidence-non-ref-');
+  await writeConfig(repoDir, { version: 2, guardrails: [] });
+  await initCleanGitRepo(repoDir);
+  const prBodyPath = path.join(repoDir, 'pr-body.md');
+  const routingPath = path.join(repoDir, 'routing.json');
+  await fs.writeFile(prBodyPath, [
+    '## Spec gate evidence',
+    '- spec gate status: pass',
+    '- spec evidence ref: workflow-check:start:routing',
+    '## Delegation Execution Log',
+    '- routing evidence status: pass',
+    '- routing evidence ref: workflow-check:start:routing',
+    '- controller_fallback: denied',
+  ].join('\n'), 'utf8');
+	  await fs.writeFile(routingPath, JSON.stringify({
+	    status: 'pass',
+	    routing_mode: 'hybrid_awp',
+	    routing_task_class: 'workflow_policy',
+	    spark_required: 'yes',
+    worker_5_4_required: 'yes',
+    controller_role: 'scope|review',
+    controller_fallback: 'denied',
+    controller_fallback_reason: 'n/a',
+    routing_evidence_ref: 'workflow-check:start:routing',
+    spark_readback_evidence: 'complete',
+    worker_5_4_evidence: 'yes-done',
+  }), 'utf8');
+
+  const result = await runSpec([
+    'workflow-check',
+    '--repo', repoDir,
+    '--phase', 'commit',
+    '--pr-body', prBodyPath,
+    '--routing-evidence', routingPath,
+    '--format', 'json',
+  ]);
+
+  assert.notEqual(result.code, 0);
+  const parsed = JSON.parse(result.stdout) as Record<string, unknown>;
+  assert.equal(parsed.status, 'fail');
+  assert.ok((parsed.missing_fields as string[]).includes('spark_readback_evidence'));
+  assert.ok((parsed.missing_fields as string[]).includes('worker_5_4_evidence'));
+});
+
+test('spec workflow-check accepts manual checklist fallback for downstream repos without spec-injector', async (t) => {
+  const repoDir = await createTempRepo(t, 'spec-injector-workflow-manual-thin-');
+  await writeConfig(repoDir, { version: 2, guardrails: [] });
+  await initCleanGitRepo(repoDir);
+  const headSha = (await runCommand('git', ['rev-parse', 'HEAD'], repoDir)).stdout.trim();
+  const prBodyPath = path.join(repoDir, 'pr-body.md');
+  const manualBody = await fs.readFile(path.join(repoRoot, 'tests', 'fixtures', 'workflow', 'tachiya-manual-pr-body.md'), 'utf8');
+  await fs.writeFile(prBodyPath, manualBody.replaceAll('__HEAD_SHA__', headSha), 'utf8');
+
+  const result = await runSpec([
+    'workflow-check',
+    '--repo', repoDir,
+    '--phase', 'commit',
+    '--pr-body', prBodyPath,
+    '--format', 'json',
+  ]);
+
+  assert.equal(result.code, 0, result.stderr);
+  const parsed = JSON.parse(result.stdout) as Record<string, unknown>;
+  assert.equal(parsed.status, 'manual');
+  assert.equal(parsed.fallback_status, 'pass');
+  assert.equal(parsed.fallback_reason_quality, 'strong');
 });
 
 test('spec label-audit forwards --limit to gh issue and pr list', async (t) => {

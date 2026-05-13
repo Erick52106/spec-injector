@@ -33,7 +33,7 @@ The required policy output fields are:
 - `controller_fallback_reason=<reason or n/a>`
 - `delegation_threshold=<short explanation>`
 
-These fields may be rendered as human-readable evidence or JSON in future CLI work. Downstream repos only need to reference the resulting routing status and evidence ref; they do not need to parse the full routing plan.
+`spec workflow-check --phase start --format json` renders these fields as local-only start-gate evidence when an autonomous routing signal is present. Downstream repos only need to reference the resulting routing status and evidence ref; they do not need to parse the full routing plan.
 
 ## Task classes
 
@@ -59,6 +59,14 @@ These fields may be rendered as human-readable evidence or JSON in future CLI wo
 
 Controller fallback must not be used to bypass scope review, avoid tests, skip evidence freshness, or turn the CLI into an autonomous executor.
 
+`spec workflow-check` reports fallback checks with:
+
+- `fallback_status=pass|fail|manual|n/a`
+- `fallback_reason_quality=strong|weak|missing|n/a`
+- `routing_mismatch=<comma-separated list or none>`
+
+Weak fallback reasons include empty values and low-signal text such as `n/a`, `none`, `small`, `done`, `ok`, or `trivial` without bounded context.
+
 ## Downstream evidence contract
 
 Downstream repos such as `tachigo` and `tachiya` may keep their PR templates and Scope Police thin. They should reference:
@@ -69,6 +77,15 @@ Downstream repos such as `tachigo` and `tachiya` may keep their PR templates and
 - final merge gate status / ref
 
 They should not parse full `spec plan` output, task packages, worker transcripts, or private context. If richer routing evidence is needed, it should be linked as a local or PR-body evidence ref rather than expanded into downstream policy parsers.
+
+Commit and merge gates may receive local start-gate routing evidence through:
+
+```bash
+spec workflow-check --repo . --phase commit --pr-body /tmp/pr.md --routing-evidence /tmp/start-gate.json
+spec workflow-check --repo . --phase merge --pr-body /tmp/pr.md --routing-evidence /tmp/start-gate.json --head-sha <sha>
+```
+
+The routing evidence file is local input only. The CLI does not fetch or mutate GitHub to resolve routing evidence refs.
 
 ## Non-goals
 

@@ -122,7 +122,12 @@ export function createMissingPath(): string {
   return path.join(os.tmpdir(), `spec-injector-missing-${process.pid}-${Date.now()}`);
 }
 
-export async function createSpecPlanFixture(t: TestLifecycle): Promise<PlanFixture> {
+export async function createSpecPlanFixture(
+  t: TestLifecycle,
+  options: {
+    issue?: Partial<IssuePayload>;
+  } = {}
+): Promise<PlanFixture> {
   const repoDir = await createTempRepo(t);
   const alwaysReadLongBody = [
     'ALWAYS_READ_LONG_BODY_SENTINEL',
@@ -183,6 +188,7 @@ export async function createSpecPlanFixture(t: TestLifecycle): Promise<PlanFixtu
     labels: [{ name: 'test' }, { name: 'backend' }, { name: 'auth' }, { name: 'database' }],
     url: 'https://github.com/Erick52106/spec-injector/issues/57',
     state: 'OPEN',
+    ...options.issue,
   };
   const fakeGh = await createFakeGh(t, issue);
 
@@ -509,7 +515,7 @@ process.stdout.write(fs.readFileSync(process.env.FAKE_GH_RESPONSE_FILE, 'utf8'))
       PATH: `${binDir}${path.delimiter}${process.env.PATH ?? ''}`,
       FAKE_GH_RESPONSE_FILE: responsePath,
       FAKE_GH_LOG: logPath,
-      FAKE_GH_EXPECT_REF: '57',
+      FAKE_GH_EXPECT_REF: String(issuePayload.number),
       FAKE_GH_EXPECT_REPO: 'Erick52106/spec-injector',
     },
     logPath,

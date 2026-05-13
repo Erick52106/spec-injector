@@ -14,6 +14,8 @@ Issue / PR label taxonomy、visual hierarchy、combination rules、migration sta
 
 Autonomous Worker Profiles / Codex autonomous PR work 的 start-gate routing source of truth 見 [Hybrid AWP routing policy](hybrid-awp-routing-policy.md)。該 policy 只適用於有明確 autonomous routing signal 的 workflow；一般 human PR 或非 autonomous work 不應因缺少 AWP routing evidence 而 fail。
 
+若 autonomous workflow 有 start-gate routing evidence，可在 commit / merge 階段用 local file 傳入 `spec workflow-check --routing-evidence <path>`。該檢查只讀本地 PR body 與本地 routing JSON，驗證 status/ref、delegation log、Spark / ops evidence、5.4 worker evidence、explicit fallback reason 與 merge HEAD freshness；它不讀取或修改 GitHub remote state，也不要求 downstream Scope Police 解析完整 routing plan。
+
 Future companion / workflow observability status vocabulary 見 [status-event-schema.md](status-event-schema.md)。該 schema 是 Layer 4 design proposal，不代表 daemon、companion UI、CLI JSON output、watcher、merge bot 或 target repo automation 已實作。
 
 `spec label-audit` 是 repo-local、human-readable 的 read-only guardrail。它讀取 accepted taxonomy 與 `gh issue list` / `gh pr list` metadata，輸出 `PASS` / `WARNING` / `NEEDS-HUMAN-REVIEW`；它只 report，不建立 labels、不修改 labels、不修改 milestones、不修改 issue / PR metadata。`needs human review` 代表 stop-and-report，不代表 checker 自動替 human 做 metadata 決策。

@@ -169,6 +169,7 @@ spec plan <issue-number-or-url> --repo . --dry-run --format prompt --verbose
 spec workflow-check --repo . --phase start --issue <issue-number-or-url>
 spec workflow-check --repo . --phase commit --pr-body /path/to/pr-body.md
 spec workflow-check --repo . --phase merge --pr-body /path/to/pr-body.md --head-sha <sha>
+spec workflow-check --repo . --phase commit --pr-body /path/to/pr-body.md --routing-evidence /path/to/start-gate.json
 ```
 
 Notes:
@@ -181,13 +182,14 @@ Notes:
 - `spec workflow-check` is a local-only, stdout-first workflow gate for autonomous PR evidence. It does not edit GitHub, add/commit files, write task packages, comment, merge, or mutate downstream repos.
 - Autonomous worker-routing flows can use the [Hybrid AWP routing policy](docs/hybrid-awp-routing-policy.md) as the start-gate source of truth before implementation begins.
 - `spec workflow-check --format json` emits the same stable fields as text output: `phase`, `status`, `repo`, `head_sha`, `checked_at`, `missing_fields`, `warnings`, and `evidence_summary`.
+- Hybrid AWP checks add optional JSON/text fields such as `routing_mode`, `routing_task_class`, `spark_required`, `worker_5_4_required`, `controller_role`, `controller_fallback`, `controller_fallback_reason`, `fallback_status`, `fallback_reason_quality`, and `routing_mismatch`.
 - Downstream repos such as `tachigo` / `tachiya` only need to copy or reference the workflow-check `status` and evidence `ref` in their PR body / ledger. Their Scope Police workflows should not parse full `spec plan` or task-package evidence.
 
 `spec workflow-check` phases:
 
-- `start`: validates repo config. With `--issue`, it performs a dry-run bounded context check through `spec plan --dry-run --format prompt --verbose` without writing a task package.
-- `commit`: checks staged files for `.spec-injector/`, generated task packages / spec output, and private context artifacts. With `--pr-body`, it also checks for spec gate status/ref or manual fallback evidence.
-- `merge`: checks a local PR body for final merge gate evidence, spec gate status/ref, and latest HEAD SHA. With `--head-sha`, stale or mismatched evidence fails.
+- `start`: validates repo config. With `--issue`, it performs a dry-run bounded context check through `spec plan --dry-run --format prompt --verbose` without writing a task package. If the issue has an AWP / Codex autonomous routing signal, it also emits a deterministic Hybrid AWP routing plan; if no autonomous signal is present, routing fields are `n/a` and ordinary workflows do not fail.
+- `commit`: checks staged files for `.spec-injector/`, generated task packages / spec output, and private context artifacts. With `--pr-body`, it also checks for spec gate status/ref or manual fallback evidence. With `--routing-evidence`, it checks local PR body routing status/ref, delegation log, Spark / ops evidence, 5.4 worker evidence, and explicit fallback quality.
+- `merge`: checks a local PR body for final merge gate evidence, spec gate status/ref, and latest HEAD SHA. With `--head-sha`, stale or mismatched evidence fails. With `--routing-evidence`, stale start-gate routing evidence or routing/PR-body mismatch fails.
 
 ## Optional live gh smoke test
 
