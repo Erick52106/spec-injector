@@ -70,3 +70,30 @@ test('target repo adoption contract remains linked from workflow docs', async ()
   assert.match(contract, /does not mutate downstream repos/i);
   assert.match(workflow, /\[target repo adoption contract\]\(target-repo-adoption-contract\.md\)/);
 });
+
+test('AI bootstrap install contract remains linked from workflow docs and README', async () => {
+  const contractPath = path.join(repoRoot, 'docs', 'ai-bootstrap-install-contract.md');
+  const workflowPath = path.join(repoRoot, 'docs', 'workflow.md');
+  const readmePath = path.join(repoRoot, 'README.md');
+  const englishReadmePath = path.join(repoRoot, 'README.en.md');
+
+  const [contract, workflow, readme, englishReadme] = await Promise.all([
+    fs.readFile(contractPath, 'utf8'),
+    fs.readFile(workflowPath, 'utf8'),
+    fs.readFile(readmePath, 'utf8'),
+    fs.readFile(englishReadmePath, 'utf8'),
+  ]);
+
+  assert.match(contract, /AI Bootstrap Install Contract/);
+  assert.match(contract, /https:\/\/github\.com\/Erick52106\/spec-injector/);
+  assert.match(contract, /SPEC_INJECTOR_DIR/);
+  assert.match(contract, /node "\$SPEC_INJECTOR_DIR\/dist\/cli\/index\.js"/);
+  assert.match(contract, /command -v spec/);
+  assert.match(contract, /spec doctor --workflow awp --format json/);
+  assert.match(contract, /Do not commit `.spec-injector\/out\/`/);
+  assert.match(contract, /tachigo/i);
+  assert.match(contract, /tachiya/i);
+  assert.match(workflow, /\[AI bootstrap install contract\]\(ai-bootstrap-install-contract\.md\)/);
+  assert.match(readme, /\[AI bootstrap install contract\]\(docs\/ai-bootstrap-install-contract\.md\)/);
+  assert.match(englishReadme, /\[AI bootstrap install contract\]\(docs\/ai-bootstrap-install-contract\.md\)/);
+});

@@ -20,6 +20,8 @@ Autonomous review follow-up 的 batching、freshness、duplicate collapse、root
 
 Downstream target repo 如何採用 `spec workflow-check` status/ref evidence、何時仍需要 target repo PR、以及 tachigo / tachiya thin-wiring examples，見 [target repo adoption contract](target-repo-adoption-contract.md)。該 contract 明確保留 local-only、read-only、no target repo mutation 邊界。
 
+Downstream AI entrypoints 若需要安裝、更新或檢查 `spec-injector` AWP capability，請引用 [AI bootstrap install contract](ai-bootstrap-install-contract.md)。該 contract 定義 canonical repo URL、`SPEC_INJECTOR_DIR` local runner fallback、`spec doctor --workflow awp --format json` readiness check，以及 no generated output / no target repo mutation 邊界。
+
 Future companion / workflow observability status vocabulary 見 [status-event-schema.md](status-event-schema.md)。該 schema 是 Layer 4 design proposal，不代表 daemon、companion UI、CLI JSON output、watcher、merge bot 或 target repo automation 已實作。
 
 `spec label-audit` 是 repo-local、human-readable 的 read-only guardrail。它讀取 accepted taxonomy 與 `gh issue list` / `gh pr list` metadata，輸出 `PASS` / `WARNING` / `NEEDS-HUMAN-REVIEW`；它只 report，不建立 labels、不修改 labels、不修改 milestones、不修改 issue / PR metadata。`needs human review` 代表 stop-and-report，不代表 checker 自動替 human 做 metadata 決策。

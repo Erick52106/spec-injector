@@ -174,6 +174,7 @@ spec awp-review-check --repo . --evidence /path/to/awp-review-evidence.json
 spec workflow-check --repo . --phase merge --pr-body /path/to/pr-body.md --finding-disposition /path/to/findings.json
 spec workflow-check --repo . --phase merge --pr-body /path/to/pr-body.md --threshold-evidence /path/to/threshold.json
 spec workflow-check --repo . --phase merge --pr <number-or-url> --format json
+spec doctor --workflow awp --format json
 ```
 
 Notes:
@@ -185,6 +186,7 @@ Notes:
 - For a full generated task package file, omit `--dry-run`; output is written under `.spec-injector/out/`.
 - `spec workflow-check` is a local-only, stdout-first workflow gate for autonomous PR evidence. It does not edit GitHub, add/commit files, write task packages, comment, merge, or mutate downstream repos.
 - Autonomous worker-routing flows can use the [Hybrid AWP routing policy](docs/hybrid-awp-routing-policy.md) as the start-gate source of truth before implementation begins.
+- Downstream AI entrypoints can reference the [AI bootstrap install contract](docs/ai-bootstrap-install-contract.md) for the `SPEC_INJECTOR_DIR` local runner fallback and `spec doctor --workflow awp --format json` capability check without requiring global installation.
 - `spec workflow-check --format json` emits the same stable fields as text output: `phase`, `status`, `repo`, `head_sha`, `checked_at`, `missing_fields`, `warnings`, and `evidence_summary`.
 - Hybrid AWP checks add optional JSON/text fields such as `routing_mode`, `routing_task_class`, `spark_required`, `worker_5_4_required`, `controller_role`, `controller_fallback`, `controller_fallback_reason`, `fallback_status`, `fallback_reason_quality`, `routing_mismatch`, `human_review_status`, and `draft_status`.
 - Downstream repos such as `tachigo` / `tachiya` only need to copy or reference the workflow-check `status` and evidence `ref` in their PR body / ledger. Their Scope Police workflows should not parse full `spec plan` or task-package evidence. See the [target repo adoption contract](docs/target-repo-adoption-contract.md).

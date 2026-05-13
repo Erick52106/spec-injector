@@ -144,6 +144,27 @@ Safety:
     await preflight(opts);
   });
 
+// doctor subcommand
+program
+  .command('doctor')
+  .description('Run local workflow capability readiness checks')
+  .option('--workflow <workflow>', 'Workflow capability set to check: awp (default: awp)')
+  .option('--format <format>', 'Output format: text or json (default: text)')
+  .addHelpText('after', `
+Checks:
+  - AWP workflow-check command and start|commit|merge phase support
+  - #242 workflow-check flags: --finding-disposition, --threshold-evidence, and --pr
+  - awp-review-check availability when present
+  - local package version and git commit metadata when available
+
+Safety:
+  Local-only capability check. Does not call GitHub, auto-install, auto-update, write files, or mutate target repos.
+`)
+  .action(async (opts: { workflow?: string; format?: string }) => {
+    const { doctor } = await import('./doctor.js');
+    await doctor(opts);
+  });
+
 // workflow-check subcommand
 program
   .command('workflow-check')
