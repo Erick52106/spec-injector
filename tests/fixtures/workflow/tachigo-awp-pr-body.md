@@ -7,6 +7,7 @@ Closes #240
 ## Delegation Execution Log
 - routing evidence status: pass
 - routing evidence ref: workflow-check:start:tachigo-awp
+- delegation_outcome: completed
 - threshold evidence status: pass
 - threshold ledger ref: workflow-check:threshold:tachigo-awp
 - worker_5_4 evidence: https://github.com/Erick52106/spec-injector/pull/240#issuecomment-2002

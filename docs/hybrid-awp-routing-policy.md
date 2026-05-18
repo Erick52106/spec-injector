@@ -35,6 +35,20 @@ The required policy output fields are:
 
 `spec workflow-check --phase start --format json` renders these fields as local-only start-gate evidence when an autonomous routing signal is present. Downstream repos only need to reference the resulting routing status and evidence ref; they do not need to parse the full routing plan.
 
+## Routing decision vs delegation outcome
+
+Start-gate routing fields describe the intended route before implementation begins. They answer "what should happen?" and must stay separate from execution/readback evidence.
+
+`delegation_outcome` records what actually happened after the controller attempted or skipped delegation:
+
+- `n/a`: start phase, non-AWP PRs, or evidence without autonomous routing context
+- `skipped`: worker dispatch was not needed or was explicitly not attempted
+- `completed`: a worker was dispatched and completed the assigned scope
+- `fell_through`: a worker was dispatched but did not fully complete, so the controller finished the scope
+- `unavailable`: routing expected a worker, but the worker/subagent facility was unavailable and the controller used fallback
+
+`controller_fallback` keeps its policy meaning: whether controller fallback is allowed by the routing decision. It must not be repurposed as execution outcome. For example, `delegation_outcome=skipped` and `delegation_outcome=fell_through` both involve controller work, but they have opposite dogfood implications: skipped suggests routing may be too eager to delegate, while fell-through suggests worker reliability or task slicing needs attention.
+
 ## Task classes
 
 | Task class | Default route | Controller role | Delegation threshold |
@@ -73,6 +87,7 @@ Downstream repos such as `tachigo` and `tachiya` may keep their PR templates and
 
 - routing status
 - routing evidence ref
+- delegation outcome
 - spec gate status / ref
 - final merge gate status / ref
 

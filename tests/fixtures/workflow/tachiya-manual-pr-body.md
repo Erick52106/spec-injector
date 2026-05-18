@@ -4,6 +4,7 @@ Closes #230
 - manual checklist fallback: repo does not use spec-injector for this PR.
 
 ## Delegation Execution Log
+- delegation_outcome: skipped
 - controller_fallback: allowed
 - controller_fallback_reason: human explicitly requested controller-only execution for a narrow docs-only checklist update.
 
