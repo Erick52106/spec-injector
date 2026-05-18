@@ -1297,7 +1297,7 @@ function assessRoutingAlignment(
   if (!evidence.hasRoutingRef) mismatch.push('routing_evidence_ref');
   if (routing.routing_evidence_ref !== 'n/a' && evidence.routingRef !== routing.routing_evidence_ref) mismatch.push('routing_evidence_ref_match');
   if (!evidence.hasDelegationLog) mismatch.push('delegation_execution_log');
-  const workerUnavailable = evidence.delegationOutcome === 'unavailable';
+  const workerUnavailable = resolveDelegationOutcome(evidence, routing) === 'unavailable';
   if (routing.spark_required === 'yes' && !workerUnavailable && !evidence.hasSparkEvidence && !isEvidenceRefValue(routing.spark_readback_evidence)) mismatch.push('spark_readback_evidence');
   if (routing.worker_5_4_required === 'yes' && !workerUnavailable && !evidence.hasWorker54Evidence && !isEvidenceRefValue(routing.worker_5_4_evidence)) mismatch.push('worker_5_4_evidence');
   if (routing.controller_fallback === 'denied' && evidence.claimsControllerOnly) mismatch.push('controller_fallback_denied');
@@ -1349,7 +1349,7 @@ function resolveDelegationOutcome(evidence: PrBodyEvidence, routing: RoutingEvid
 function delegationOutcomeWarnings(evidence: PrBodyEvidence, routing: RoutingEvidence | null): string[] {
   const hasAutonomousRoutingContext = evidence.hasAutonomousSignal || Boolean(routing && routing.routing_mode !== 'n/a');
   if (!hasAutonomousRoutingContext) return [];
-  if (!evidence.hasDelegationOutcome) {
+  if (!evidence.hasDelegationOutcome && !routing?.delegation_outcome) {
     return ['Delegation outcome is missing; workflow-check kept backward-compatible status and reported delegation_outcome=n/a.'];
   }
   if (!evidence.delegationOutcome) {

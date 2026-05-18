@@ -1633,6 +1633,55 @@ test('spec workflow-check commit phase keeps unavailable outcome with fallback r
   assert.equal(parsed.fallback_reason_quality, 'weak');
 });
 
+test('spec workflow-check commit phase uses routing evidence unavailable outcome without worker refs', async (t) => {
+  const repoDir = await createTempRepo(t, 'spec-injector-workflow-routing-unavailable-');
+  await writeConfig(repoDir, { version: 2, guardrails: [] });
+  await initCleanGitRepo(repoDir);
+  const headSha = (await runCommand('git', ['rev-parse', 'HEAD'], repoDir)).stdout.trim();
+  const prBodyPath = path.join(repoDir, 'pr-body.md');
+  const routingPath = path.join(repoDir, 'routing.json');
+  await fs.writeFile(prBodyPath, [
+    '## Spec gate evidence',
+    '- spec gate status: pass',
+    '- spec evidence ref: workflow-check:start:routing-unavailable',
+    '## Delegation Execution Log',
+    '- routing evidence status: pass',
+    '- routing evidence ref: workflow-check:start:routing-unavailable',
+    '- controller_fallback: allowed',
+    '- controller_fallback_reason: worker facility was unavailable in this runtime; controller kept the patch narrow and validated locally.',
+  ].join('\n'), 'utf8');
+  await fs.writeFile(routingPath, JSON.stringify({
+    phase: 'start',
+    status: 'pass',
+    missing_fields: [],
+    head_sha: headSha,
+    routing_mode: 'controller_fallback',
+    routing_task_class: 'small_docs_template_test',
+    spark_required: 'no',
+    worker_5_4_required: 'yes',
+    controller_role: 'scope|review',
+    controller_fallback: 'allowed',
+    controller_fallback_reason: 'worker facility was unavailable in this runtime',
+    routing_evidence_ref: 'workflow-check:start:routing-unavailable',
+    delegation_outcome: 'unavailable',
+  }), 'utf8');
+
+  const result = await runSpec([
+    'workflow-check',
+    '--repo', repoDir,
+    '--phase', 'commit',
+    '--pr-body', prBodyPath,
+    '--routing-evidence', routingPath,
+    '--format', 'json',
+  ]);
+
+  assert.equal(result.code, 0, result.stderr);
+  const parsed = JSON.parse(result.stdout) as Record<string, unknown>;
+  assert.equal(parsed.status, 'pass');
+  assert.equal(parsed.delegation_outcome, 'unavailable');
+  assert.doesNotMatch((parsed.warnings as string[]).join('\n'), /Delegation outcome is missing/);
+});
+
 test('spec workflow-check merge phase fails stale routing evidence head SHA', async (t) => {
   const repoDir = await createTempRepo(t, 'spec-injector-workflow-stale-routing-');
   await writeConfig(repoDir, { version: 2, guardrails: [] });
@@ -1957,6 +2006,7 @@ test('spec workflow-check accepts manual checklist fallback for downstream repos
   assert.equal(result.code, 0, result.stderr);
   const parsed = JSON.parse(result.stdout) as Record<string, unknown>;
   assert.equal(parsed.status, 'manual');
+  assert.equal(parsed.delegation_outcome, 'skipped');
   assert.equal(parsed.fallback_status, 'pass');
   assert.equal(parsed.fallback_reason_quality, 'strong');
 });
