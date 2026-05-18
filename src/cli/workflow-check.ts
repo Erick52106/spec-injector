@@ -11,6 +11,7 @@ import type { Issue } from '../github/types.js';
 type WorkflowPhase = 'start' | 'commit' | 'merge';
 type WorkflowStatus = 'pass' | 'fail' | 'manual' | 'skipped';
 type OutputFormat = 'text' | 'json';
+type DelegationOutcome = 'n/a' | 'skipped' | 'completed' | 'fell_through' | 'unavailable';
 
 type WorkflowCheckOptions = {
   repo?: string;
@@ -41,6 +42,7 @@ type WorkflowCheckResult = {
   controller_role?: string;
   controller_fallback?: string;
   controller_fallback_reason?: string;
+  delegation_outcome: DelegationOutcome;
   delegation_threshold?: string;
   routing_evidence_ref?: string;
   fallback_status?: string;
@@ -84,6 +86,8 @@ type PrBodyEvidence = {
   claimsControllerOnly: boolean;
   controllerFallback: 'allowed' | 'denied' | null;
   controllerFallbackReason: string | null;
+  hasDelegationOutcome: boolean;
+  delegationOutcome: DelegationOutcome | null;
   hasThresholdStatus: boolean;
   thresholdStatus: 'pass' | 'fail' | 'manual' | 'skipped' | 'pending' | 'unknown' | null;
   hasThresholdRef: boolean;
@@ -116,6 +120,7 @@ type RoutingEvidence = {
   controller_fallback_reason: string;
   delegation_threshold: string;
   routing_evidence_ref: string;
+  delegation_outcome?: DelegationOutcome;
   head_sha?: string;
   spark_readback_evidence?: string;
   worker_5_4_evidence?: string;
@@ -188,6 +193,7 @@ const CONTROLLER_ONLY_PATTERN = /\b(?:controller-only|controller only|controller
 const WEAK_FALLBACK_REASONS = new Set(['', 'n/a', 'na', 'none', 'small', 'done', 'ok', 'trivial']);
 const FINDING_SOURCES = ['coderabbit', 'chatgpt-codex-connector', 'human', 'self-review'];
 const FINDING_STATUSES = ['adopted', 'not_adopted', 'deferred_follow_up', 'blocked', 'noise'];
+const DELEGATION_OUTCOMES = ['n/a', 'skipped', 'completed', 'fell_through', 'unavailable'] as const;
 const THRESHOLD_TASK_SIZES = ['tiny', 'small', 'medium', 'large'];
 const THRESHOLD_RISKS = ['low', 'medium', 'high'];
 const THRESHOLD_DECISIONS = ['spawned', 'controller_direct', 'manual'];
@@ -436,6 +442,8 @@ async function runCommitPhase(
   }
 
   const routingCheck = routing ? assessRoutingAlignment(routing, evidence, 'commit', opts.headSha) : null;
+  const delegationOutcome = resolveDelegationOutcome(evidence, routing);
+  const delegationWarnings = delegationOutcomeWarnings(evidence, routing);
 
   if (evidence.hasManualFallback && !isBlockedSpecStatus(evidence.specStatus)) {
     const fallback = assessFallback(routing ?? evidenceToFallbackRouting(evidence), evidence);
@@ -446,13 +454,14 @@ async function runCommitPhase(
         checkedAt,
         status: 'fail',
         missingFields: routingCheck.routing_mismatch,
-        warnings,
+        warnings: [...warnings, ...delegationWarnings],
         evidenceSummary: `commit gate routing alignment failed: ${routingCheck.routing_mismatch.join(', ')}`,
         routing: routing ?? evidenceToFallbackRouting(evidence),
         fallback: routingCheck,
         findingDispositionAssessment: findingDisposition,
         threshold: threshold?.evidence,
         thresholdAssessment: threshold,
+        delegationOutcome,
       });
     }
     const manualMissingFields = [
@@ -465,13 +474,14 @@ async function runCommitPhase(
       checkedAt,
       status: summarizeWorkflowStatus(['manual', findingDisposition?.status ?? 'pass', threshold?.status ?? 'pass']),
       missingFields: manualMissingFields,
-      warnings: [...warnings, ...(findingDisposition?.warnings ?? []), ...(threshold?.warnings ?? [])],
+      warnings: [...warnings, ...delegationWarnings, ...(findingDisposition?.warnings ?? []), ...(threshold?.warnings ?? [])],
       evidenceSummary: 'commit gate recorded manual fallback evidence and staged state is clean',
       routing: routing ?? evidenceToFallbackRouting(evidence),
       fallback,
       findingDispositionAssessment: findingDisposition,
       threshold: threshold?.evidence,
       thresholdAssessment: threshold,
+      delegationOutcome,
     });
   }
 
@@ -490,13 +500,14 @@ async function runCommitPhase(
       checkedAt,
       status: 'fail',
       missingFields,
-      warnings: [...warnings, ...(findingDisposition?.warnings ?? []), ...(threshold?.warnings ?? [])],
+      warnings: [...warnings, ...delegationWarnings, ...(findingDisposition?.warnings ?? []), ...(threshold?.warnings ?? [])],
       evidenceSummary: `commit gate missing ${missingFields.join(', ')}`,
       routing: routing ?? undefined,
       fallback: routingCheck ?? undefined,
       findingDispositionAssessment: findingDisposition,
       threshold: threshold?.evidence,
       thresholdAssessment: threshold,
+      delegationOutcome,
     });
   }
 
@@ -506,13 +517,14 @@ async function runCommitPhase(
     checkedAt,
     status: 'pass',
     missingFields: [],
-    warnings: [...warnings, ...(findingDisposition?.warnings ?? []), ...(threshold?.warnings ?? [])],
+    warnings: [...warnings, ...delegationWarnings, ...(findingDisposition?.warnings ?? []), ...(threshold?.warnings ?? [])],
     evidenceSummary: 'commit gate passed: staged artifacts clean and PR body contains spec gate evidence',
     routing: routing ?? undefined,
     fallback: routingCheck ?? inferFallbackFromEvidence(evidence),
     findingDispositionAssessment: findingDisposition,
     threshold: threshold?.evidence,
     thresholdAssessment: threshold,
+    delegationOutcome,
   });
 }
 
@@ -590,6 +602,8 @@ async function runMergePhase(
     missingFields.push('head_sha_freshness');
   }
   const routingCheck = routing ? assessRoutingAlignment(routing, evidence, 'merge', opts.headSha) : null;
+  const delegationOutcome = resolveDelegationOutcome(evidence, routing);
+  const delegationWarnings = delegationOutcomeWarnings(evidence, routing);
   if (routingCheck) missingFields.push(...routingCheck.routing_mismatch);
   if (findingDisposition) missingFields.push(...findingDisposition.missingFields);
   if (threshold) missingFields.push(...threshold.missingFields);
@@ -601,13 +615,14 @@ async function runMergePhase(
       checkedAt,
       status: 'manual',
       missingFields,
-      warnings: [...warnings, ...(findingDisposition?.warnings ?? []), ...(threshold?.warnings ?? [])],
+      warnings: [...warnings, ...delegationWarnings, ...(findingDisposition?.warnings ?? []), ...(threshold?.warnings ?? [])],
       evidenceSummary: `merge gate requires manual fallback: missing ${missingFields.join(', ')}`,
       routing: routing ?? evidenceToFallbackRouting(evidence),
       fallback: routingCheck ?? assessFallback(routing ?? evidenceToFallbackRouting(evidence), evidence),
       findingDispositionAssessment: findingDisposition,
       threshold: threshold?.evidence,
       thresholdAssessment: threshold,
+      delegationOutcome,
     });
   }
 
@@ -618,13 +633,14 @@ async function runMergePhase(
       checkedAt,
       status: 'fail',
       missingFields,
-      warnings: [...warnings, ...(findingDisposition?.warnings ?? []), ...(threshold?.warnings ?? [])],
+      warnings: [...warnings, ...delegationWarnings, ...(findingDisposition?.warnings ?? []), ...(threshold?.warnings ?? [])],
       evidenceSummary: renderMergeFailureSummary(missingFields),
       routing: routing ?? undefined,
       fallback: routingCheck ?? undefined,
       findingDispositionAssessment: findingDisposition,
       threshold: threshold?.evidence,
       thresholdAssessment: threshold,
+      delegationOutcome,
     });
   }
 
@@ -634,13 +650,14 @@ async function runMergePhase(
     checkedAt,
     status: 'pass',
     missingFields: [],
-    warnings: [...warnings, ...(findingDisposition?.warnings ?? []), ...(threshold?.warnings ?? [])],
+    warnings: [...warnings, ...delegationWarnings, ...(findingDisposition?.warnings ?? []), ...(threshold?.warnings ?? [])],
     evidenceSummary: 'merge gate passed: final merge gate, spec evidence, and HEAD freshness are present',
     routing: routing ?? undefined,
     fallback: routingCheck ?? inferFallbackFromEvidence(evidence),
     findingDispositionAssessment: findingDisposition,
     threshold: threshold?.evidence,
     thresholdAssessment: threshold,
+    delegationOutcome,
   });
 }
 
@@ -792,6 +809,7 @@ async function runMergeCloseoutPhase(
       ? 'merge closeout readback passed: checks, review threads, evidence status, and HEAD freshness are ready'
       : `merge closeout readback ${status}: ${closeout.missingFields.join(', ')}`,
     closeout,
+    delegationOutcome: prBodyEvidence.delegationOutcome,
   });
 }
 
@@ -856,6 +874,8 @@ function parsePrBodyEvidenceText(body: string, expectedHeadSha?: string): PrBody
   const findingDispositionStatus = parseGenericStatus(rawFindingDispositionStatus);
   const findingDispositionRef = parseTextField(body, 'finding_disposition_ref') ??
     parseTextField(body, 'finding disposition ref');
+  const rawDelegationOutcome = parseTextField(body, 'delegation_outcome') ?? parseTextField(body, 'delegation outcome');
+  const delegationOutcome = parseDelegationOutcome(rawDelegationOutcome);
   const readyToMerge = parseReadyToMerge(body);
   const hasLatestHead = Boolean(expectedHeadSha)
     ? body.includes(expectedHeadSha as string)
@@ -884,6 +904,8 @@ function parsePrBodyEvidenceText(body: string, expectedHeadSha?: string): PrBody
     claimsControllerOnly: CONTROLLER_ONLY_PATTERN.test(body),
     controllerFallback: parseAllowedDeniedField(body, 'controller_fallback') ?? parseAllowedDeniedField(body, 'controller fallback'),
     controllerFallbackReason: parseTextField(body, 'controller_fallback_reason') ?? parseTextField(body, 'fallback_reason'),
+    hasDelegationOutcome: Boolean(rawDelegationOutcome),
+    delegationOutcome,
     hasThresholdStatus: Boolean(rawThresholdStatus),
     thresholdStatus,
     hasThresholdRef: Boolean(thresholdRef),
@@ -915,6 +937,7 @@ async function readRoutingEvidence(routingEvidencePath: string): Promise<Routing
     controller_fallback_reason: String(raw.controller_fallback_reason ?? raw.fallback_reason ?? 'n/a'),
     delegation_threshold: String(raw.delegation_threshold ?? 'n/a'),
     routing_evidence_ref: requiredEvidenceRef(raw.routing_evidence_ref ?? raw.evidence_ref, 'routing_evidence_ref'),
+    delegation_outcome: optionalDelegationOutcome(raw.delegation_outcome, 'delegation_outcome'),
     head_sha: typeof raw.head_sha === 'string' ? raw.head_sha : undefined,
     spark_readback_evidence: typeof raw.spark_readback_evidence === 'string' ? raw.spark_readback_evidence : undefined,
     worker_5_4_evidence: typeof raw.worker_5_4_evidence === 'string' ? raw.worker_5_4_evidence : undefined,
@@ -1053,6 +1076,7 @@ function buildResult(input: {
   threshold?: ThresholdEvidence;
   thresholdAssessment?: GateAssessment | null;
   closeout?: CloseoutReadback;
+  delegationOutcome?: DelegationOutcome | null;
 }): WorkflowCheckResult {
   const result: WorkflowCheckResult = {
     phase: input.phase,
@@ -1063,6 +1087,7 @@ function buildResult(input: {
     missing_fields: unique(input.missingFields),
     warnings: unique(input.warnings),
     evidence_summary: input.evidenceSummary,
+    delegation_outcome: input.delegationOutcome ?? input.routing?.delegation_outcome ?? 'n/a',
   };
   if (input.routing) {
     result.routing_mode = input.routing.routing_mode;
@@ -1139,6 +1164,7 @@ function printResult(result: WorkflowCheckResult, format: OutputFormat): void {
     'controller_role',
     'controller_fallback',
     'controller_fallback_reason',
+    'delegation_outcome',
     'delegation_threshold',
     'routing_evidence_ref',
     'fallback_status',
@@ -1271,8 +1297,9 @@ function assessRoutingAlignment(
   if (!evidence.hasRoutingRef) mismatch.push('routing_evidence_ref');
   if (routing.routing_evidence_ref !== 'n/a' && evidence.routingRef !== routing.routing_evidence_ref) mismatch.push('routing_evidence_ref_match');
   if (!evidence.hasDelegationLog) mismatch.push('delegation_execution_log');
-  if (routing.spark_required === 'yes' && !evidence.hasSparkEvidence && !isEvidenceRefValue(routing.spark_readback_evidence)) mismatch.push('spark_readback_evidence');
-  if (routing.worker_5_4_required === 'yes' && !evidence.hasWorker54Evidence && !isEvidenceRefValue(routing.worker_5_4_evidence)) mismatch.push('worker_5_4_evidence');
+  const workerUnavailable = resolveDelegationOutcome(evidence, routing) === 'unavailable';
+  if (routing.spark_required === 'yes' && !workerUnavailable && !evidence.hasSparkEvidence && !isEvidenceRefValue(routing.spark_readback_evidence)) mismatch.push('spark_readback_evidence');
+  if (routing.worker_5_4_required === 'yes' && !workerUnavailable && !evidence.hasWorker54Evidence && !isEvidenceRefValue(routing.worker_5_4_evidence)) mismatch.push('worker_5_4_evidence');
   if (routing.controller_fallback === 'denied' && evidence.claimsControllerOnly) mismatch.push('controller_fallback_denied');
   if (phase === 'merge' && expectedHeadSha && routing.head_sha && routing.head_sha !== expectedHeadSha) mismatch.push('routing_evidence_freshness');
 
@@ -1313,6 +1340,22 @@ function isBlockedRoutingStatus(status: PrBodyEvidence['routingStatus']): boolea
 function inferFallbackFromEvidence(evidence: PrBodyEvidence): FallbackAssessment | undefined {
   if (evidence.controllerFallback !== 'allowed' && !evidence.hasManualFallback) return undefined;
   return assessFallback(evidenceToFallbackRouting(evidence), evidence);
+}
+
+function resolveDelegationOutcome(evidence: PrBodyEvidence, routing: RoutingEvidence | null): DelegationOutcome {
+  return evidence.delegationOutcome ?? routing?.delegation_outcome ?? 'n/a';
+}
+
+function delegationOutcomeWarnings(evidence: PrBodyEvidence, routing: RoutingEvidence | null): string[] {
+  const hasAutonomousRoutingContext = evidence.hasAutonomousSignal || Boolean(routing && routing.routing_mode !== 'n/a');
+  if (!hasAutonomousRoutingContext) return [];
+  if (!evidence.hasDelegationOutcome && !routing?.delegation_outcome) {
+    return ['Delegation outcome is missing; workflow-check kept backward-compatible status and reported delegation_outcome=n/a.'];
+  }
+  if (!evidence.delegationOutcome) {
+    return [`Delegation outcome value is not recognized; expected ${DELEGATION_OUTCOMES.join('|')}.`];
+  }
+  return [];
 }
 
 function evidenceToFallbackRouting(evidence: PrBodyEvidence): RoutingEvidence {
@@ -1365,6 +1408,18 @@ function parseAllowedDeniedField(body: string, fieldName: string): 'allowed' | '
   if (normalized.startsWith('allowed')) return 'allowed';
   if (normalized.startsWith('denied')) return 'denied';
   return null;
+}
+
+function parseDelegationOutcome(value: string | null): DelegationOutcome | null {
+  if (value === null) return null;
+  const normalized = value.trim().toLowerCase();
+  if (DELEGATION_OUTCOMES.includes(normalized as DelegationOutcome)) return normalized as DelegationOutcome;
+  return null;
+}
+
+function optionalDelegationOutcome(value: unknown, fieldName: string): DelegationOutcome | undefined {
+  if (value === undefined) return undefined;
+  return requiredEnum(value, [...DELEGATION_OUTCOMES], fieldName) as DelegationOutcome;
 }
 
 function parseTextField(body: string, fieldName: string): string | null {

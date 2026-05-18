@@ -7,6 +7,7 @@ Closes #229
 ## Delegation Execution Log
 - routing evidence status: pass
 - routing evidence ref: https://github.com/Erick52106/spec-injector/issues/229#issuecomment-1002
+- delegation_outcome: completed
 - controller_fallback: denied
 - controller_fallback_reason: n/a
 
