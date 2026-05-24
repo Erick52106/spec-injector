@@ -287,7 +287,7 @@ function isFullRepoRelativePath(filePath: string): boolean {
 }
 
 function normalizeBulletPathCandidate(line: string): string | null {
-  const match = line.match(/^\s*(?:[-*]|\d+\.)\s+([A-Za-z0-9._/-]+)\s*$/);
+  const match = line.match(/^\s*(?:[-*]|\d+\.)\s+([A-Za-z0-9._/#-]+)\s*$/);
   if (!match) return null;
   return normalizeExplicitPathCandidate(match[1]);
 }
@@ -297,10 +297,11 @@ function normalizeExplicitPathCandidate(candidate: string): string | null {
   if (trimmed.length === 0) return null;
   if (trimmed.includes('://')) return null;
   if (trimmed.startsWith('/')) return null;
-  if (trimmed.includes('#')) return null;
-  if (!/^[A-Za-z0-9._/-]+$/.test(trimmed)) return null;
+  const unanchored = stripGitHubLineAnchor(trimmed);
+  if (!unanchored) return null;
+  if (!/^[A-Za-z0-9._/-]+$/.test(unanchored)) return null;
 
-  const normalized = path.posix.normalize(trimmed);
+  const normalized = path.posix.normalize(unanchored);
   if (normalized === '.' || normalized === '..') return null;
   if (normalized.startsWith('../')) return null;
   if (path.posix.isAbsolute(normalized)) return null;
@@ -308,6 +309,16 @@ function normalizeExplicitPathCandidate(candidate: string): string | null {
   if (!hasRecognizedRepoFileShape(normalized)) return null;
 
   return normalized;
+}
+
+function stripGitHubLineAnchor(candidate: string): string | null {
+  const hashIndex = candidate.indexOf('#');
+  if (hashIndex === -1) return candidate;
+
+  const pathPart = candidate.slice(0, hashIndex);
+  const fragment = candidate.slice(hashIndex);
+  if (/^#L\d+(?:-L\d+)?$/.test(fragment)) return pathPart;
+  return null;
 }
 
 function normalizeMarkdownLinkTargetPathCandidate(candidate: string): string | null {
