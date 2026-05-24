@@ -2297,6 +2297,7 @@ test('spec workflow-check merge phase collects closeout readback evidence with m
       '- spec evidence ref: https://github.com/Erick52106/spec-injector/issues/239#issuecomment-1001',
       '- routing evidence status: pass',
       '- routing evidence ref: workflow-check:start:239',
+      '- delegation_outcome: completed',
       '- finding disposition status: pass',
       '',
       '## Implementation Evidence',
@@ -2331,6 +2332,7 @@ test('spec workflow-check merge phase collects closeout readback evidence with m
   assert.equal(parsed.status, 'pass');
   assert.equal(parsed.closeout_readback_status, 'pass');
   assert.equal(parsed.ready_to_merge, 'yes');
+  assert.equal(parsed.delegation_outcome, 'completed');
   assert.equal(parsed.human_review_status, 'pass');
   assert.equal(parsed.draft_status, 'pass');
   assert.equal(parsed.unresolved_review_threads_count, 0);
@@ -2340,6 +2342,136 @@ test('spec workflow-check merge phase collects closeout readback evidence with m
   assert.match(ghLog, /pr view/);
   assert.match(ghLog, /pr checks/);
   assert.match(ghLog, /api graphql/);
+  assertNoGhMutationCommands(ghLog);
+});
+
+test('spec workflow-check merge closeout fails malformed delegation outcome evidence', async (t) => {
+  const repoDir = await createTempRepo(t, 'spec-injector-workflow-closeout-delegation-outcome-');
+  await writeConfig(repoDir, { version: 2, guardrails: [] });
+  await initCleanGitRepo(repoDir);
+  const headSha = 'acacacacacacacacacacacacacacacacacacacac';
+  const fixture = await createEvidenceCheckFixture(t, {
+    issueNumber: 298,
+    headSha,
+    prBody: [
+      'Closes #298',
+      '',
+      '## Summary',
+      'Closeout readback evidence with malformed delegation outcome.',
+      '',
+      '## Scope',
+      'Read-only closeout evidence collection.',
+      '',
+      '## Non-goals',
+      'No mutation.',
+      '',
+      '## Spec gate evidence',
+      '- spec gate status: pass',
+      '- spec evidence ref: https://github.com/Erick52106/spec-injector/issues/298#issuecomment-1001',
+      '- routing evidence status: pass',
+      '- routing evidence ref: workflow-check:start:298',
+      '- delegation_outcome: unknown',
+      '- finding disposition status: pass',
+      '',
+      '## Implementation Evidence',
+      '- Issue evidence: https://github.com/Erick52106/spec-injector/issues/298#issuecomment-1001',
+      `- Commit: ${headSha}`,
+      '',
+      '## Validation',
+      '- `pnpm test`',
+      '',
+      '## Final merge gate',
+      `- latest head SHA: ${headSha}`,
+      '- ready_to_merge: yes',
+    ].join('\n'),
+    reviews: [{ author: { login: 'chatgpt-codex-connector' }, body: 'No actionable findings.', state: 'COMMENTED' }],
+    reviewThreads: [],
+    checks: [
+      { name: 'build', state: 'COMPLETED', conclusion: 'SUCCESS', bucket: 'pass' },
+      { name: 'CodeRabbit', state: 'SUCCESS', conclusion: 'SUCCESS', bucket: 'pass' },
+    ],
+  });
+
+  const result = await runSpec([
+    'workflow-check',
+    '--repo', repoDir,
+    '--phase', 'merge',
+    '--pr', `https://github.com/${fixture.repo}/pull/${fixture.prNumber}`,
+    '--format', 'json',
+  ], { env: fixture.env });
+
+  assert.notEqual(result.code, 0);
+  const parsed = JSON.parse(result.stdout) as Record<string, unknown>;
+  assert.equal(parsed.status, 'fail');
+  assert.equal(parsed.ready_to_merge, 'no');
+  assert.equal(parsed.delegation_outcome, 'n/a');
+  assert.ok((parsed.missing_fields as string[]).includes('delegation_outcome'));
+  const ghLog = (await readGhLog(fixture.ghLogPath)).join('\n');
+  assertNoGhMutationCommands(ghLog);
+});
+
+test('spec workflow-check merge closeout fails empty delegation outcome evidence', async (t) => {
+  const repoDir = await createTempRepo(t, 'spec-injector-workflow-closeout-empty-delegation-outcome-');
+  await writeConfig(repoDir, { version: 2, guardrails: [] });
+  await initCleanGitRepo(repoDir);
+  const headSha = 'adadadadadadadadadadadadadadadadadadadad';
+  const fixture = await createEvidenceCheckFixture(t, {
+    issueNumber: 298,
+    headSha,
+    prBody: [
+      'Closes #298',
+      '',
+      '## Summary',
+      'Closeout readback evidence with empty delegation outcome.',
+      '',
+      '## Scope',
+      'Read-only closeout evidence collection.',
+      '',
+      '## Non-goals',
+      'No mutation.',
+      '',
+      '## Spec gate evidence',
+      '- spec gate status: pass',
+      '- spec evidence ref: https://github.com/Erick52106/spec-injector/issues/298#issuecomment-1001',
+      '- routing evidence status: pass',
+      '- routing evidence ref: workflow-check:start:298',
+      '- delegation_outcome:',
+      '- finding disposition status: pass',
+      '',
+      '## Implementation Evidence',
+      '- Issue evidence: https://github.com/Erick52106/spec-injector/issues/298#issuecomment-1001',
+      `- Commit: ${headSha}`,
+      '',
+      '## Validation',
+      '- `pnpm test`',
+      '',
+      '## Final merge gate',
+      `- latest head SHA: ${headSha}`,
+      '- ready_to_merge: yes',
+    ].join('\n'),
+    reviews: [{ author: { login: 'chatgpt-codex-connector' }, body: 'No actionable findings.', state: 'COMMENTED' }],
+    reviewThreads: [],
+    checks: [
+      { name: 'build', state: 'COMPLETED', conclusion: 'SUCCESS', bucket: 'pass' },
+      { name: 'CodeRabbit', state: 'SUCCESS', conclusion: 'SUCCESS', bucket: 'pass' },
+    ],
+  });
+
+  const result = await runSpec([
+    'workflow-check',
+    '--repo', repoDir,
+    '--phase', 'merge',
+    '--pr', `https://github.com/${fixture.repo}/pull/${fixture.prNumber}`,
+    '--format', 'json',
+  ], { env: fixture.env });
+
+  assert.notEqual(result.code, 0);
+  const parsed = JSON.parse(result.stdout) as Record<string, unknown>;
+  assert.equal(parsed.status, 'fail');
+  assert.equal(parsed.ready_to_merge, 'no');
+  assert.equal(parsed.delegation_outcome, 'n/a');
+  assert.ok((parsed.missing_fields as string[]).includes('delegation_outcome'));
+  const ghLog = (await readGhLog(fixture.ghLogPath)).join('\n');
   assertNoGhMutationCommands(ghLog);
 });
 
