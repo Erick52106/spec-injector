@@ -163,6 +163,37 @@ test('explicit issue-mentioned JSONC config references are classified as issue s
   assert.deepEqual(explicit.missing.map((doc) => doc.filePath), []);
 });
 
+test('explicit issue-mentioned TOML config references are classified as issue sources only', async (t) => {
+  const repoDir = await createTempRepo(t);
+  const sourceFiles = ['pyproject.toml', 'config/wrangler.toml', 'Cargo.toml'];
+  const issue = {
+    number: 290,
+    title: 'Include explicit TOML config references',
+    body: [
+      'Relevant config references:',
+      ...sourceFiles.map((filePath) => `- \`${filePath}\``),
+    ].join('\n'),
+    labels: [],
+    url: 'https://github.com/Erick52106/spec-injector/issues/290',
+    state: 'OPEN',
+  };
+
+  await writeRepoFiles(repoDir, {
+    'pyproject.toml': '[project]\nname = "toml-package"\n',
+    'config/wrangler.toml': 'name = "toml-worker"\n',
+    'Cargo.toml': '[package]\nname = "toml-crate"\n',
+  });
+
+  const explicit = await extractExplicitIssueFileReferences(issue, repoDir);
+
+  assert.deepEqual(explicit.docs.map((doc) => doc.filePath), []);
+  assert.deepEqual(explicit.sources.map((doc) => doc.filePath), sourceFiles);
+  assert.deepEqual(explicit.missing.map((doc) => doc.filePath), []);
+
+  const autoDiscovered = await discoverSourceFiles(issue, repoDir, ['.'], 10);
+  assert.deepEqual(autoDiscovered.map((doc) => doc.filePath), []);
+});
+
 test('auto source discovery includes Node module extensions while preserving generated and skip-dir filtering', async (t) => {
   const repoDir = await createTempRepo(t);
   const sourceFiles = ['src/cli.mjs', 'src/config.cjs', 'src/module.mts', 'src/legacy.cts'];
