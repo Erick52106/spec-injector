@@ -188,7 +188,7 @@ const ROUTING_STATUS_PATTERN = /\b(?:routing[_ -]evidence[_ -]status|routing sta
 const GENERIC_STATUS_VALUES = ['pass', 'fail', 'manual', 'skipped', 'pending', 'unknown'] as const;
 const AUTONOMOUS_SIGNAL_PATTERN = /\b(?:Autonomous Worker Profiles|Hybrid AWP|AWP|Codex autonomous PR|controller_fallback|Delegation Execution Log)\b/i;
 const AUTONOMOUS_WORKER_ROUTING_SIGNAL_PATTERN = /\bautonomous worker[- ]routing\b/i;
-const NEGATED_AUTONOMOUS_WORKER_ROUTING_SIGNAL_PATTERN = /\b(?:no|not|without)\s+autonomous worker[- ]routing\b|\bautonomous worker[- ]routing\s+(?:is\s+)?not\s+(?:requested|required)\b/i;
+const NEGATED_AUTONOMOUS_WORKER_ROUTING_SIGNAL_PATTERN = /\b(?:no|not)\s+autonomous worker[- ]routing\b|\bautonomous worker[- ]routing\s+(?:is\s+)?not\s+(?:requested|required)\b/i;
 const SPARK_EVIDENCE_PATTERN = /\b(?:ops_spark|spark(?: \/ ops)? worker|ops worker|spark_readback_evidence|readback evidence)\b/i;
 const WORKER_54_EVIDENCE_PATTERN = /\b(?:worker_5_4|5\.4 worker|implementation worker|bounded implementation worker)\b/i;
 const CONTROLLER_ONLY_PATTERN = /\b(?:controller-only|controller only|controller_fallback\s*[:=]\s*allowed|controller fallback\s*[:=]\s*allowed)\b/i;
