@@ -5875,6 +5875,42 @@ test('spec plan includes issue-mentioned source file paths in prompt and full ou
   assert.match(fullResult.stdout, /sources:\s*3/);
 });
 
+test('spec plan treats Markdown link labels as issue-mentioned repo paths', async (t) => {
+  const fixture = await createExplicitPathPlanFixture(t, {
+    issueNumber: 268,
+    title: 'Extract Markdown link issue-mentioned repo paths',
+    bodyLines: [
+      'Relevant linked references:',
+      '- [apps/dashboard/src/providers/dataProvider.ts](https://github.com/example/repo/blob/main/apps/dashboard/src/providers/dataProvider.ts)',
+      '- [docs/architecture.md](docs/architecture.md)',
+      '- [external API](https://example.com/src/external-api.ts)',
+      '- [docs/architecture.md#anchor](docs/architecture.md#anchor)',
+    ],
+    repoFiles: {
+      'apps/dashboard/src/providers/dataProvider.ts': 'export const provider = "MARKDOWN_LINK_SOURCE_SENTINEL";\n',
+      'docs/architecture.md': '# Architecture\n\nMARKDOWN_LINK_DOC_SENTINEL\n',
+    },
+  });
+
+  const promptResult = await runSpec(['plan', fixture.issueUrl, '--repo', fixture.repoDir, '--dry-run', '--format', 'prompt'], { env: fixture.env });
+  const fullResult = await runSpec(['plan', fixture.issueUrl, '--repo', fixture.repoDir, '--dry-run'], { env: fixture.env });
+
+  assert.equal(promptResult.code, 0, promptResult.stderr);
+  assert.equal(fullResult.code, 0, fullResult.stderr);
+
+  const promptIssueDocs = sectionBetween(promptResult.stdout, '### Issue-Mentioned Docs', '### Issue-Mentioned Source Files');
+  const promptIssueSources = sectionBetween(promptResult.stdout, '### Issue-Mentioned Source Files', '### Auto-Discovered Docs');
+
+  assert.match(promptIssueDocs, /`docs\/architecture\.md` — issue-mentioned; mentioned in issue/);
+  assert.match(promptIssueSources, /`apps\/dashboard\/src\/providers\/dataProvider\.ts` — issue-mentioned; mentioned in issue/);
+  assert.doesNotMatch(promptResult.stdout, /src\/external-api\.ts/);
+  assert.doesNotMatch(promptResult.stdout, /docs\/architecture\.md#anchor/);
+  assert.match(fullResult.stdout, /### docs\/architecture\.md\n\n_source: issue-mentioned; mentioned in issue_/);
+  assert.match(fullResult.stdout, /MARKDOWN_LINK_DOC_SENTINEL/);
+  assert.match(fullResult.stdout, /### apps\/dashboard\/src\/providers\/dataProvider\.ts\n\n_source: issue-mentioned; mentioned in issue_/);
+  assert.match(fullResult.stdout, /MARKDOWN_LINK_SOURCE_SENTINEL/);
+});
+
 test('spec plan includes issue-mentioned docs and de-dupes with always_read', async (t) => {
   const fixture = await createExplicitPathPlanFixture(t, {
     issueNumber: 81,
