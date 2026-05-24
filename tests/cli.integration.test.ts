@@ -4852,6 +4852,22 @@ test('spec validate rejects malformed discovery.exclude values', async (t) => {
   assertNoRawStackTrace(result);
 });
 
+test('spec validate rejects invalid discovery limit values', async (t) => {
+  const repoDir = await createTempRepo(t);
+  await writeConfig(repoDir, {
+    version: 2,
+    discovery: {
+      max_docs: '5',
+    },
+  });
+
+  const result = await runSpec(['validate', '--repo', repoDir]);
+
+  assert.notEqual(result.code, 0);
+  assert.match(result.stderr, /discovery\.max_docs must be a non-negative integer/i);
+  assertNoRawStackTrace(result);
+});
+
 test('spec validate rejects malformed guardrails values and missing required fields', async (t) => {
   const repoDir = await createTempRepo(t);
   await writeConfig(repoDir, {
