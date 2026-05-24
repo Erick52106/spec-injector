@@ -1559,6 +1559,8 @@ function parseReadyToMerge(body: string): 'yes' | 'no' | 'manual' | null {
   const value = parseTextField(body, 'ready_to_merge') ?? parseTextField(body, 'ready to merge');
   const normalized = normalize(value);
   if (['yes', 'no', 'manual'].includes(normalized)) return normalized as 'yes' | 'no' | 'manual';
+  if (normalized === 'true') return 'yes';
+  if (normalized === 'false') return 'no';
   return null;
 }
 
