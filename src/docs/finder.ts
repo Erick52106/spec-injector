@@ -21,11 +21,11 @@ type ScoredReference = {
 };
 
 const EXPLICIT_FILE_EXTENSIONS = new Set([
-  '.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs', '.mts', '.cts', '.go', '.md', '.json', '.yml', '.yaml', '.sql', '.css', '.html', '.sh',
+  '.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs', '.mts', '.cts', '.go', '.md', '.mdx', '.json', '.yml', '.yaml', '.sql', '.css', '.html', '.sh',
 ]);
 const ROOT_DOC_CANDIDATES = ['README.md', 'CLAUDE.md', 'AGENTS.md', 'GEMINI.md'] as const;
 const EXPLICIT_ROOT_FILES = new Set<string>(ROOT_DOC_CANDIDATES);
-const DOC_EXTENSIONS = new Set(['.md']);
+const DOC_EXTENSIONS = new Set(['.md', '.mdx']);
 const ISSUE_MENTIONED_REASON = 'mentioned in issue';
 const SOURCE_SNIPPET_BYTES = 500;
 
@@ -376,7 +376,7 @@ function walkMarkdown(
       const relDir = path.relative(repoPath, full);
       if (isPlanDiscoveryExcluded(relDir, exclude)) continue;
       walkMarkdown(full, repoPath, exclude, results);
-    } else if (entry.isFile() && entry.name.endsWith('.md')) {
+    } else if (entry.isFile() && DOC_EXTENSIONS.has(path.extname(entry.name).toLowerCase())) {
       const rel = path.relative(repoPath, full);
       if (!isPlanDiscoveryExcluded(rel, exclude)) results.push(rel);
     }

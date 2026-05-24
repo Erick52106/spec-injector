@@ -64,6 +64,52 @@ test('root doc candidates share one source for fixed discovery and explicit refe
   );
 });
 
+test('explicit issue-mentioned MDX docs are classified as issue docs', async (t) => {
+  const repoDir = await createTempRepo(t);
+  const issue = {
+    number: 286,
+    title: 'Include MDX docs in docs finder',
+    body: 'Relevant docs:\n- `docs/usage.mdx`',
+    labels: [],
+    url: 'https://github.com/Erick52106/spec-injector/issues/286',
+    state: 'OPEN',
+  };
+
+  await writeRepoFiles(repoDir, {
+    'docs/usage.mdx': '# Usage\n\nMDX usage guidance for docs finder.\n',
+  });
+
+  const explicit = await extractExplicitIssueFileReferences(issue, repoDir);
+
+  assert.deepEqual(explicit.docs.map((doc) => doc.filePath), ['docs/usage.mdx']);
+  assert.equal(explicit.docs[0]?.kind, 'issue-doc');
+  assert.deepEqual(explicit.sources.map((doc) => doc.filePath), []);
+  assert.deepEqual(explicit.missing.map((doc) => doc.filePath), []);
+});
+
+test('auto relevant docs discovery includes scored MDX docs without adding MDX to source discovery', async (t) => {
+  const repoDir = await createTempRepo(t);
+  const issue = {
+    number: 286,
+    title: 'Refresh usage guide docs',
+    body: 'Usage guide docs should be found during relevant docs discovery.',
+    labels: [],
+    url: 'https://github.com/Erick52106/spec-injector/issues/286',
+    state: 'OPEN',
+  };
+
+  await writeRepoFiles(repoDir, {
+    'docs/usage.mdx': '# Usage Guide\n\nRelevant usage guide docs for MDX discovery.\n',
+    'src/usage.mdx': '# Usage Guide\n\nThis MDX file must not be treated as source.\n',
+  });
+
+  const discoveredDocs = await discoverRelevantDocs(issue, repoDir, new Set(), 5);
+  assert.equal(discoveredDocs.some((doc) => doc.filePath === 'docs/usage.mdx'), true);
+
+  const discoveredSources = await discoverSourceFiles(issue, repoDir, ['src'], 5);
+  assert.deepEqual(discoveredSources.map((doc) => doc.filePath), []);
+});
+
 test('explicit issue-mentioned source references include Node module extensions', async (t) => {
   const repoDir = await createTempRepo(t);
   const sourceFiles = ['src/cli.mjs', 'src/config.cjs', 'src/module.mts', 'src/legacy.cts'];
