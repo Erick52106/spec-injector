@@ -111,7 +111,7 @@ CodeRabbit / Codex auto review findings 只能作為 auxiliary signals。`spec e
 
 Thread-level limitation：`spec evidence-check` 目前只做 read-only 輔助檢核，不會完整 enforce GitHub review thread / conversation closeout。它可提醒 PR body / evidence / HEAD / validation / findings shape，但不能保證每條 CodeRabbit / Codex / human thread 都已關閉。`PASS` 僅表示輔助欄位滿足程度，不是 merge approval。該 checker 不能 auto-comment、auto-resolve、auto-merge、auto-close，也不會 mutate GitHub issue / PR metadata；最終 thread-level closeout 必須由 human 逐條確認與接手。
 
-`spec workflow-check --phase merge --pr <number-or-url>` 可做 local-only merge closeout readback。它會讀取 PR body、draft state、review metadata、`gh pr checks` summary 與 review threads，並把無法可靠判斷的 GitHub / `gh` output drift 回報成 `manual` fallback，而不是把工具層 schema mismatch 誤判成 PR 本身不可 merge。若 checks readback 回傳缺欄位、未知 enum、或只有無法歸類的 status shape，controller 應以 PR 頁面、`gh pr checks`、Actions UI、review thread readback 補人工 evidence；不得因 manual fallback 自動 merge，也不得讓 checker auto-comment、auto-resolve 或 mutate GitHub。
+`spec workflow-check --phase merge --pr <number-or-url>` 可做 local-only merge closeout readback。它會讀取 PR body、draft state、review metadata、`gh pr checks` summary 與 review threads，並把無法可靠判斷的 GitHub / `gh` output drift 回報成 `manual` fallback，而不是把工具層 schema mismatch 誤判成 PR 本身不可 merge。這個 `--pr` readback path 不依賴 target repo `.spec-injector/config.json`；若 local config 不存在，checker 會保留 warning 並繼續 readback，避免 repo-local closeout 被 config bootstrap 狀態誤擋。`start` / `commit` phase 仍需要 local config。若 checks readback 回傳缺欄位、未知 enum、或只有無法歸類的 status shape，controller 應以 PR 頁面、`gh pr checks`、Actions UI、review thread readback 補人工 evidence；不得因 manual fallback 自動 merge，也不得讓 checker auto-comment、auto-resolve 或 mutate GitHub。
 
 ## Worktree naming
 

@@ -210,7 +210,6 @@ export async function workflowCheck(opts: WorkflowCheckOptions): Promise<void> {
 
   try {
     ensureRepoPath(repoPath);
-    config = await loadConfig(repoPath);
   } catch (err) {
     const result = buildResult({
       phase,
@@ -225,9 +224,33 @@ export async function workflowCheck(opts: WorkflowCheckOptions): Promise<void> {
     process.exit(1);
   }
 
+  try {
+    config = await loadConfig(repoPath);
+  } catch (err) {
+    if (isMergePrCloseout(phase, opts)) {
+      warnings.push(`Local config unavailable; merge --pr closeout continued with readback-only evidence: ${(err as Error).message}`);
+    } else {
+      const result = buildResult({
+        phase,
+        repoPath,
+        checkedAt,
+        status: 'fail',
+        missingFields: ['config'],
+        warnings,
+        evidenceSummary: `workflow-check could not validate repo config: ${(err as Error).message}`,
+      });
+      printResult(result, format);
+      process.exit(1);
+    }
+  }
+
   const result = await runPhase(phase, repoPath, config, opts, checkedAt, warnings);
   printResult(result, format);
   if (result.status === 'fail') process.exit(1);
+}
+
+function isMergePrCloseout(phase: WorkflowPhase, opts: WorkflowCheckOptions): boolean {
+  return phase === 'merge' && Boolean(opts.pr);
 }
 
 function parsePhase(value: string): WorkflowPhase {
@@ -243,13 +266,29 @@ function parseFormat(value: string): OutputFormat {
 async function runPhase(
   phase: WorkflowPhase,
   repoPath: string,
-  config: Config,
+  config: Config | null,
   opts: WorkflowCheckOptions,
   checkedAt: string,
   warnings: string[]
 ): Promise<WorkflowCheckResult> {
   if (phase === 'start') {
     return runStartPhase(repoPath, opts, checkedAt, warnings);
+  }
+
+  if (isMergePrCloseout(phase, opts)) {
+    return runMergeCloseoutPhase(repoPath, opts, checkedAt, warnings);
+  }
+
+  if (!config) {
+    return buildResult({
+      phase,
+      repoPath,
+      checkedAt,
+      status: 'fail',
+      missingFields: ['config'],
+      warnings,
+      evidenceSummary: 'workflow-check could not validate repo config',
+    });
   }
 
   const staged = readStagedPaths(repoPath, config);
