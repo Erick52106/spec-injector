@@ -43,6 +43,10 @@ type CheckPayload = {
 };
 
 type EvidenceCheckFormat = 'text' | 'json';
+type EvidenceCheckReport = {
+  overall: Severity;
+  checks: EvidenceCheck[];
+};
 
 const HASH_PATTERN = /\b[0-9a-f]{7,40}\b/gi;
 const LINKED_ISSUE_PATTERN = /\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s+#(\d+)\b/gi;
@@ -113,7 +117,12 @@ export async function evidenceCheck(opts: EvidenceCheckOptions): Promise<void> {
       process.exit(1);
     }
   } catch (err) {
-    console.error(`✗ Evidence check failed: ${(err as Error).message}`);
+    const message = (err as Error).message;
+    if (opts.format === 'json') {
+      printReport(buildFatalReport(message), 'json');
+    } else {
+      console.error(`✗ Evidence check failed: ${message}`);
+    }
     process.exit(1);
   }
 }
@@ -153,7 +162,7 @@ function buildReport(input: {
   expectedHead?: string;
   checks: CheckPayload[];
   checksReadError?: string;
-}): { overall: Severity; checks: EvidenceCheck[] } {
+}): EvidenceCheckReport {
   const checks: EvidenceCheck[] = [];
   const latestHead = input.pr.headRefOid ?? '';
   const evidenceComment = input.evidenceUrl && input.issue
@@ -382,6 +391,20 @@ function buildReport(input: {
   };
 }
 
+function buildFatalReport(message: string): EvidenceCheckReport {
+  return {
+    overall: 'fail',
+    checks: [
+      fail(
+        'Evidence check execution',
+        'pre-report fatal error',
+        message,
+        'Fix the evidence-check invocation, then rerun the read-only checker.'
+      ),
+    ],
+  };
+}
+
 function checkRequiredSections(body: string): EvidenceCheck[] {
   const groups: Array<[string, RegExp, string]> = [
     ['Summary section', /^##+\s*(Summary|摘要)/im, 'Summary'],
@@ -553,7 +576,7 @@ function summarizeOverall(checks: EvidenceCheck[]): Severity {
   return 'pass';
 }
 
-function printReport(report: { overall: Severity; checks: EvidenceCheck[] }, format: EvidenceCheckFormat): void {
+function printReport(report: EvidenceCheckReport, format: EvidenceCheckFormat): void {
   if (format === 'json') {
     console.log(JSON.stringify(report, null, 2));
     return;

@@ -4399,6 +4399,36 @@ test('spec evidence-check fails when --repo conflicts with the repository encode
   assertNoGhMutationCommands(ghLog);
 });
 
+test('spec evidence-check --format json prints parseable fatal report when --repo conflicts with PR URL', async (t) => {
+  const fixture = await createEvidenceCheckFixture(t);
+
+  const result = await runSpec([
+    'evidence-check',
+    '--pr', `https://github.com/${fixture.repo}/pull/${fixture.prNumber}`,
+    '--repo', 'owner-b/repo-b',
+    '--format', 'json',
+  ], { env: fixture.env });
+
+  assert.notEqual(result.code, 0);
+  assert.equal(result.stderr, '');
+
+  const report = JSON.parse(result.stdout) as {
+    overall?: unknown;
+    checks?: Array<Record<string, unknown>>;
+  };
+  assert.equal(report.overall, 'fail');
+  assert.ok(Array.isArray(report.checks));
+  assert.ok(report.checks.some((check) =>
+    check.severity === 'fail' &&
+    check.item === 'Evidence check execution' &&
+    check.reason === '--repo must match the repository encoded in --pr.'
+  ));
+
+  const ghLog = (await readGhLog(fixture.ghLogPath)).join('\n');
+  assert.equal(ghLog.trim(), '');
+  assertNoGhMutationCommands(ghLog);
+});
+
 test('spec evidence-check still requires --repo when --pr is not a GitHub PR URL', async (t) => {
   const fixture = await createEvidenceCheckFixture(t);
 
