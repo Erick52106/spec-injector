@@ -233,6 +233,45 @@ test('explicit issue-mentioned paths strip GitHub line anchors only', async (t) 
   assert.deepEqual(explicit.missing.map((doc) => doc.filePath), []);
 });
 
+test('explicit issue-mentioned same-repo GitHub blob URLs normalize to repo-relative paths', async (t) => {
+  const repoDir = await createTempRepo(t);
+  const issue = {
+    number: 308,
+    title: 'Recognize explicit same-repo GitHub blob references',
+    body: [
+      'Relevant GitHub references:',
+      '- `https://github.com/Erick52106/spec-injector/blob/main/src/foo.ts#L10`',
+      'Raw reference: https://github.com/Erick52106/spec-injector/blob/main/src/raw.ts#L4.',
+      '- [linked source](https://github.com/Erick52106/spec-injector/blob/main/src/linked.ts#L10-L20)',
+      '- [linked doc](https://github.com/Erick52106/spec-injector/blob/main/docs/guide.md#L3)',
+      '- `https://github.com/OtherOrg/spec-injector/blob/main/src/cross-repo.ts#L1`',
+      '- `https://github.com/Erick52106/spec-injector/tree/main/src/not-blob.ts`',
+      '- `https://example.com/Erick52106/spec-injector/blob/main/src/not-github.ts`',
+      '- `https://github.com/Erick52106/spec-injector/blob/main/docs/section.md#heading`',
+    ].join('\n'),
+    labels: [],
+    url: 'https://github.com/Erick52106/spec-injector/issues/308',
+    state: 'OPEN',
+  };
+
+  await writeRepoFiles(repoDir, {
+    'src/foo.ts': 'export const foo = true;\n',
+    'src/raw.ts': 'export const raw = true;\n',
+    'src/linked.ts': 'export const linked = true;\n',
+    'docs/guide.md': '# Guide\n',
+  });
+
+  const explicit = await extractExplicitIssueFileReferences(issue, repoDir);
+
+  assert.deepEqual(explicit.sources.map((doc) => doc.filePath), [
+    'src/foo.ts',
+    'src/raw.ts',
+    'src/linked.ts',
+  ]);
+  assert.deepEqual(explicit.docs.map((doc) => doc.filePath), ['docs/guide.md']);
+  assert.deepEqual(explicit.missing.map((doc) => doc.filePath), []);
+});
+
 test('auto source discovery includes Node module extensions while preserving generated and skip-dir filtering', async (t) => {
   const repoDir = await createTempRepo(t);
   const sourceFiles = ['src/cli.mjs', 'src/config.cjs', 'src/module.mts', 'src/legacy.cts'];
