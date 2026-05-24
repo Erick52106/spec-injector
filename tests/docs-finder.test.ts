@@ -136,6 +136,33 @@ test('explicit issue-mentioned source references include Node module extensions'
   assert.deepEqual(explicit.missing.map((doc) => doc.filePath), []);
 });
 
+test('explicit issue-mentioned JSONC config references are classified as issue sources', async (t) => {
+  const repoDir = await createTempRepo(t);
+  const sourceFiles = ['wrangler.jsonc', 'config/tsconfig.jsonc'];
+  const issue = {
+    number: 288,
+    title: 'Include explicit JSONC config references',
+    body: [
+      'Relevant config references:',
+      ...sourceFiles.map((filePath) => `- \`${filePath}\``),
+    ].join('\n'),
+    labels: [],
+    url: 'https://github.com/Erick52106/spec-injector/issues/288',
+    state: 'OPEN',
+  };
+
+  await writeRepoFiles(repoDir, {
+    'wrangler.jsonc': '{\n  "name": "jsonc-worker"\n}\n',
+    'config/tsconfig.jsonc': '{\n  "extends": "../tsconfig.json"\n}\n',
+  });
+
+  const explicit = await extractExplicitIssueFileReferences(issue, repoDir);
+
+  assert.deepEqual(explicit.docs.map((doc) => doc.filePath), []);
+  assert.deepEqual(explicit.sources.map((doc) => doc.filePath), sourceFiles);
+  assert.deepEqual(explicit.missing.map((doc) => doc.filePath), []);
+});
+
 test('auto source discovery includes Node module extensions while preserving generated and skip-dir filtering', async (t) => {
   const repoDir = await createTempRepo(t);
   const sourceFiles = ['src/cli.mjs', 'src/config.cjs', 'src/module.mts', 'src/legacy.cts'];
