@@ -42,6 +42,22 @@ import {
 
 const UNREPLACED_TEMPLATE_PLACEHOLDER_PATTERN = /\{\{\s*[A-Za-z_][A-Za-z0-9_]*\s*\}\}|__[A-Z][A-Z0-9_]*__/;
 
+test('repo ignore policy keeps local worktree scratch directories untracked', async () => {
+  const gitignorePath = path.join(repoRoot, '.gitignore');
+  const workflowPath = path.join(repoRoot, 'docs', 'workflow.md');
+
+  const [gitignore, workflow] = await Promise.all([
+    fs.readFile(gitignorePath, 'utf8'),
+    fs.readFile(workflowPath, 'utf8'),
+  ]);
+
+  assert.match(gitignore, /^\/\.worktrees\/$/m);
+  assert.match(gitignore, /^\/worktrees\/$/m);
+  assert.match(gitignore, /^\/spec-injector-worktrees\/$/m);
+  assert.match(workflow, /Repo-local worktree scratch directories/);
+  assert.match(workflow, /不要 commit local worktree contents/);
+});
+
 async function captureConsoleOutput(fn: () => Promise<void>): Promise<{ stdout: string; stderr: string }> {
   const originalLog = console.log;
   const originalError = console.error;
