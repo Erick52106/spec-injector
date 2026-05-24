@@ -4249,6 +4249,107 @@ test('spec evidence-check passes for complete PR and issue evidence without muta
   assertNoGhMutationCommands(ghLog);
 });
 
+test('spec evidence-check --format json prints parseable pass report without auxiliary footer', async (t) => {
+  const fixture = await createEvidenceCheckFixture(t);
+
+  const result = await runSpec([
+    'evidence-check',
+    '--pr', String(fixture.prNumber),
+    '--repo', fixture.repo,
+    '--expected-head', fixture.headSha,
+    '--format', 'json',
+  ], { env: fixture.env });
+
+  assert.equal(result.code, 0, result.stderr);
+  assert.equal(result.stderr, '');
+  assert.doesNotMatch(result.stdout, /Auxiliary notice:/i);
+  assert.doesNotMatch(result.stdout, /Evidence check summary:/i);
+
+  const report = JSON.parse(result.stdout) as {
+    overall?: unknown;
+    checks?: Array<Record<string, unknown>>;
+  };
+  assert.equal(report.overall, 'pass');
+  assert.ok(Array.isArray(report.checks));
+  assert.ok(report.checks.length > 0);
+  for (const check of report.checks) {
+    assert.equal(typeof check.severity, 'string');
+    assert.equal(typeof check.item, 'string');
+    assert.equal(typeof check.evidence, 'string');
+    assert.equal(typeof check.reason, 'string');
+    assert.equal(typeof check.action, 'string');
+  }
+  assert.ok(report.checks.some((check) => check.item === 'PR body linked issue'));
+
+  const ghLog = (await readGhLog(fixture.ghLogPath)).join('\n');
+  assertNoGhMutationCommands(ghLog);
+});
+
+test('spec evidence-check --format json prints parseable fail report and exits non-zero', async (t) => {
+  const fixture = await createEvidenceCheckFixture(t, {
+    prBody: [
+      'Closes #109',
+      '## Summary',
+      'ok',
+      '## Scope',
+      'ok',
+      '## Non-goals',
+      'ok',
+      '## Validation',
+      '- `pnpm test` ✅',
+      '## Implementation Evidence',
+      '- Latest HEAD: 1234567890abcdef1234567890abcdef12345678',
+    ].join('\n'),
+  });
+
+  const result = await runSpec([
+    'evidence-check',
+    '--pr', String(fixture.prNumber),
+    '--repo', fixture.repo,
+    '--format', 'json',
+  ], { env: fixture.env });
+
+  assert.notEqual(result.code, 0);
+  assert.equal(result.stderr, '');
+  assert.doesNotMatch(result.stdout, /Auxiliary notice:/i);
+  assert.doesNotMatch(result.stdout, /Evidence check summary:/i);
+
+  const report = JSON.parse(result.stdout) as {
+    overall?: unknown;
+    checks?: Array<Record<string, unknown>>;
+  };
+  assert.equal(report.overall, 'fail');
+  assert.ok(Array.isArray(report.checks));
+  assert.ok(report.checks.some((check) =>
+    check.severity === 'fail' &&
+    check.item === 'Issue evidence URL' &&
+    check.reason === 'issue evidence URL is missing'
+  ));
+
+  const ghLog = (await readGhLog(fixture.ghLogPath)).join('\n');
+  assertNoGhMutationCommands(ghLog);
+});
+
+test('spec evidence-check rejects invalid --format value clearly', async (t) => {
+  const fixture = await createEvidenceCheckFixture(t);
+
+  const result = await runSpec([
+    'evidence-check',
+    '--pr', String(fixture.prNumber),
+    '--repo', fixture.repo,
+    '--format', 'yaml',
+  ], { env: fixture.env });
+
+  assert.notEqual(result.code, 0);
+  assert.match(result.stderr, /Invalid evidence-check format "yaml"/i);
+  assert.match(result.stderr, /Expected one of: text, json/i);
+  assertNoRawStackTrace(result);
+
+  const ghLog = (await readGhLog(fixture.ghLogPath)).join('\n');
+  assert.equal(ghLog.trim(), '');
+  assertNoGhMutationCommands(ghLog);
+});
+
 test('spec evidence-check accepts a full PR URL when --repo matches the encoded repository', async (t) => {
   const fixture = await createEvidenceCheckFixture(t);
 
