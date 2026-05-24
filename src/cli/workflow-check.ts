@@ -916,8 +916,9 @@ function parsePrBodyEvidenceText(body: string, expectedHeadSha?: string): PrBody
   const specStatus = explicitSpecStatus.hasSpecStatus
     ? explicitSpecStatus.specStatus
     : statusMatch?.[1]?.toLowerCase() as PrBodyEvidence['specStatus'] | undefined;
+  const hasRoutingStatusField = hasTextField(body, 'routing_evidence_status') || hasTextField(body, 'routing evidence status');
   const rawRoutingStatus = parseTextField(body, 'routing_evidence_status') ?? parseTextField(body, 'routing evidence status') ?? null;
-  const routingStatus = parseRoutingStatus(rawRoutingStatus);
+  const routingStatus = hasRoutingStatusField ? parseRoutingStatus(rawRoutingStatus ?? '') : null;
   const routingRef = parseTextField(body, 'routing_evidence_ref') ??
     parseTextField(body, 'routing evidence ref') ??
     parseTextField(body, 'routing_ref');
@@ -947,7 +948,7 @@ function parsePrBodyEvidenceText(body: string, expectedHeadSha?: string): PrBody
     hasLatestHead,
     headMatches: expectedHeadSha ? body.includes(expectedHeadSha) : null,
     hasAutonomousSignal: hasAutonomousRoutingSignal(body),
-    hasRoutingStatus: Boolean(rawRoutingStatus),
+    hasRoutingStatus: hasRoutingStatusField,
     routingStatus: routingStatus ?? null,
     hasRoutingRef: Boolean(routingRef),
     routingRef,
@@ -1498,7 +1499,7 @@ function optionalDelegationOutcome(value: unknown, fieldName: string): Delegatio
 
 function parseTextField(body: string, fieldName: string): string | null {
   const escaped = fieldName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const match = body.match(new RegExp(`(?:^|\\n)\\s*(?:[-*]\\s*)?${escaped}\\s*[:=]\\s*([^\\n\\r]+)`, 'i'));
+  const match = body.match(new RegExp(`(?:^|\\n)\\s*(?:[-*]\\s*)?${escaped}\\s*[:=][^\\S\\n\\r]*([^\\n\\r]*)`, 'i'));
   return match?.[1]?.trim() ?? null;
 }
 
