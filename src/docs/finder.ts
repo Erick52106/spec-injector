@@ -364,7 +364,7 @@ function normalizeGitHubBlobUrlCandidate(
 
   if (url.protocol !== 'https:' && url.protocol !== 'http:') return null;
   if (!['github.com', 'www.github.com'].includes(url.hostname.toLowerCase())) return null;
-  if (url.search.length > 0) return null;
+  if (!isAllowedGitHubBlobQuery(url.searchParams)) return null;
   if (url.hash.length > 0 && !/^#L\d+(?:-L\d+)?$/.test(url.hash)) return null;
 
   const pathSegments = decodeGitHubPathSegments(url.pathname);
@@ -377,6 +377,11 @@ function normalizeGitHubBlobUrlCandidate(
   }
 
   return findGitHubUrlRepoRelativePath(blobSegments, normalizationContext.repoPath);
+}
+
+function isAllowedGitHubBlobQuery(searchParams: URLSearchParams): boolean {
+  const entries = [...searchParams.entries()];
+  return entries.length === 0 || (entries.length === 1 && entries[0][0] === 'plain' && entries[0][1] === '1');
 }
 
 function normalizeGitHubRawUrlCandidate(

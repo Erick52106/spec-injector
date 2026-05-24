@@ -244,6 +244,10 @@ test('explicit issue-mentioned same-repo GitHub blob URLs normalize to repo-rela
       'Raw reference: https://github.com/Erick52106/spec-injector/blob/main/src/raw.ts#L4.',
       '- [linked source](https://github.com/Erick52106/spec-injector/blob/main/src/linked.ts#L10-L20)',
       '- [linked doc](https://github.com/Erick52106/spec-injector/blob/main/docs/guide.md#L3)',
+      '- `https://github.com/Erick52106/spec-injector/blob/main/src/plain.ts?plain=1#L10`',
+      '- [plain doc](https://github.com/Erick52106/spec-injector/blob/main/docs/plain.md?plain=1)',
+      '- `https://github.com/Erick52106/spec-injector/blob/main/src/ignored-query.ts?foo=bar#L1`',
+      '- `https://github.com/Erick52106/spec-injector/blob/main/src/ignored-plain-zero.ts?plain=0#L1`',
       '- `https://github.com/OtherOrg/spec-injector/blob/main/src/cross-repo.ts#L1`',
       '- `https://github.com/Erick52106/spec-injector/tree/main/src/not-blob.ts`',
       '- `https://example.com/Erick52106/spec-injector/blob/main/src/not-github.ts`',
@@ -258,7 +262,11 @@ test('explicit issue-mentioned same-repo GitHub blob URLs normalize to repo-rela
     'src/foo.ts': 'export const foo = true;\n',
     'src/raw.ts': 'export const raw = true;\n',
     'src/linked.ts': 'export const linked = true;\n',
+    'src/plain.ts': 'export const plain = true;\n',
+    'src/ignored-query.ts': 'export const ignoredQuery = true;\n',
+    'src/ignored-plain-zero.ts': 'export const ignoredPlainZero = true;\n',
     'docs/guide.md': '# Guide\n',
+    'docs/plain.md': '# Plain\n',
   });
 
   const explicit = await extractExplicitIssueFileReferences(issue, repoDir);
@@ -267,8 +275,9 @@ test('explicit issue-mentioned same-repo GitHub blob URLs normalize to repo-rela
     'src/foo.ts',
     'src/raw.ts',
     'src/linked.ts',
+    'src/plain.ts',
   ]);
-  assert.deepEqual(explicit.docs.map((doc) => doc.filePath), ['docs/guide.md']);
+  assert.deepEqual(explicit.docs.map((doc) => doc.filePath), ['docs/guide.md', 'docs/plain.md']);
   assert.deepEqual(explicit.missing.map((doc) => doc.filePath), []);
 });
 
