@@ -189,7 +189,8 @@ test('AWP dogfood outcome ledger remains linked from dogfood docs and README', a
   ]);
 
   assert.match(ledger, /AWP Dogfood Outcome Ledger/);
-  assert.match(ledger, /至少 3-5/);
+  assert.match(ledger, /至少 5 張 target repo PR outcome sample/);
+  assert.doesNotMatch(ledger, /3-5 sample|3-5 張|3-5 sample threshold/);
   assert.match(ledger, /missed worker/i);
   assert.match(ledger, /over-delegated worker/i);
   assert.match(ledger, /workflow-check caught real issue/i);
