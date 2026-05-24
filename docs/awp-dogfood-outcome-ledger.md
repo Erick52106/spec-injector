@@ -16,7 +16,7 @@
 
 ## Sample Threshold
 
-在調整核心 AWP baseline 前，應先累積至少 3-5 張 target repo PR outcome sample。
+在調整核心 AWP baseline 前，應先累積至少 5 張 target repo PR outcome sample。
 
 ## #258 Freeze Gate
 
@@ -113,7 +113,7 @@ Outcome analysis must separate the source of friction:
 
 ## P0 Must-Fix Signals
 
-下列情況可以在未達 3-5 sample threshold 前建立或處理 P0/P1 fix issue：
+下列情況可以在未達至少 5 張 sample threshold 前建立或處理 P0/P1 fix issue：
 
 - `spec workflow-check` 產生 false pass，導致 unsafe merge gate evidence。
 - 工具嘗試 GitHub mutation、target repo mutation、auto-merge、auto-comment、或寫入 private/generated output。
@@ -133,7 +133,7 @@ Outcome analysis must separate the source of friction:
 - Manual fallback wording 可以更清楚，但沒有 false pass。
 - AWP ledgers 太長、太短、或欄位命名不順，但 downstream 仍能完成 closeout。
 
-這些可以累積 3-5 sample 後一起校準。
+這些可以累積至少 5 張 sample 後一起校準。
 
 ## Baseline Change Gate
 
