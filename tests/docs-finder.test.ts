@@ -272,6 +272,48 @@ test('explicit issue-mentioned same-repo GitHub blob URLs normalize to repo-rela
   assert.deepEqual(explicit.missing.map((doc) => doc.filePath), []);
 });
 
+test('explicit issue-mentioned same-repo raw GitHub URLs normalize to repo-relative paths', async (t) => {
+  const repoDir = await createTempRepo(t);
+  const issue = {
+    number: 310,
+    title: 'Recognize explicit same-repo raw GitHub references',
+    body: [
+      'Relevant raw references:',
+      '- `https://raw.githubusercontent.com/Erick52106/spec-injector/main/src/foo.ts#L10`',
+      'Raw inline reference: https://raw.githubusercontent.com/Erick52106/spec-injector/main/src/raw.ts#L4.',
+      '- [linked source](https://raw.githubusercontent.com/Erick52106/spec-injector/main/src/linked.ts#L10-L20)',
+      '- [linked doc](https://raw.githubusercontent.com/Erick52106/spec-injector/main/docs/guide.md#L3)',
+      '- [slash ref source](https://raw.githubusercontent.com/Erick52106/spec-injector/feature/raw-refs/src/slash-ref.ts#L7)',
+      '- `https://raw.githubusercontent.com/OtherOrg/spec-injector/main/src/cross-repo.ts#L1`',
+      '- `https://github.com/Erick52106/spec-injector/raw/main/src/not-raw-host.ts#L1`',
+      '- `https://example.com/Erick52106/spec-injector/main/src/not-github.ts#L1`',
+      '- `https://raw.githubusercontent.com/Erick52106/spec-injector/main/docs/section.md#heading`',
+    ].join('\n'),
+    labels: [],
+    url: 'https://github.com/Erick52106/spec-injector/issues/310',
+    state: 'OPEN',
+  };
+
+  await writeRepoFiles(repoDir, {
+    'src/foo.ts': 'export const foo = true;\n',
+    'src/raw.ts': 'export const raw = true;\n',
+    'src/linked.ts': 'export const linked = true;\n',
+    'src/slash-ref.ts': 'export const slashRef = true;\n',
+    'docs/guide.md': '# Guide\n',
+  });
+
+  const explicit = await extractExplicitIssueFileReferences(issue, repoDir);
+
+  assert.deepEqual(explicit.sources.map((doc) => doc.filePath), [
+    'src/foo.ts',
+    'src/raw.ts',
+    'src/linked.ts',
+    'src/slash-ref.ts',
+  ]);
+  assert.deepEqual(explicit.docs.map((doc) => doc.filePath), ['docs/guide.md']);
+  assert.deepEqual(explicit.missing.map((doc) => doc.filePath), []);
+});
+
 test('auto source discovery includes Node module extensions while preserving generated and skip-dir filtering', async (t) => {
   const repoDir = await createTempRepo(t);
   const sourceFiles = ['src/cli.mjs', 'src/config.cjs', 'src/module.mts', 'src/legacy.cts'];

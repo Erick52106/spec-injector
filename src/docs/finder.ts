@@ -317,8 +317,8 @@ function normalizeExplicitPathCandidate(
 ): string | null {
   const trimmed = candidate.trim();
   if (trimmed.length === 0) return null;
-  const githubBlobPath = normalizeGitHubBlobUrlCandidate(trimmed, normalizationContext);
-  if (githubBlobPath) return githubBlobPath;
+  const githubUrlPath = normalizeGitHubUrlCandidate(trimmed, normalizationContext);
+  if (githubUrlPath) return githubUrlPath;
   if (trimmed.includes('://')) return null;
   if (trimmed.startsWith('/')) return null;
   return normalizeRepoRelativePathCandidate(trimmed);
@@ -337,6 +337,16 @@ function normalizeRepoRelativePathCandidate(candidate: string): string | null {
   if (!hasRecognizedRepoFileShape(normalized)) return null;
 
   return normalized;
+}
+
+function normalizeGitHubUrlCandidate(
+  candidate: string,
+  normalizationContext: ExplicitPathNormalizationContext
+): string | null {
+  return (
+    normalizeGitHubBlobUrlCandidate(candidate, normalizationContext) ??
+    normalizeGitHubRawUrlCandidate(candidate, normalizationContext)
+  );
 }
 
 function normalizeGitHubBlobUrlCandidate(
@@ -366,7 +376,36 @@ function normalizeGitHubBlobUrlCandidate(
     return null;
   }
 
-  return findGitHubBlobRepoRelativePath(blobSegments, normalizationContext.repoPath);
+  return findGitHubUrlRepoRelativePath(blobSegments, normalizationContext.repoPath);
+}
+
+function normalizeGitHubRawUrlCandidate(
+  candidate: string,
+  normalizationContext: ExplicitPathNormalizationContext
+): string | null {
+  if (!normalizationContext.githubRepoSlug) return null;
+
+  let url: URL;
+  try {
+    url = new URL(candidate);
+  } catch {
+    return null;
+  }
+
+  if (url.protocol !== 'https:' && url.protocol !== 'http:') return null;
+  if (url.hostname.toLowerCase() !== 'raw.githubusercontent.com') return null;
+  if (url.search.length > 0) return null;
+  if (url.hash.length > 0 && !/^#L\d+(?:-L\d+)?$/.test(url.hash)) return null;
+
+  const pathSegments = decodeGitHubPathSegments(url.pathname);
+  if (!pathSegments || pathSegments.length < 4) return null;
+
+  const [owner, repo, ...rawSegments] = pathSegments;
+  if (`${owner.toLowerCase()}/${repo.toLowerCase()}` !== normalizationContext.githubRepoSlug) {
+    return null;
+  }
+
+  return findGitHubUrlRepoRelativePath(rawSegments, normalizationContext.repoPath);
 }
 
 function decodeGitHubPathSegments(pathname: string): string[] | null {
@@ -384,15 +423,15 @@ function trimTrailingUrlPunctuation(candidate: string): string {
   return candidate.replace(/[.,;:]+$/g, '');
 }
 
-function findGitHubBlobRepoRelativePath(blobSegments: string[], repoPath: string): string | null {
-  if (blobSegments.length < 2) return null;
+function findGitHubUrlRepoRelativePath(refAndPathSegments: string[], repoPath: string): string | null {
+  if (refAndPathSegments.length < 2) return null;
 
-  for (let index = 1; index < blobSegments.length; index += 1) {
-    const normalized = normalizeRepoRelativePathCandidate(blobSegments.slice(index).join('/'));
+  for (let index = 1; index < refAndPathSegments.length; index += 1) {
+    const normalized = normalizeRepoRelativePathCandidate(refAndPathSegments.slice(index).join('/'));
     if (normalized && fs.existsSync(path.resolve(repoPath, normalized))) return normalized;
   }
 
-  return normalizeRepoRelativePathCandidate(blobSegments.slice(1).join('/'));
+  return normalizeRepoRelativePathCandidate(refAndPathSegments.slice(1).join('/'));
 }
 
 function stripGitHubLineAnchor(candidate: string): string | null {
