@@ -1193,6 +1193,76 @@ test('spec workflow-check start phase emits Hybrid AWP routing fields for autono
   assertNoGhMutationCommands(ghLog);
 });
 
+test('spec workflow-check start phase treats autonomous worker routing wording as AWP signal', async (t) => {
+  const fixture = await createSpecPlanFixture(t, {
+    issue: {
+      number: 292,
+      title: 'fix(workflow-check): recognize autonomous worker routing signal',
+      body: [
+        'autonomous worker routing is required for this deterministic workflow-check guardrail bugfix.',
+        'Keep the workflow policy regression focused and do not broaden weak routing signals.',
+      ].join('\n'),
+      labels: [{ name: 'area:workflow' }, { name: 'area:cli' }],
+      url: 'https://github.com/Erick52106/spec-injector/issues/292',
+    },
+  });
+  await initCleanGitRepo(fixture.repoDir);
+
+  const result = await runSpec([
+    'workflow-check',
+    '--repo', fixture.repoDir,
+    '--phase', 'start',
+    '--issue', fixture.issueUrl,
+    '--format', 'json',
+  ], { env: fixture.env });
+
+  assert.equal(result.code, 0, result.stderr);
+  const parsed = JSON.parse(result.stdout) as Record<string, unknown>;
+  assert.equal(parsed.status, 'pass');
+  assert.equal(parsed.routing_mode, 'hybrid_awp');
+  assert.equal(parsed.routing_task_class, 'workflow_policy');
+  assert.equal(parsed.routing_evidence_ref, 'workflow-check:start:issue-292');
+  assert.deepEqual(parsed.missing_fields, []);
+  await assertFileMissing(fixture.taskPackagePath);
+  const ghLog = (await readGhLog(fixture.ghLogPath)).join('\n');
+  assertNoGhMutationCommands(ghLog);
+});
+
+test('spec workflow-check start phase keeps without autonomous worker routing evidence as AWP signal', async (t) => {
+  const fixture = await createSpecPlanFixture(t, {
+    issue: {
+      number: 292,
+      title: 'fix(workflow-check): require autonomous routing evidence',
+      body: [
+        'Do not merge without autonomous worker routing evidence.',
+        'This workflow policy bugfix must keep explicit AWP routing requirements visible.',
+      ].join('\n'),
+      labels: [{ name: 'area:workflow' }, { name: 'area:cli' }],
+      url: 'https://github.com/Erick52106/spec-injector/issues/292',
+    },
+  });
+  await initCleanGitRepo(fixture.repoDir);
+
+  const result = await runSpec([
+    'workflow-check',
+    '--repo', fixture.repoDir,
+    '--phase', 'start',
+    '--issue', fixture.issueUrl,
+    '--format', 'json',
+  ], { env: fixture.env });
+
+  assert.equal(result.code, 0, result.stderr);
+  const parsed = JSON.parse(result.stdout) as Record<string, unknown>;
+  assert.equal(parsed.status, 'pass');
+  assert.equal(parsed.routing_mode, 'hybrid_awp');
+  assert.equal(parsed.routing_task_class, 'workflow_policy');
+  assert.equal(parsed.routing_evidence_ref, 'workflow-check:start:issue-292');
+  assert.deepEqual(parsed.missing_fields, []);
+  await assertFileMissing(fixture.taskPackagePath);
+  const ghLog = (await readGhLog(fixture.ghLogPath)).join('\n');
+  assertNoGhMutationCommands(ghLog);
+});
+
 test('spec workflow-check start phase does not fail non-autonomous issues for missing AWP routing', async (t) => {
   const fixture = await createSpecPlanFixture(t, {
     issue: {
