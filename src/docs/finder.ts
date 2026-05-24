@@ -348,7 +348,7 @@ async function gatherCandidates(repoPath: string, exclude: Set<string>): Promise
   const candidates: string[] = [];
 
   // Fixed high-value files
-  for (const fixed of ['README.md', 'CLAUDE.md', 'AGENTS.md']) {
+  for (const fixed of ['README.md', 'CLAUDE.md', 'AGENTS.md', 'GEMINI.md']) {
     if (!isPlanDiscoveryExcluded(fixed, exclude) && fs.existsSync(path.join(repoPath, fixed))) {
       candidates.push(fixed);
     }
