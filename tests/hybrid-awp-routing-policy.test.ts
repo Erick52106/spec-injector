@@ -27,6 +27,7 @@ test('repo-local AWP instructions require dispatch or explicit fallback evidence
   assert.match(agents, /repo-native workflow compliance 不等於 AWP delegation evidence/);
 
   assert.match(workflow, /Autonomous \/ AWP start-gate overlay/);
+  assert.match(workflow, /after startup safety checks/);
   assert.match(workflow, /before implementation/);
   assert.match(workflow, /worker dispatch/);
   assert.match(workflow, /controller-direct fallback/);
@@ -39,6 +40,8 @@ test('repo-local AWP instructions require dispatch or explicit fallback evidence
 
   assert.match(policy, /repo-native issue\/worktree\/evidence compliance does not prove AWP delegation occurred/);
   assert.match(policy, /worker dispatch or an explicit controller-direct fallback/);
+
+  assert.doesNotMatch(agents, /controller-direct fallback[\s\S]{0,200}fell_through/);
 
   assert.match(readme, /AWP-signaled workflow/);
   assert.match(readme, /ordinary issue-to-PR workflow does not prove worker dispatch/);

@@ -32,7 +32,7 @@ Future companion / workflow observability status vocabulary 見 [status-event-sc
 
 ## Autonomous / AWP start-gate overlay
 
-若 user prompt、source issue、task package 或 repo-local instruction 明確要求 AWP、Autonomous Worker Profiles、autonomous worker routing 或等價 worker-routing contract，controller 必須把它視為 `autonomous routing signal`。這個 overlay 發生在 standard startup sequence 與 implementation plan 之前，也就是 before implementation；它不取代 issue-first、worktree-first、validation、PR evidence 或 review closeout。
+若 user prompt、source issue、task package 或 repo-local instruction 明確要求 AWP、Autonomous Worker Profiles、autonomous worker routing 或等價 worker-routing contract，controller 必須把它視為 `autonomous routing signal`。Signal detection 可以發生在 prompt reading / issue triage 階段；但 worker dispatch、implementation slice 或 controller-direct fallback evidence 必須 after startup safety checks，也就是完成 main repo status check、dedicated worktree 建立與 worktree clean readback 之後，且 before implementation。這個 overlay 不取代 issue-first、worktree-first、validation、PR evidence 或 review closeout。
 
 有 AWP signal 時，implementation 前必須先留下 start-gate evidence：
 

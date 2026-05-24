@@ -39,10 +39,12 @@ Metadata-only 任務可以不用 dedicated worktree，但不得假設 main repo 
 
 若 user prompt、source issue、task package 或 repo-local instruction 明確要求 AWP / Autonomous Worker Profiles / autonomous worker routing，該要求是 Hybrid AWP routing signal。
 
-在任何 code/docs implementation 前，controller 必須先完成 start-gate routing decision：
+偵測 AWP signal 可以發生在 issue triage / prompt reading 階段；但 worker dispatch、implementation slice 或 controller-direct fallback evidence 必須在 Mandatory startup rules 完成、dedicated worktree clean 之後，且在任何 code/docs implementation 前完成。
+
+controller 必須先完成 start-gate routing decision：
 
 - 實際 dispatch worker / subagent 做 bounded exploration、implementation slice 或 readback，並在 evidence 中記錄 assigned scope 與 outcome。
-- 或記錄 controller-direct fallback，且包含明確 bounded `controller_fallback_reason` 與 `delegation_outcome=skipped|unavailable|fell_through`。
+- 或記錄 controller-direct fallback，且包含明確 bounded `controller_fallback_reason` 與 `delegation_outcome=skipped|unavailable`。
 
 AWP evidence 至少應在 source issue、PR body、implementation evidence comment 或 closeout 中保留 `routing_mode`、`routing_task_class`、`controller_fallback`、`controller_fallback_reason` 與 `delegation_outcome`。
 
