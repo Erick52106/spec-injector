@@ -201,6 +201,12 @@ function collectExplicitPathCandidates(body: string): string[] {
     if (normalized) candidates.push({ index: match.index ?? 0, path: normalized });
   }
 
+  for (const match of body.matchAll(/\[([^\]\n]+)\]\([^\)\n]+\)/g)) {
+    if (match.index !== undefined && body[match.index - 1] === '!') continue;
+    const normalized = normalizeExplicitPathCandidate(match[1]);
+    if (normalized) candidates.push({ index: match.index ?? 0, path: normalized });
+  }
+
   let offset = 0;
   for (const line of body.split('\n')) {
     const normalized = normalizeBulletPathCandidate(line);
