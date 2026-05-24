@@ -5348,16 +5348,22 @@ test('spec plan includes issue-mentioned source file paths in prompt and full ou
   assert.match(fullResult.stdout, /sources:\s*3/);
 });
 
-test('spec plan treats Markdown link labels as issue-mentioned repo paths', async (t) => {
+test('spec plan treats Markdown link labels and repo-relative targets as issue-mentioned repo paths', async (t) => {
   const fixture = await createExplicitPathPlanFixture(t, {
-    issueNumber: 268,
+    issueNumber: 276,
     title: 'Extract Markdown link issue-mentioned repo paths',
     bodyLines: [
       'Relevant linked references:',
       '- [apps/dashboard/src/providers/dataProvider.ts](https://github.com/example/repo/blob/main/apps/dashboard/src/providers/dataProvider.ts)',
-      '- [docs/architecture.md](docs/architecture.md)',
+      '- [Architecture](docs/architecture.md)',
       '- [external API](https://example.com/src/external-api.ts)',
-      '- [docs/architecture.md#anchor](docs/architecture.md#anchor)',
+      '- [Anchor only](#local-anchor)',
+      '- [Anchored doc](docs/architecture.md#anchor)',
+      '- ![Architecture diagram](docs/architecture.md)',
+      '- [Absolute](/docs/absolute.md)',
+      '- [Traversal](../outside.md)',
+      '- [Route-like API](/api/specs/openapi.json)',
+      '- [Relative route-like API](api/specs/openapi.json)',
     ],
     repoFiles: {
       'apps/dashboard/src/providers/dataProvider.ts': 'export const provider = "MARKDOWN_LINK_SOURCE_SENTINEL";\n',
@@ -5378,6 +5384,9 @@ test('spec plan treats Markdown link labels as issue-mentioned repo paths', asyn
   assert.match(promptIssueSources, /`apps\/dashboard\/src\/providers\/dataProvider\.ts` — issue-mentioned; mentioned in issue/);
   assert.doesNotMatch(promptResult.stdout, /src\/external-api\.ts/);
   assert.doesNotMatch(promptResult.stdout, /docs\/architecture\.md#anchor/);
+  assert.doesNotMatch(promptResult.stdout, /docs\/absolute\.md/);
+  assert.doesNotMatch(promptResult.stdout, /outside\.md/);
+  assert.doesNotMatch(promptResult.stdout, /api\/specs\/openapi\.json/);
   assert.match(fullResult.stdout, /### docs\/architecture\.md\n\n_source: issue-mentioned; mentioned in issue_/);
   assert.match(fullResult.stdout, /MARKDOWN_LINK_DOC_SENTINEL/);
   assert.match(fullResult.stdout, /### apps\/dashboard\/src\/providers\/dataProvider\.ts\n\n_source: issue-mentioned; mentioned in issue_/);

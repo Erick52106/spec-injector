@@ -201,10 +201,13 @@ function collectExplicitPathCandidates(body: string): string[] {
     if (normalized) candidates.push({ index: match.index ?? 0, path: normalized });
   }
 
-  for (const match of body.matchAll(/\[([^\]\n]+)\]\([^\)\n]+\)/g)) {
+  for (const match of body.matchAll(/\[([^\]\n]+)\]\(([^\)\n]+)\)/g)) {
     if (match.index !== undefined && body[match.index - 1] === '!') continue;
-    const normalized = normalizeExplicitPathCandidate(match[1]);
-    if (normalized) candidates.push({ index: match.index ?? 0, path: normalized });
+    const labelPath = normalizeExplicitPathCandidate(match[1]);
+    if (labelPath) candidates.push({ index: match.index ?? 0, path: labelPath });
+
+    const targetPath = normalizeMarkdownLinkTargetPathCandidate(match[2]);
+    if (targetPath) candidates.push({ index: match.index ?? 0, path: targetPath });
   }
 
   let offset = 0;
@@ -303,6 +306,13 @@ function normalizeExplicitPathCandidate(candidate: string): string | null {
   if (normalized.split('/').some((segment) => segment === '..' || segment.length === 0)) return null;
   if (!hasRecognizedRepoFileShape(normalized)) return null;
 
+  return normalized;
+}
+
+function normalizeMarkdownLinkTargetPathCandidate(candidate: string): string | null {
+  const normalized = normalizeExplicitPathCandidate(candidate);
+  if (!normalized) return null;
+  if (normalized.startsWith('api/')) return null;
   return normalized;
 }
 
