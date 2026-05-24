@@ -35,6 +35,21 @@ Code/docs implementation 不得直接在 main repo worktree 進行。
 
 Metadata-only 任務可以不用 dedicated worktree，但不得假設 main repo 可以被任意切換或清理。若 metadata-only 任務遇到 dirty repo，停下回報。
 
+## AWP / autonomous routing signal
+
+若 user prompt、source issue、task package 或 repo-local instruction 明確要求 AWP / Autonomous Worker Profiles / autonomous worker routing，該要求是 Hybrid AWP routing signal。
+
+在任何 code/docs implementation 前，controller 必須先完成 start-gate routing decision：
+
+- 實際 dispatch worker / subagent 做 bounded exploration、implementation slice 或 readback，並在 evidence 中記錄 assigned scope 與 outcome。
+- 或記錄 controller-direct fallback，且包含明確 bounded `controller_fallback_reason` 與 `delegation_outcome=skipped|unavailable|fell_through`。
+
+AWP evidence 至少應在 source issue、PR body、implementation evidence comment 或 closeout 中保留 `routing_mode`、`routing_task_class`、`controller_fallback`、`controller_fallback_reason` 與 `delegation_outcome`。
+
+repo-native workflow compliance 不等於 AWP delegation evidence。完成 ordinary issue-first / worktree-first / PR evidence closeout 仍不得被宣稱為 AWP，除非同時有 worker dispatch 或明確 controller-direct fallback evidence。
+
+AWP routing 不改變本 repo 的產品邊界：不得把 worker runtime、daemon、hosted control plane、dashboard、auto-comment、auto-merge、hidden LLM wrapper 或 target repo mutation 塞進 CLI core。
+
 ## Scope discipline
 
 - 只處理指定 issue。

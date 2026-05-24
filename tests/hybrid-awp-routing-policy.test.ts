@@ -4,6 +4,48 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { repoRoot } from './helpers/cli.ts';
 
+test('repo-local AWP instructions require dispatch or explicit fallback evidence before implementation', async () => {
+  const agentsPath = path.join(repoRoot, 'AGENTS.md');
+  const workflowPath = path.join(repoRoot, 'docs', 'workflow.md');
+  const handoffPath = path.join(repoRoot, 'docs', 'agent-handoff.md');
+  const policyPath = path.join(repoRoot, 'docs', 'hybrid-awp-routing-policy.md');
+  const readmePath = path.join(repoRoot, 'README.md');
+  const englishReadmePath = path.join(repoRoot, 'README.en.md');
+
+  const [agents, workflow, handoff, policy, readme, englishReadme] = await Promise.all([
+    fs.readFile(agentsPath, 'utf8'),
+    fs.readFile(workflowPath, 'utf8'),
+    fs.readFile(handoffPath, 'utf8'),
+    fs.readFile(policyPath, 'utf8'),
+    fs.readFile(readmePath, 'utf8'),
+    fs.readFile(englishReadmePath, 'utf8'),
+  ]);
+
+  assert.match(agents, /AWP \/ autonomous routing signal/);
+  assert.match(agents, /controller_fallback_reason/);
+  assert.match(agents, /delegation_outcome/);
+  assert.match(agents, /repo-native workflow compliance 不等於 AWP delegation evidence/);
+
+  assert.match(workflow, /Autonomous \/ AWP start-gate overlay/);
+  assert.match(workflow, /before implementation/);
+  assert.match(workflow, /worker dispatch/);
+  assert.match(workflow, /controller-direct fallback/);
+  assert.match(workflow, /delegation_outcome/);
+
+  assert.match(handoff, /AWP controller \/ worker handoff/);
+  assert.match(handoff, /repo-native workflow compliance is not delegation proof/);
+  assert.match(handoff, /dispatch worker/);
+  assert.match(handoff, /controller-direct fallback/);
+
+  assert.match(policy, /repo-native issue\/worktree\/evidence compliance does not prove AWP delegation occurred/);
+  assert.match(policy, /worker dispatch or an explicit controller-direct fallback/);
+
+  assert.match(readme, /AWP-signaled workflow/);
+  assert.match(readme, /ordinary issue-to-PR workflow does not prove worker dispatch/);
+  assert.match(englishReadme, /AWP-signaled workflow/);
+  assert.match(englishReadme, /ordinary issue-to-PR workflow does not prove worker dispatch/);
+});
+
 test('Hybrid AWP routing policy remains linked from workflow-check docs', async () => {
   const policyPath = path.join(repoRoot, 'docs', 'hybrid-awp-routing-policy.md');
   const readmePath = path.join(repoRoot, 'README.md');
