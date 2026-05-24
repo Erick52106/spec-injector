@@ -92,6 +92,13 @@ function requireStringArray(val: unknown, field: string): string[] {
   return val as string[];
 }
 
+function requireNonNegativeInteger(val: unknown, field: string): number {
+  if (typeof val !== 'number' || !Number.isInteger(val) || val < 0) {
+    throw new Error(`${field} must be a non-negative integer`);
+  }
+  return val;
+}
+
 function parseAndValidateConfig(text: string, filePath: string): SpecConfig {
   const raw = JSON.parse(text) as Record<string, unknown>;
 
@@ -139,8 +146,10 @@ function parseAndValidateConfig(text: string, filePath: string): SpecConfig {
       docs: d['docs'] !== undefined ? requireStringArray(d['docs'], 'discovery.docs') : undefined,
       source: d['source'] !== undefined ? requireStringArray(d['source'], 'discovery.source') : undefined,
       exclude: d['exclude'] !== undefined ? requireStringArray(d['exclude'], 'discovery.exclude') : undefined,
-      max_docs: typeof d['max_docs'] === 'number' ? d['max_docs'] : undefined,
-      max_source_files: typeof d['max_source_files'] === 'number' ? d['max_source_files'] : undefined,
+      max_docs: d['max_docs'] !== undefined ? requireNonNegativeInteger(d['max_docs'], 'discovery.max_docs') : undefined,
+      max_source_files: d['max_source_files'] !== undefined
+        ? requireNonNegativeInteger(d['max_source_files'], 'discovery.max_source_files')
+        : undefined,
     };
   }
 
