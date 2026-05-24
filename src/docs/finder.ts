@@ -23,7 +23,8 @@ type ScoredReference = {
 const EXPLICIT_FILE_EXTENSIONS = new Set([
   '.ts', '.tsx', '.js', '.jsx', '.go', '.md', '.json', '.yml', '.yaml', '.sql', '.css', '.html', '.sh',
 ]);
-const EXPLICIT_ROOT_FILES = new Set(['README.md', 'AGENTS.md', 'CLAUDE.md', 'GEMINI.md']);
+const ROOT_DOC_CANDIDATES = ['README.md', 'CLAUDE.md', 'AGENTS.md', 'GEMINI.md'] as const;
+const EXPLICIT_ROOT_FILES = new Set<string>(ROOT_DOC_CANDIDATES);
 const DOC_EXTENSIONS = new Set(['.md']);
 const ISSUE_MENTIONED_REASON = 'mentioned in issue';
 const SOURCE_SNIPPET_BYTES = 500;
@@ -348,7 +349,7 @@ async function gatherCandidates(repoPath: string, exclude: Set<string>): Promise
   const candidates: string[] = [];
 
   // Fixed high-value files
-  for (const fixed of ['README.md', 'CLAUDE.md', 'AGENTS.md', 'GEMINI.md']) {
+  for (const fixed of ROOT_DOC_CANDIDATES) {
     if (!isPlanDiscoveryExcluded(fixed, exclude) && fs.existsSync(path.join(repoPath, fixed))) {
       candidates.push(fixed);
     }
