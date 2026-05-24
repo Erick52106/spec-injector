@@ -19,6 +19,10 @@ type ScoredReference = {
   truncatedBytes?: number;
   originalBytes?: number;
 };
+type ExplicitPathNormalizationContext = {
+  githubRepoSlug: string | null;
+  repoPath: string;
+};
 
 const EXPLICIT_FILE_EXTENSIONS = new Set([
   '.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs', '.mts', '.cts', '.go', '.md', '.mdx', '.json', '.jsonc', '.toml', '.yml', '.yaml', '.sql', '.css', '.html', '.sh',
@@ -117,7 +121,11 @@ export async function extractExplicitIssueFileReferences(
   issue: Issue,
   repoPath: string
 ): Promise<{ docs: DocSection[]; sources: DocSection[]; missing: DocSection[] }> {
-  const candidates = collectExplicitPathCandidates(issue.body);
+  const normalizationContext: ExplicitPathNormalizationContext = {
+    githubRepoSlug: parseIssueGithubRepoSlug(issue.url),
+    repoPath,
+  };
+  const candidates = collectExplicitPathCandidates(issue.body, normalizationContext);
   const totalConfirmedBasenameCounts = await collectConfirmedFullPathBasenameCounts(candidates, repoPath);
   const docs: DocSection[] = [];
   const sources: DocSection[] = [];
@@ -194,26 +202,34 @@ function validateDocPath(docPath: string, repoPath: string): void {
   }
 }
 
-function collectExplicitPathCandidates(body: string): string[] {
+function collectExplicitPathCandidates(
+  body: string,
+  normalizationContext: ExplicitPathNormalizationContext
+): string[] {
   const candidates: Array<{ index: number; path: string }> = [];
 
   for (const match of body.matchAll(/`([^`\n]+)`/g)) {
-    const normalized = normalizeExplicitPathCandidate(match[1]);
+    const normalized = normalizeExplicitPathCandidate(match[1], normalizationContext);
+    if (normalized) candidates.push({ index: match.index ?? 0, path: normalized });
+  }
+
+  for (const match of body.matchAll(/https?:\/\/[^\s`)<]+/g)) {
+    const normalized = normalizeExplicitPathCandidate(trimTrailingUrlPunctuation(match[0]), normalizationContext);
     if (normalized) candidates.push({ index: match.index ?? 0, path: normalized });
   }
 
   for (const match of body.matchAll(/\[([^\]\n]+)\]\(([^\)\n]+)\)/g)) {
     if (match.index !== undefined && body[match.index - 1] === '!') continue;
-    const labelPath = normalizeExplicitPathCandidate(match[1]);
+    const labelPath = normalizeExplicitPathCandidate(match[1], normalizationContext);
     if (labelPath) candidates.push({ index: match.index ?? 0, path: labelPath });
 
-    const targetPath = normalizeMarkdownLinkTargetPathCandidate(match[2]);
+    const targetPath = normalizeMarkdownLinkTargetPathCandidate(match[2], normalizationContext);
     if (targetPath) candidates.push({ index: match.index ?? 0, path: targetPath });
   }
 
   let offset = 0;
   for (const line of body.split('\n')) {
-    const normalized = normalizeBulletPathCandidate(line);
+    const normalized = normalizeBulletPathCandidate(line, normalizationContext);
     if (normalized) {
       const lineIndex = line.indexOf(normalized);
       candidates.push({
@@ -286,18 +302,30 @@ function isFullRepoRelativePath(filePath: string): boolean {
   return filePath.includes('/');
 }
 
-function normalizeBulletPathCandidate(line: string): string | null {
+function normalizeBulletPathCandidate(
+  line: string,
+  normalizationContext: ExplicitPathNormalizationContext
+): string | null {
   const match = line.match(/^\s*(?:[-*]|\d+\.)\s+([A-Za-z0-9._/#-]+)\s*$/);
   if (!match) return null;
-  return normalizeExplicitPathCandidate(match[1]);
+  return normalizeExplicitPathCandidate(match[1], normalizationContext);
 }
 
-function normalizeExplicitPathCandidate(candidate: string): string | null {
+function normalizeExplicitPathCandidate(
+  candidate: string,
+  normalizationContext: ExplicitPathNormalizationContext
+): string | null {
   const trimmed = candidate.trim();
   if (trimmed.length === 0) return null;
+  const githubBlobPath = normalizeGitHubBlobUrlCandidate(trimmed, normalizationContext);
+  if (githubBlobPath) return githubBlobPath;
   if (trimmed.includes('://')) return null;
   if (trimmed.startsWith('/')) return null;
-  const unanchored = stripGitHubLineAnchor(trimmed);
+  return normalizeRepoRelativePathCandidate(trimmed);
+}
+
+function normalizeRepoRelativePathCandidate(candidate: string): string | null {
+  const unanchored = stripGitHubLineAnchor(candidate);
   if (!unanchored) return null;
   if (!/^[A-Za-z0-9._/-]+$/.test(unanchored)) return null;
 
@@ -311,6 +339,62 @@ function normalizeExplicitPathCandidate(candidate: string): string | null {
   return normalized;
 }
 
+function normalizeGitHubBlobUrlCandidate(
+  candidate: string,
+  normalizationContext: ExplicitPathNormalizationContext
+): string | null {
+  if (!normalizationContext.githubRepoSlug) return null;
+
+  let url: URL;
+  try {
+    url = new URL(candidate);
+  } catch {
+    return null;
+  }
+
+  if (url.protocol !== 'https:' && url.protocol !== 'http:') return null;
+  if (!['github.com', 'www.github.com'].includes(url.hostname.toLowerCase())) return null;
+  if (url.search.length > 0) return null;
+  if (url.hash.length > 0 && !/^#L\d+(?:-L\d+)?$/.test(url.hash)) return null;
+
+  const pathSegments = decodeGitHubPathSegments(url.pathname);
+  if (!pathSegments || pathSegments.length < 5) return null;
+
+  const [owner, repo, route, ...blobSegments] = pathSegments;
+  if (route !== 'blob') return null;
+  if (`${owner.toLowerCase()}/${repo.toLowerCase()}` !== normalizationContext.githubRepoSlug) {
+    return null;
+  }
+
+  return findGitHubBlobRepoRelativePath(blobSegments, normalizationContext.repoPath);
+}
+
+function decodeGitHubPathSegments(pathname: string): string[] | null {
+  try {
+    return pathname
+      .split('/')
+      .filter((segment) => segment.length > 0)
+      .map((segment) => decodeURIComponent(segment));
+  } catch {
+    return null;
+  }
+}
+
+function trimTrailingUrlPunctuation(candidate: string): string {
+  return candidate.replace(/[.,;:]+$/g, '');
+}
+
+function findGitHubBlobRepoRelativePath(blobSegments: string[], repoPath: string): string | null {
+  if (blobSegments.length < 2) return null;
+
+  for (let index = 1; index < blobSegments.length; index += 1) {
+    const normalized = normalizeRepoRelativePathCandidate(blobSegments.slice(index).join('/'));
+    if (normalized && fs.existsSync(path.resolve(repoPath, normalized))) return normalized;
+  }
+
+  return normalizeRepoRelativePathCandidate(blobSegments.slice(1).join('/'));
+}
+
 function stripGitHubLineAnchor(candidate: string): string | null {
   const hashIndex = candidate.indexOf('#');
   if (hashIndex === -1) return candidate;
@@ -321,14 +405,31 @@ function stripGitHubLineAnchor(candidate: string): string | null {
   return null;
 }
 
-function normalizeMarkdownLinkTargetPathCandidate(candidate: string): string | null {
+function normalizeMarkdownLinkTargetPathCandidate(
+  candidate: string,
+  normalizationContext: ExplicitPathNormalizationContext
+): string | null {
   const target = extractMarkdownLinkDestination(candidate);
   if (!target) return null;
 
-  const normalized = normalizeExplicitPathCandidate(target);
+  const normalized = normalizeExplicitPathCandidate(target, normalizationContext);
   if (!normalized) return null;
   if (normalized.startsWith('api/')) return null;
   return normalized;
+}
+
+function parseIssueGithubRepoSlug(issueUrl: string): string | null {
+  let url: URL;
+  try {
+    url = new URL(issueUrl);
+  } catch {
+    return null;
+  }
+
+  if (!['github.com', 'www.github.com'].includes(url.hostname.toLowerCase())) return null;
+  const [owner, repo] = url.pathname.split('/').filter((segment) => segment.length > 0);
+  if (!owner || !repo) return null;
+  return `${owner.toLowerCase()}/${repo.toLowerCase()}`;
 }
 
 function extractMarkdownLinkDestination(candidate: string): string | null {
