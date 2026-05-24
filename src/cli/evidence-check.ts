@@ -16,6 +16,7 @@ type EvidenceCheckOptions = {
   issue?: string;
   expectedHead?: string;
   evidenceUrl?: string;
+  format?: string;
 };
 
 type PullRequestPayload = {
@@ -41,6 +42,8 @@ type CheckPayload = {
   bucket?: string;
 };
 
+type EvidenceCheckFormat = 'text' | 'json';
+
 const HASH_PATTERN = /\b[0-9a-f]{7,40}\b/gi;
 const LINKED_ISSUE_PATTERN = /\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s+#(\d+)\b/gi;
 const EVIDENCE_URL_PATTERN = /https:\/\/github\.com\/([^/\s]+)\/([^/\s]+)\/issues\/(\d+)#issuecomment-\d+/gi;
@@ -53,6 +56,7 @@ const EXPLICIT_NO_ACTIONABLE_REVIEW_PATTERN = /\bno actionable(?: comments?| fin
 
 export async function evidenceCheck(opts: EvidenceCheckOptions): Promise<void> {
   try {
+    const format = parseFormat(opts.format);
     const context = resolveContext(opts);
     const pr = readJson<PullRequestPayload>([
       'gh',
@@ -103,7 +107,7 @@ export async function evidenceCheck(opts: EvidenceCheckOptions): Promise<void> {
       checksReadError: checksRead.error,
     });
 
-    printReport(report);
+    printReport(report, format);
 
     if (report.overall === 'fail' || report.overall === 'needs-human-review') {
       process.exit(1);
@@ -112,6 +116,14 @@ export async function evidenceCheck(opts: EvidenceCheckOptions): Promise<void> {
     console.error(`✗ Evidence check failed: ${(err as Error).message}`);
     process.exit(1);
   }
+}
+
+function parseFormat(format: string | undefined): EvidenceCheckFormat {
+  const normalized = format ?? 'text';
+  if (normalized === 'text' || normalized === 'json') {
+    return normalized;
+  }
+  throw new Error(`Invalid evidence-check format "${format}". Expected one of: text, json.`);
 }
 
 function resolveContext(opts: EvidenceCheckOptions): { prRef: string; repo: string } {
@@ -541,7 +553,12 @@ function summarizeOverall(checks: EvidenceCheck[]): Severity {
   return 'pass';
 }
 
-function printReport(report: { overall: Severity; checks: EvidenceCheck[] }): void {
+function printReport(report: { overall: Severity; checks: EvidenceCheck[] }, format: EvidenceCheckFormat): void {
+  if (format === 'json') {
+    console.log(JSON.stringify(report, null, 2));
+    return;
+  }
+
   const counts = {
     pass: report.checks.filter((check) => check.severity === 'pass').length,
     warning: report.checks.filter((check) => check.severity === 'warning').length,

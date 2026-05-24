@@ -240,6 +240,7 @@ program
   .option('--issue <number>', 'Expected linked source issue number')
   .option('--expected-head <sha>', 'Expected latest PR head SHA')
   .option('--evidence-url <url>', 'Expected source issue implementation evidence comment URL')
+  .option('--format <format>', 'Output format: text or json (default: text)')
   .addHelpText('after', `
 Checks:
   - PR body linked issue, required sections, evidence URL, and HEAD freshness
@@ -256,6 +257,7 @@ Safety:
     issue?: string;
     expectedHead?: string;
     evidenceUrl?: string;
+    format?: string;
   }) => {
     const { evidenceCheck } = await import('./evidence-check.js');
     await evidenceCheck(opts);
