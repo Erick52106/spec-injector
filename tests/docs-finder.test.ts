@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { discoverRelevantDocs, extractExplicitIssueFileReferences } from '../dist/docs/finder.js';
+import { discoverRelevantDocs, discoverSourceFiles, extractExplicitIssueFileReferences } from '../dist/docs/finder.js';
 import { createTempRepo, writeRepoFiles } from './helpers/fixtures.ts';
 
 test('auto relevant docs discovery includes GEMINI.md fixed candidate unless excluded', async (t) => {
@@ -62,6 +62,60 @@ test('root doc candidates share one source for fixed discovery and explicit refe
     rootDocs.every((doc) => countOccurrences(finderSource, `'${doc}'`) === 1),
     true
   );
+});
+
+test('explicit issue-mentioned source references include Node module extensions', async (t) => {
+  const repoDir = await createTempRepo(t);
+  const sourceFiles = ['src/cli.mjs', 'src/config.cjs', 'src/module.mts', 'src/legacy.cts'];
+  const issue = {
+    number: 284,
+    title: 'Include explicit Node module source references',
+    body: [
+      'Relevant source files:',
+      ...sourceFiles.map((filePath) => `- \`${filePath}\``),
+    ].join('\n'),
+    labels: [],
+    url: 'https://github.com/Erick52106/spec-injector/issues/284',
+    state: 'OPEN',
+  };
+
+  await writeRepoFiles(repoDir, Object.fromEntries(
+    sourceFiles.map((filePath) => [filePath, `export const sentinel = "${filePath}";\n`])
+  ));
+
+  const explicit = await extractExplicitIssueFileReferences(issue, repoDir);
+
+  assert.deepEqual(explicit.docs.map((doc) => doc.filePath), []);
+  assert.deepEqual(explicit.sources.map((doc) => doc.filePath), sourceFiles);
+  assert.deepEqual(explicit.missing.map((doc) => doc.filePath), []);
+});
+
+test('auto source discovery includes Node module extensions while preserving generated and skip-dir filtering', async (t) => {
+  const repoDir = await createTempRepo(t);
+  const sourceFiles = ['src/cli.mjs', 'src/config.cjs', 'src/module.mts', 'src/legacy.cts'];
+  const issue = {
+    number: 284,
+    title: 'Refresh cli config module legacy source discovery',
+    body: 'Auto discovery should find cli config module legacy Node module extension files.',
+    labels: [],
+    url: 'https://github.com/Erick52106/spec-injector/issues/284',
+    state: 'OPEN',
+  };
+
+  await writeRepoFiles(repoDir, {
+    'src/cli.mjs': 'export const cli = "NODE_EXTENSION_DISCOVERY_SENTINEL cli";\n',
+    'src/config.cjs': 'module.exports = { config: "NODE_EXTENSION_DISCOVERY_SENTINEL config" };\n',
+    'src/module.mts': 'export const moduleSource = "NODE_EXTENSION_DISCOVERY_SENTINEL module";\n',
+    'src/legacy.cts': 'export const legacySource = "NODE_EXTENSION_DISCOVERY_SENTINEL legacy";\n',
+    'src/generated/cli.mjs': 'export const generatedCli = "NODE_EXTENSION_DISCOVERY_SENTINEL cli";\n',
+    'src/node_modules/config.cjs': 'module.exports = { skipped: "NODE_EXTENSION_DISCOVERY_SENTINEL config" };\n',
+    'src/types.generated.mts': 'export const generatedModule = "NODE_EXTENSION_DISCOVERY_SENTINEL module";\n',
+  });
+
+  const discovered = await discoverSourceFiles(issue, repoDir, ['src'], 10);
+  const discoveredPaths = discovered.map((source) => source.filePath);
+
+  assert.deepEqual([...discoveredPaths].sort(), [...sourceFiles].sort());
 });
 
 function countOccurrences(text: string, needle: string): number {
