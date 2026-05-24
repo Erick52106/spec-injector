@@ -206,6 +206,42 @@ test('AWP dogfood outcome ledger remains linked from dogfood docs and README', a
   assert.match(englishReadme, /\[docs\/awp-dogfood-outcome-ledger\.md\]\(docs\/awp-dogfood-outcome-ledger\.md\)/);
 });
 
+test('AWP baseline freeze gate remains linked and design-only', async () => {
+  const ledgerPath = path.join(repoRoot, 'docs', 'awp-dogfood-outcome-ledger.md');
+  const dogfoodPath = path.join(repoRoot, 'docs', 'dogfood.md');
+  const workflowPath = path.join(repoRoot, 'docs', 'workflow.md');
+  const readmePath = path.join(repoRoot, 'README.md');
+  const englishReadmePath = path.join(repoRoot, 'README.en.md');
+
+  const [ledger, dogfood, workflow, readme, englishReadme] = await Promise.all([
+    fs.readFile(ledgerPath, 'utf8'),
+    fs.readFile(dogfoodPath, 'utf8'),
+    fs.readFile(workflowPath, 'utf8'),
+    fs.readFile(readmePath, 'utf8'),
+    fs.readFile(englishReadmePath, 'utf8'),
+  ]);
+
+  assert.match(ledger, /#258 freeze gate/i);
+  assert.match(ledger, /freeze status: active/i);
+  assert.match(ledger, /至少 5 張真實 AWP PR/);
+  assert.match(ledger, /false_blocker_count/);
+  assert.match(ledger, /evidence_missing_count/);
+  assert.match(ledger, /review_round_count/);
+  assert.match(ledger, /ci_rerun_count/);
+  assert.match(ledger, /total_diff_lines/);
+  assert.match(ledger, /P0 break-glass/i);
+  assert.match(ledger, /Do not implement `spec session`/);
+  assert.match(ledger, /Do not change `spec workflow-check` CLI flags/);
+  assert.match(ledger, /#246/);
+  assert.match(ledger, /#247/);
+  assert.match(ledger, /#249/);
+
+  assert.match(dogfood, /#258 freeze gate/i);
+  assert.match(workflow, /#258 freeze gate/i);
+  assert.match(readme, /AWP baseline freeze/i);
+  assert.match(englishReadme, /AWP baseline freeze/i);
+});
+
 test('third brownfield dogfood report remains indexed with safety and caveat evidence', async () => {
   const dogfoodIndexPath = path.join(repoRoot, 'docs', 'dogfood.md');
   const reportPath = path.join(repoRoot, 'docs', 'dogfood', 'hono-2026-05-14.md');

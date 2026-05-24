@@ -18,6 +18,28 @@
 
 在調整核心 AWP baseline 前，應先累積至少 3-5 張 target repo PR outcome sample。
 
+## #258 Freeze Gate
+
+freeze status: active.
+
+Issue #258 freezes the current AWP baseline after #246, #247, and #249. Until the ledger has 至少 5 張真實 AWP PR samples, do not change baseline AWP workflow fields, Worker Profiles tables, `spec workflow-check` CLI flags, JSON schema, exit-code semantics, target repo PR templates, target repo Scope Police rules, or target repo AWP AGENTS sections for non-P0 reasons.
+
+P0 break-glass can bypass the sample gate only when a safety or correctness issue would otherwise mislead merge closeout or block all acceptable workarounds. Ordinary naming preferences, PR body formatting, single-PR review nits, theoretical session security models, or one-off workflow friction should stay in the ledger or a bounded follow-up issue.
+
+Freeze re-evaluation should use ledger data, including:
+
+- `false_blocker_count`
+- `evidence_missing_count`
+- `review_round_count`
+- `ci_rerun_count`
+- `total_diff_lines`
+- repeated workflow friction across repo / issue type
+- any real evidence of forged or misleading session / delegation evidence
+
+Do not change `spec workflow-check` CLI flags, JSON schema, or exit-code meaning from this freeze issue.
+
+Do not implement `spec session`, `workflow-check --session`, hooks, HMAC, external witness, GitHub App bot witness, branch protection required checks, hosted control plane, daemon, dashboard, auto-comment, or auto-merge from this freeze issue. If future evidence supports a v0.2 session artifact, open a separate implementation issue with target repo thin wiring, rollback criteria, migration notes, and explicit non-goals.
+
 未達樣本門檻前：
 
 - P0 blocker 可以立刻修。

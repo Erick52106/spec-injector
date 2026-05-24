@@ -6,7 +6,7 @@ Dogfood 是用 `spec-injector` 處理真實 target repo issue，以驗證 contex
 
 Dogfood 不等於直接實作 target repo issue。它是一種觀察與校準流程。
 
-AWP / `spec workflow-check` target PR outcome 的跨 repo 回收欄位，請見 [AWP Dogfood Outcome Ledger](awp-dogfood-outcome-ledger.md)。該 ledger 用於累積 3-5 張真實 PR outcome 後再調整核心 AWP baseline；它不是 merge approval，也不要求 target repo PR body 塞完整 metrics。
+AWP / `spec workflow-check` target PR outcome 的跨 repo 回收欄位與 #258 freeze gate，請見 [AWP Dogfood Outcome Ledger](awp-dogfood-outcome-ledger.md)。該 ledger 用於累積至少 5 張真實 PR outcome 後再調整核心 AWP baseline；它不是 merge approval，也不要求 target repo PR body 塞完整 metrics。
 
 ## Reports
 

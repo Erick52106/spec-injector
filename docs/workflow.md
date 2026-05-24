@@ -14,6 +14,8 @@ Issue / PR label taxonomy、visual hierarchy、combination rules、migration sta
 
 Autonomous Worker Profiles / Codex autonomous PR work 的 start-gate routing source of truth 見 [Hybrid AWP routing policy](hybrid-awp-routing-policy.md)。該 policy 只適用於有明確 autonomous routing signal 的 workflow；一般 human PR 或非 autonomous work 不應因缺少 AWP routing evidence 而 fail。
 
+核心 AWP baseline 變更受 [AWP Dogfood Outcome Ledger](awp-dogfood-outcome-ledger.md) 的 #258 freeze gate 控制。未累積至少 5 張真實 AWP PR outcome sample 前，除 P0 break-glass 外，不新增 session / hook / enforcement surface，也不更改 `spec workflow-check` flags 或 schema。
+
 若 autonomous workflow 有 start-gate routing evidence，可在 commit / merge 階段用 local file 傳入 `spec workflow-check --routing-evidence <path>`。該檢查只讀本地 PR body 與本地 routing JSON，驗證 status/ref、delegation log、Spark / ops evidence、5.4 worker evidence、explicit fallback reason 與 merge HEAD freshness；它不讀取或修改 GitHub remote state，也不要求 downstream Scope Police 解析完整 routing plan。
 
 Autonomous review follow-up 的 batching、freshness、duplicate collapse、root-cause escalation、patch budget 與 final closeout ledger source of truth 見 [AWP review triage gates](awp-review-triage-gates.md)。可用 `spec awp-review-check --repo . --evidence <path>` 檢查 local JSON evidence；該 checker 不讀寫 GitHub、不 resolve review threads、不 auto-fix、不 merge，也不要求 downstream Scope Police 解析完整 ledger。
