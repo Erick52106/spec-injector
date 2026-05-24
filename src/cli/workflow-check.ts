@@ -980,7 +980,7 @@ function parseExplicitSpecStatus(body: string): { hasSpecStatus: boolean; specSt
     if (!hasTextField(body, fieldName)) continue;
     return {
       hasSpecStatus: true,
-      specStatus: parseGenericStatus(parseTextField(body, fieldName)),
+      specStatus: parseGenericStatus(parseTextField(body, fieldName)) ?? 'unknown',
     };
   }
   return { hasSpecStatus: false, specStatus: null };

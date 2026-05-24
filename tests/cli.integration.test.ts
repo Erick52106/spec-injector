@@ -2476,6 +2476,138 @@ test('spec workflow-check merge closeout fails explicit spec evidence status fai
   assertNoGhMutationCommands(ghLog);
 });
 
+test('spec workflow-check merge closeout fails malformed explicit spec evidence status', async (t) => {
+  const repoDir = await createTempRepo(t, 'spec-injector-workflow-closeout-spec-status-malformed-');
+  await writeConfig(repoDir, { version: 2, guardrails: [] });
+  await initCleanGitRepo(repoDir);
+  const headSha = 'aeaeaeaeaeaeaeaeaeaeaeaeaeaeaeaeaeaeaeae';
+  const fixture = await createEvidenceCheckFixture(t, {
+    issueNumber: 302,
+    headSha,
+    prBody: [
+      'Closes #302',
+      '',
+      '## Summary',
+      'Closeout readback evidence with malformed explicit spec status.',
+      '',
+      '## Scope',
+      'Read-only closeout evidence collection.',
+      '',
+      '## Non-goals',
+      'No mutation.',
+      '',
+      '## Spec gate evidence',
+      '- spec_evidence_status: maybe',
+      '- spec evidence ref: https://github.com/Erick52106/spec-injector/issues/302#issuecomment-1001',
+      '- routing evidence status: pass',
+      '- routing evidence ref: workflow-check:start:302',
+      '- delegation_outcome: completed',
+      '- finding disposition status: pass',
+      '',
+      '## Implementation Evidence',
+      '- Issue evidence: https://github.com/Erick52106/spec-injector/issues/302#issuecomment-1001',
+      `- Commit: ${headSha}`,
+      '',
+      '## Validation',
+      '- `pnpm test`',
+      '',
+      '## Final merge gate',
+      `- latest head SHA: ${headSha}`,
+      '- ready_to_merge: yes',
+    ].join('\n'),
+    reviews: [{ author: { login: 'chatgpt-codex-connector' }, body: 'No actionable findings.', state: 'COMMENTED' }],
+    reviewThreads: [],
+    checks: [
+      { name: 'build', state: 'COMPLETED', conclusion: 'SUCCESS', bucket: 'pass' },
+      { name: 'CodeRabbit', state: 'SUCCESS', conclusion: 'SUCCESS', bucket: 'pass' },
+    ],
+  });
+
+  const result = await runSpec([
+    'workflow-check',
+    '--repo', repoDir,
+    '--phase', 'merge',
+    '--pr', `https://github.com/${fixture.repo}/pull/${fixture.prNumber}`,
+    '--format', 'json',
+  ], { env: fixture.env });
+
+  assert.notEqual(result.code, 0);
+  const parsed = JSON.parse(result.stdout) as Record<string, unknown>;
+  assert.equal(parsed.status, 'fail');
+  assert.equal(parsed.closeout_readback_status, 'fail');
+  assert.notEqual(parsed.spec_gate_status, 'pass');
+  assert.equal(parsed.ready_to_merge, 'no');
+  assert.ok((parsed.missing_fields as string[]).includes('spec_gate_status'));
+  const ghLog = (await readGhLog(fixture.ghLogPath)).join('\n');
+  assertNoGhMutationCommands(ghLog);
+});
+
+test('spec workflow-check merge closeout fails empty explicit spec evidence status', async (t) => {
+  const repoDir = await createTempRepo(t, 'spec-injector-workflow-closeout-spec-status-empty-');
+  await writeConfig(repoDir, { version: 2, guardrails: [] });
+  await initCleanGitRepo(repoDir);
+  const headSha = 'afafafafafafafafafafafafafafafafafafafaf';
+  const fixture = await createEvidenceCheckFixture(t, {
+    issueNumber: 302,
+    headSha,
+    prBody: [
+      'Closes #302',
+      '',
+      '## Summary',
+      'Closeout readback evidence with empty explicit spec status.',
+      '',
+      '## Scope',
+      'Read-only closeout evidence collection.',
+      '',
+      '## Non-goals',
+      'No mutation.',
+      '',
+      '## Spec gate evidence',
+      '- spec evidence ref: https://github.com/Erick52106/spec-injector/issues/302#issuecomment-1001',
+      '- routing evidence status: pass',
+      '- routing evidence ref: workflow-check:start:302',
+      '- delegation_outcome: completed',
+      '- finding disposition status: pass',
+      '',
+      '## Implementation Evidence',
+      '- Issue evidence: https://github.com/Erick52106/spec-injector/issues/302#issuecomment-1001',
+      `- Commit: ${headSha}`,
+      '',
+      '## Validation',
+      '- `pnpm test`',
+      '',
+      '## Final merge gate',
+      `- latest head SHA: ${headSha}`,
+      '- ready_to_merge: yes',
+      '- spec_evidence_status:',
+    ].join('\n'),
+    reviews: [{ author: { login: 'chatgpt-codex-connector' }, body: 'No actionable findings.', state: 'COMMENTED' }],
+    reviewThreads: [],
+    checks: [
+      { name: 'build', state: 'COMPLETED', conclusion: 'SUCCESS', bucket: 'pass' },
+      { name: 'CodeRabbit', state: 'SUCCESS', conclusion: 'SUCCESS', bucket: 'pass' },
+    ],
+  });
+
+  const result = await runSpec([
+    'workflow-check',
+    '--repo', repoDir,
+    '--phase', 'merge',
+    '--pr', `https://github.com/${fixture.repo}/pull/${fixture.prNumber}`,
+    '--format', 'json',
+  ], { env: fixture.env });
+
+  assert.notEqual(result.code, 0);
+  const parsed = JSON.parse(result.stdout) as Record<string, unknown>;
+  assert.equal(parsed.status, 'fail');
+  assert.equal(parsed.closeout_readback_status, 'fail');
+  assert.notEqual(parsed.spec_gate_status, 'pass');
+  assert.equal(parsed.ready_to_merge, 'no');
+  assert.ok((parsed.missing_fields as string[]).includes('spec_gate_status'));
+  const ghLog = (await readGhLog(fixture.ghLogPath)).join('\n');
+  assertNoGhMutationCommands(ghLog);
+});
+
 test('spec workflow-check merge closeout fails malformed delegation outcome evidence', async (t) => {
   const repoDir = await createTempRepo(t, 'spec-injector-workflow-closeout-delegation-outcome-');
   await writeConfig(repoDir, { version: 2, guardrails: [] });
