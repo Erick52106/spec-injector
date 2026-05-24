@@ -194,6 +194,45 @@ test('explicit issue-mentioned TOML config references are classified as issue so
   assert.deepEqual(autoDiscovered.map((doc) => doc.filePath), []);
 });
 
+test('explicit issue-mentioned paths strip GitHub line anchors only', async (t) => {
+  const repoDir = await createTempRepo(t);
+  const issue = {
+    number: 296,
+    title: 'Recognize explicit paths with GitHub line anchors',
+    body: [
+      'Relevant references:',
+      '- `src/foo.ts#L10`',
+      '- src/range.ts#L10-L20',
+      '- [linked source](src/linked.ts#L12)',
+      '- [linked doc](docs/guide.md#L3-L4)',
+      '- `docs/readme.md#section`',
+      '- [ignored section](docs/section.md#heading)',
+    ].join('\n'),
+    labels: [],
+    url: 'https://github.com/Erick52106/spec-injector/issues/296',
+    state: 'OPEN',
+  };
+
+  await writeRepoFiles(repoDir, {
+    'src/foo.ts': 'export const foo = true;\n',
+    'src/range.ts': 'export const range = true;\n',
+    'src/linked.ts': 'export const linked = true;\n',
+    'docs/guide.md': '# Guide\n',
+    'docs/readme.md': '# Readme\n',
+    'docs/section.md': '# Section\n',
+  });
+
+  const explicit = await extractExplicitIssueFileReferences(issue, repoDir);
+
+  assert.deepEqual(explicit.sources.map((doc) => doc.filePath), [
+    'src/foo.ts',
+    'src/range.ts',
+    'src/linked.ts',
+  ]);
+  assert.deepEqual(explicit.docs.map((doc) => doc.filePath), ['docs/guide.md']);
+  assert.deepEqual(explicit.missing.map((doc) => doc.filePath), []);
+});
+
 test('auto source discovery includes Node module extensions while preserving generated and skip-dir filtering', async (t) => {
   const repoDir = await createTempRepo(t);
   const sourceFiles = ['src/cli.mjs', 'src/config.cjs', 'src/module.mts', 'src/legacy.cts'];
