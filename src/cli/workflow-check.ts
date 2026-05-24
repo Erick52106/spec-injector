@@ -180,6 +180,16 @@ type CloseoutReadback = {
 const PHASES = new Set<WorkflowPhase>(['start', 'commit', 'merge']);
 const FORMATS = new Set<OutputFormat>(['text', 'json']);
 const SPEC_STATUS_PATTERN = /\b(?:spec(?:[-_ ](?:gate|workflow|workflow-check|evidence))?|workflow-check|spec_evidence_status)\b[^\n\r]{0,120}\b(pass|fail|manual|skipped|pending|unknown)\b/i;
+const SPEC_STATUS_FIELD_NAMES = [
+  'spec_evidence_status',
+  'spec evidence status',
+  'spec_gate_status',
+  'spec gate status',
+  'workflow_check_status',
+  'workflow-check status',
+  'workflow check status',
+  'spec status',
+];
 const SPEC_REF_PATTERN = /\b(?:spec[_ -]evidence[_ -]ref|spec[_ -]gate[_ -]ref|workflow-check[_ -]ref|spec gate evidence ref|spec gate evidence|workflow-check evidence)\b\s*[:=]?\s*\S+/i;
 const MANUAL_FALLBACK_PATTERN = /\bmanual(?: checklist)? fallback\b|\bmanual spec gate\b|\bmanual workflow gate\b/i;
 const FINAL_MERGE_GATE_PATTERN = /\bfinal merge gate\b|\bmerge gate\b/i;
@@ -901,8 +911,11 @@ async function parsePrBodyEvidence(prBodyPath: string, expectedHeadSha?: string)
 }
 
 function parsePrBodyEvidenceText(body: string, expectedHeadSha?: string): PrBodyEvidence {
-  const statusMatch = body.match(SPEC_STATUS_PATTERN);
-  const specStatus = statusMatch?.[1]?.toLowerCase() as PrBodyEvidence['specStatus'] | undefined;
+  const explicitSpecStatus = parseExplicitSpecStatus(body);
+  const statusMatch = explicitSpecStatus.hasSpecStatus ? null : body.match(SPEC_STATUS_PATTERN);
+  const specStatus = explicitSpecStatus.hasSpecStatus
+    ? explicitSpecStatus.specStatus
+    : statusMatch?.[1]?.toLowerCase() as PrBodyEvidence['specStatus'] | undefined;
   const rawRoutingStatus = parseTextField(body, 'routing_evidence_status') ?? parseTextField(body, 'routing evidence status') ?? null;
   const routingStatus = parseRoutingStatus(rawRoutingStatus);
   const routingRef = parseTextField(body, 'routing_evidence_ref') ??
@@ -926,7 +939,7 @@ function parsePrBodyEvidenceText(body: string, expectedHeadSha?: string): PrBody
     : LATEST_HEAD_PATTERN.test(body);
 
   return {
-    hasSpecStatus: Boolean(statusMatch),
+    hasSpecStatus: explicitSpecStatus.hasSpecStatus || Boolean(statusMatch),
     specStatus: specStatus ?? null,
     hasSpecRef: SPEC_REF_PATTERN.test(body),
     hasManualFallback: MANUAL_FALLBACK_PATTERN.test(body),
@@ -960,6 +973,17 @@ function parsePrBodyEvidenceText(body: string, expectedHeadSha?: string): PrBody
     findingDispositionRef,
     readyToMerge,
   };
+}
+
+function parseExplicitSpecStatus(body: string): { hasSpecStatus: boolean; specStatus: PrBodyEvidence['specStatus'] } {
+  for (const fieldName of SPEC_STATUS_FIELD_NAMES) {
+    if (!hasTextField(body, fieldName)) continue;
+    return {
+      hasSpecStatus: true,
+      specStatus: parseGenericStatus(parseTextField(body, fieldName)),
+    };
+  }
+  return { hasSpecStatus: false, specStatus: null };
 }
 
 async function readRoutingEvidence(routingEvidencePath: string): Promise<RoutingEvidence> {
