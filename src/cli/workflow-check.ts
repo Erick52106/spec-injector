@@ -790,6 +790,7 @@ async function runMergeCloseoutPhase(
   const sourceIssueEvidenceStatus = /https:\/\/github\.com\/[^\s]+\/issues\/\d+#issuecomment-\d+/i.test(body) ? 'pass' : 'manual';
   const specGateStatus = prBodyEvidence.specStatus === 'pass' ? 'pass' : isBlockedSpecStatus(prBodyEvidence.specStatus) ? 'fail' : 'manual';
   const routingEvidenceStatus = prBodyEvidence.routingStatus === 'pass' ? 'pass' : isBlockedRoutingStatus(prBodyEvidence.routingStatus) ? 'fail' : 'manual';
+  const delegationOutcomeStatus: WorkflowStatus = prBodyEvidence.hasDelegationOutcome && !prBodyEvidence.delegationOutcome ? 'fail' : 'pass';
   const findingDispositionStatus = prBodyEvidence.findingDispositionStatus === 'pass'
     ? 'pass'
     : isBlockedRoutingStatus(prBodyEvidence.findingDispositionStatus)
@@ -805,13 +806,14 @@ async function runMergeCloseoutPhase(
   if (sourceIssueEvidenceStatus !== 'pass') missingFields.push('source_issue_evidence');
   if (specGateStatus !== 'pass') missingFields.push('spec_gate_status');
   if (routingEvidenceStatus !== 'pass') missingFields.push('routing_evidence_status');
+  if (delegationOutcomeStatus === 'fail') missingFields.push('delegation_outcome');
   if (findingDispositionStatus === 'fail') missingFields.push('finding_disposition_status');
   if (readyToMergeStatus !== 'pass') missingFields.push('ready_to_merge');
   if (humanReviewStatus === 'fail') missingFields.push('human_review_status');
   if (draftStatus === 'fail') missingFields.push('draft_pr');
   if (headSha && !body.includes(headSha)) missingFields.push('head_sha_freshness');
 
-  const hasFail = [checksStatus, specGateStatus, routingEvidenceStatus, findingDispositionStatus, readyToMergeStatus, humanReviewStatus, draftStatus].includes('fail') ||
+  const hasFail = [checksStatus, specGateStatus, routingEvidenceStatus, delegationOutcomeStatus, findingDispositionStatus, readyToMergeStatus, humanReviewStatus, draftStatus].includes('fail') ||
     (unresolvedCount ?? 0) > 0;
   const hasManual = missingFields.length > 0 ||
     checksStatus === 'manual' ||
@@ -915,6 +917,7 @@ function parsePrBodyEvidenceText(body: string, expectedHeadSha?: string): PrBody
   const findingDispositionStatus = parseGenericStatus(rawFindingDispositionStatus);
   const findingDispositionRef = parseTextField(body, 'finding_disposition_ref') ??
     parseTextField(body, 'finding disposition ref');
+  const hasDelegationOutcomeField = hasTextField(body, 'delegation_outcome') || hasTextField(body, 'delegation outcome');
   const rawDelegationOutcome = parseTextField(body, 'delegation_outcome') ?? parseTextField(body, 'delegation outcome');
   const delegationOutcome = parseDelegationOutcome(rawDelegationOutcome);
   const readyToMerge = parseReadyToMerge(body);
@@ -945,7 +948,7 @@ function parsePrBodyEvidenceText(body: string, expectedHeadSha?: string): PrBody
     claimsControllerOnly: CONTROLLER_ONLY_PATTERN.test(body),
     controllerFallback: parseAllowedDeniedField(body, 'controller_fallback') ?? parseAllowedDeniedField(body, 'controller fallback'),
     controllerFallbackReason: parseTextField(body, 'controller_fallback_reason') ?? parseTextField(body, 'fallback_reason'),
-    hasDelegationOutcome: Boolean(rawDelegationOutcome),
+    hasDelegationOutcome: hasDelegationOutcomeField,
     delegationOutcome,
     hasThresholdStatus: Boolean(rawThresholdStatus),
     thresholdStatus,
@@ -1473,6 +1476,11 @@ function parseTextField(body: string, fieldName: string): string | null {
   const escaped = fieldName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const match = body.match(new RegExp(`(?:^|\\n)\\s*(?:[-*]\\s*)?${escaped}\\s*[:=]\\s*([^\\n\\r]+)`, 'i'));
   return match?.[1]?.trim() ?? null;
+}
+
+function hasTextField(body: string, fieldName: string): boolean {
+  const escaped = fieldName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`(?:^|\\n)\\s*(?:[-*]\\s*)?${escaped}\\s*[:=]`, 'i').test(body);
 }
 
 function hasEvidenceRefValue(body: string, fieldName: string): boolean {
