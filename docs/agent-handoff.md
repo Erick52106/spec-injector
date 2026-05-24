@@ -94,6 +94,19 @@ Claude Code 優先負責 planning / review 類工作：
 
 `spec-injector` 只產出 handoff artifact。Branch、commit、PR、evidence comment、review、merge 與 cleanup 是 surrounding workflow，不是 CLI core 自動執行的 runtime behavior。
 
+## AWP controller / worker handoff
+
+當 human、source issue 或 repo instruction 明確要求 AWP / Autonomous Worker Profiles / autonomous worker routing 時，standard handoff flow 前要先做 AWP start-gate handoff。repo-native workflow compliance is not delegation proof：issue-first、dedicated worktree、validation、PR body、implementation evidence comment 與 merge closeout 只能證明一般 repo workflow，不代表真的發生 worker routing。
+
+AWP controller 必須在 implementation 前二選一：
+
+- `dispatch worker`：派出 bounded worker / subagent 做 exploration、implementation slice 或 readback，並保存 assigned scope、result summary、closeout status 與 `delegation_outcome=completed|fell_through`。
+- `controller-direct fallback`：不派 worker，但在 issue / PR / closeout evidence 中明確記錄 `controller_fallback=allowed`、bounded `controller_fallback_reason` 與 `delegation_outcome=skipped|unavailable`。
+
+Controller 保留 scope、architecture、review 與 merge-gate responsibility。Worker output 是 input，不是 approval；controller 必須獨立 readback diff、tests、GitHub state 與 review findings，才能進入 PR / merge closeout。
+
+這個 handoff 不讓 `spec-injector` 變成 agent orchestrator。它只要求 repo-local AWP work 誠實記錄「有派工」或「明確 fallback」，不得把 ordinary controller-only run 包裝成 AWP。
+
 ## Planning vs implementation
 
 Read-only planning 適用於：

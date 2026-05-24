@@ -18,6 +18,8 @@ Absence of autonomous routing signal must not fail ordinary human PRs or non-aut
 
 Downstream Scope Police workflows should not enforce AWP routing sections for general human PRs.
 
+For repo-local `spec-injector` work, repo-native issue/worktree/evidence compliance does not prove AWP delegation occurred. When an AWP signal is present, closeout evidence needs either worker dispatch or an explicit controller-direct fallback so reviewers can distinguish actual AWP execution from an ordinary controller-only issue-to-PR workflow.
+
 ## Start gate
 
 Routing is decided at the start gate, before implementation starts and before the controller commits to a plan. The start gate should classify the task, decide which worker class is required, and record the controller's retained role.

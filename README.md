@@ -252,6 +252,8 @@ spec plan <issue-number-or-url> --repo . --dry-run --format prompt --verbose
 
 The AI should then use that prompt output to draft an implementation plan. Human approval remains the gate before any repo files are modified.
 
+AWP-signaled workflow differs from the ordinary issue-to-PR path. If a prompt, source issue, or repo instruction explicitly asks for AWP / Autonomous Worker Profiles / autonomous worker routing, the controller must first follow the [Hybrid AWP routing policy](docs/hybrid-awp-routing-policy.md) and record either worker dispatch evidence or a controller-direct fallback reason. The ordinary issue-to-PR workflow does not prove worker dispatch by itself.
+
 Some teams may expose a repo-level `/spec-plan <issue>` shorthand in Claude Code or another AI tool. That shorthand is workflow glue, not a `spec-injector` runtime command. The actual CLI command remains `spec plan`.
 
 See [docs/workflow.md](docs/workflow.md), [docs/workflows/README.md](docs/workflows/README.md), [docs/workflows/codex.md](docs/workflows/codex.md), and [docs/workflows/claude-code.md](docs/workflows/claude-code.md).

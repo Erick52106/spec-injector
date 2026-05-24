@@ -30,6 +30,19 @@ Future companion / workflow observability status vocabulary 見 [status-event-sc
 
 相鄰工具與 roadmap 邊界請見 [docs/positioning.md](positioning.md)。多 agent / Codex / Claude Code / ChatGPT / other agents 的分工與 handoff patterns 請見 [docs/agent-handoff.md](agent-handoff.md)。
 
+## Autonomous / AWP start-gate overlay
+
+若 user prompt、source issue、task package 或 repo-local instruction 明確要求 AWP、Autonomous Worker Profiles、autonomous worker routing 或等價 worker-routing contract，controller 必須把它視為 `autonomous routing signal`。Signal detection 可以發生在 prompt reading / issue triage 階段；但 worker dispatch、implementation slice 或 controller-direct fallback evidence 必須 after startup safety checks，也就是完成 main repo status check、dedicated worktree 建立與 worktree clean readback 之後，且 before implementation。這個 overlay 不取代 issue-first、worktree-first、validation、PR evidence 或 review closeout。
+
+有 AWP signal 時，implementation 前必須先留下 start-gate evidence：
+
+- `worker dispatch`：controller 實際派出 bounded worker / subagent 做 exploration、implementation slice 或 readback，並記錄 assigned scope、result summary 與 `delegation_outcome=completed|fell_through`。
+- `controller-direct fallback`：controller 不派 worker，但明確記錄 `controller_fallback=allowed`、bounded `controller_fallback_reason` 與 `delegation_outcome=skipped|unavailable`。
+
+AWP closeout 應在 source issue、PR body、implementation evidence comment 或 merge closeout 中能讀回 routing mode、task class、controller fallback decision、fallback reason 與 `delegation_outcome`。repo-native workflow compliance、`spec plan`、dedicated worktree、validation、PR body evidence 與 issue closeout 只證明一般 repo workflow；它們本身不是 AWP delegation evidence。
+
+沒有 autonomous routing signal 的 ordinary human PR / non-AWP AI work 不需要 worker dispatch 或 controller-direct fallback evidence，相關欄位可維持 `n/a`、`manual` 或 `skipped`。
+
 ## Worktree-first workflow
 
 Main repo 是 control plane，應保持 clean / synced。Code/docs implementation 不直接在 main repo worktree 做。
