@@ -387,7 +387,7 @@ These directions should get separate issues, tests, and corresponding docs updat
 - Workflow: [docs/workflow.md](docs/workflow.md)
 - Validation matrix and quality gates: [docs/validation.md](docs/validation.md)
 - Dogfood: [docs/dogfood.md](docs/dogfood.md)
-- AWP dogfood outcome ledger: [docs/awp-dogfood-outcome-ledger.md](docs/awp-dogfood-outcome-ledger.md)
+- AWP dogfood outcome ledger and AWP baseline freeze: [docs/awp-dogfood-outcome-ledger.md](docs/awp-dogfood-outcome-ledger.md)
 - Optional AWP delegation evidence manifest: [docs/awp-delegation-evidence-manifest.md](docs/awp-delegation-evidence-manifest.md)
 - Install / release strategy: [docs/release.md](docs/release.md)
 - AI workflow guides: [docs/workflows/README.md](docs/workflows/README.md)
