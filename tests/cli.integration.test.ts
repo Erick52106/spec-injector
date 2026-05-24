@@ -5356,6 +5356,10 @@ test('spec plan treats Markdown link labels and repo-relative targets as issue-m
       'Relevant linked references:',
       '- [apps/dashboard/src/providers/dataProvider.ts](https://github.com/example/repo/blob/main/apps/dashboard/src/providers/dataProvider.ts)',
       '- [Architecture](docs/architecture.md)',
+      '- [Angle wrapped doc](<docs/angle-reference.md>)',
+      '- [Angle wrapped titled doc](<docs/angle-title-reference.md> "Angle title")',
+      '- [Double titled doc](docs/double-title-reference.md "Double title")',
+      "- [Single titled doc](docs/single-title-reference.md 'Single title')",
       '- [external API](https://example.com/src/external-api.ts)',
       '- [Anchor only](#local-anchor)',
       '- [Anchored doc](docs/architecture.md#anchor)',
@@ -5364,10 +5368,16 @@ test('spec plan treats Markdown link labels and repo-relative targets as issue-m
       '- [Traversal](../outside.md)',
       '- [Route-like API](/api/specs/openapi.json)',
       '- [Relative route-like API](api/specs/openapi.json)',
+      '- [Malformed angle](<docs/malformed-angle.md)',
+      '- [Malformed title](docs/malformed-title.md "unterminated title)',
     ],
     repoFiles: {
       'apps/dashboard/src/providers/dataProvider.ts': 'export const provider = "MARKDOWN_LINK_SOURCE_SENTINEL";\n',
       'docs/architecture.md': '# Architecture\n\nMARKDOWN_LINK_DOC_SENTINEL\n',
+      'docs/angle-reference.md': '# Angle Reference\n\nMARKDOWN_LINK_ANGLE_DOC_SENTINEL\n',
+      'docs/angle-title-reference.md': '# Angle Title Reference\n\nMARKDOWN_LINK_ANGLE_TITLE_DOC_SENTINEL\n',
+      'docs/double-title-reference.md': '# Double Title Reference\n\nMARKDOWN_LINK_DOUBLE_TITLE_DOC_SENTINEL\n',
+      'docs/single-title-reference.md': '# Single Title Reference\n\nMARKDOWN_LINK_SINGLE_TITLE_DOC_SENTINEL\n',
     },
   });
 
@@ -5381,14 +5391,28 @@ test('spec plan treats Markdown link labels and repo-relative targets as issue-m
   const promptIssueSources = sectionBetween(promptResult.stdout, '### Issue-Mentioned Source Files', '### Auto-Discovered Docs');
 
   assert.match(promptIssueDocs, /`docs\/architecture\.md` — issue-mentioned; mentioned in issue/);
+  assert.match(promptIssueDocs, /`docs\/angle-reference\.md` — issue-mentioned; mentioned in issue/);
+  assert.match(promptIssueDocs, /`docs\/angle-title-reference\.md` — issue-mentioned; mentioned in issue/);
+  assert.match(promptIssueDocs, /`docs\/double-title-reference\.md` — issue-mentioned; mentioned in issue/);
+  assert.match(promptIssueDocs, /`docs\/single-title-reference\.md` — issue-mentioned; mentioned in issue/);
   assert.match(promptIssueSources, /`apps\/dashboard\/src\/providers\/dataProvider\.ts` — issue-mentioned; mentioned in issue/);
   assert.doesNotMatch(promptResult.stdout, /src\/external-api\.ts/);
   assert.doesNotMatch(promptResult.stdout, /docs\/architecture\.md#anchor/);
   assert.doesNotMatch(promptResult.stdout, /docs\/absolute\.md/);
   assert.doesNotMatch(promptResult.stdout, /outside\.md/);
   assert.doesNotMatch(promptResult.stdout, /api\/specs\/openapi\.json/);
+  assert.doesNotMatch(promptResult.stdout, /docs\/malformed-angle\.md/);
+  assert.doesNotMatch(promptResult.stdout, /docs\/malformed-title\.md/);
   assert.match(fullResult.stdout, /### docs\/architecture\.md\n\n_source: issue-mentioned; mentioned in issue_/);
   assert.match(fullResult.stdout, /MARKDOWN_LINK_DOC_SENTINEL/);
+  assert.match(fullResult.stdout, /### docs\/angle-reference\.md\n\n_source: issue-mentioned; mentioned in issue_/);
+  assert.match(fullResult.stdout, /MARKDOWN_LINK_ANGLE_DOC_SENTINEL/);
+  assert.match(fullResult.stdout, /### docs\/angle-title-reference\.md\n\n_source: issue-mentioned; mentioned in issue_/);
+  assert.match(fullResult.stdout, /MARKDOWN_LINK_ANGLE_TITLE_DOC_SENTINEL/);
+  assert.match(fullResult.stdout, /### docs\/double-title-reference\.md\n\n_source: issue-mentioned; mentioned in issue_/);
+  assert.match(fullResult.stdout, /MARKDOWN_LINK_DOUBLE_TITLE_DOC_SENTINEL/);
+  assert.match(fullResult.stdout, /### docs\/single-title-reference\.md\n\n_source: issue-mentioned; mentioned in issue_/);
+  assert.match(fullResult.stdout, /MARKDOWN_LINK_SINGLE_TITLE_DOC_SENTINEL/);
   assert.match(fullResult.stdout, /### apps\/dashboard\/src\/providers\/dataProvider\.ts\n\n_source: issue-mentioned; mentioned in issue_/);
   assert.match(fullResult.stdout, /MARKDOWN_LINK_SOURCE_SENTINEL/);
 });

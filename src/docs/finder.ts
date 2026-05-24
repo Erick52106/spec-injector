@@ -310,10 +310,28 @@ function normalizeExplicitPathCandidate(candidate: string): string | null {
 }
 
 function normalizeMarkdownLinkTargetPathCandidate(candidate: string): string | null {
-  const normalized = normalizeExplicitPathCandidate(candidate);
+  const target = extractMarkdownLinkDestination(candidate);
+  if (!target) return null;
+
+  const normalized = normalizeExplicitPathCandidate(target);
   if (!normalized) return null;
   if (normalized.startsWith('api/')) return null;
   return normalized;
+}
+
+function extractMarkdownLinkDestination(candidate: string): string | null {
+  const trimmed = candidate.trim();
+  if (trimmed.length === 0) return null;
+
+  const angleMatch = trimmed.match(/^<([^<>\s]+)>(?:\s+(["'])([^"']*)\2)?$/);
+  if (angleMatch) return angleMatch[1];
+  if (trimmed.startsWith('<') || trimmed.endsWith('>')) return null;
+
+  const titleMatch = trimmed.match(/^([^\s]+)\s+(["'])([^"']*)\2$/);
+  if (titleMatch) return titleMatch[1];
+
+  if (/\s/.test(trimmed)) return null;
+  return trimmed;
 }
 
 function hasRecognizedRepoFileShape(filePath: string): boolean {
