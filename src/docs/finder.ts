@@ -21,7 +21,7 @@ type ScoredReference = {
 };
 
 const EXPLICIT_FILE_EXTENSIONS = new Set([
-  '.ts', '.tsx', '.js', '.jsx', '.go', '.md', '.json', '.yml', '.yaml', '.sql', '.css', '.html', '.sh',
+  '.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs', '.mts', '.cts', '.go', '.md', '.json', '.yml', '.yaml', '.sql', '.css', '.html', '.sh',
 ]);
 const ROOT_DOC_CANDIDATES = ['README.md', 'CLAUDE.md', 'AGENTS.md', 'GEMINI.md'] as const;
 const EXPLICIT_ROOT_FILES = new Set<string>(ROOT_DOC_CANDIDATES);
@@ -417,7 +417,7 @@ function scorePath(keywords: string[], filePath: string): number {
 
 // --- source discovery ---
 
-const SOURCE_EXTENSIONS = new Set(['.ts', '.tsx', '.js', '.jsx', '.py', '.go', '.rs', '.java', '.sol', '.rb', '.graphql']);
+const SOURCE_EXTENSIONS = new Set(['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs', '.mts', '.cts', '.py', '.go', '.rs', '.java', '.sol', '.rb', '.graphql']);
 const SKIP_DIRS = new Set(['node_modules', '.git', 'dist', 'build', '.cache', 'vendor', 'coverage']);
 const GENERATED_SOURCE_DIRS = new Set(['generated', '__generated__']);
 const ALIAS_HINT_SKIP_DIRS = new Set([...SKIP_DIRS, '.spec-injector']);
