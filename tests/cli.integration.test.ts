@@ -51,9 +51,9 @@ test('repo ignore policy keeps local worktree scratch directories untracked', as
     fs.readFile(workflowPath, 'utf8'),
   ]);
 
-  assert.match(gitignore, /^\.worktrees\/$/m);
-  assert.match(gitignore, /^worktrees\/$/m);
-  assert.match(gitignore, /^spec-injector-worktrees\/$/m);
+  assert.match(gitignore, /^\/\.worktrees\/$/m);
+  assert.match(gitignore, /^\/worktrees\/$/m);
+  assert.match(gitignore, /^\/spec-injector-worktrees\/$/m);
   assert.match(workflow, /Repo-local worktree scratch directories/);
   assert.match(workflow, /不要 commit local worktree contents/);
 });

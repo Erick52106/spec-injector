@@ -3,6 +3,6 @@ dist/
 *.js.map
 
 # Local worktree and scratch directories
-.worktrees/
-worktrees/
-spec-injector-worktrees/
+/.worktrees/
+/worktrees/
+/spec-injector-worktrees/
