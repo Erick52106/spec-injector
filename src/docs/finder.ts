@@ -436,10 +436,8 @@ export async function discoverSourceFiles(
 
   const candidates: string[] = [];
   for (const srcPath of sourcePaths) {
-    const absolute = path.resolve(repoPath, srcPath);
-    if (fs.existsSync(absolute) && fs.statSync(absolute).isDirectory()) {
-      walkSource(absolute, repoPath, candidates);
-    }
+    const absolute = resolveInRepoSourceRoot(repoPath, srcPath);
+    if (absolute) walkSource(absolute, repoPath, candidates);
   }
 
   const scored: ScoredReference[] = [];
@@ -503,6 +501,29 @@ function unreadableDocSection(
     readStatus: readResult.status,
     readErrorCode: readResult.code,
   };
+}
+
+function resolveInRepoSourceRoot(repoPath: string, sourcePath: string): string | null {
+  const repoRoot = path.resolve(repoPath);
+  const absolute = path.resolve(repoRoot, sourcePath);
+  if (!isPathInsideOrEqual(repoRoot, absolute)) return null;
+
+  try {
+    if (!fs.statSync(absolute).isDirectory()) return null;
+
+    const realRepoRoot = fs.realpathSync(repoRoot);
+    const realSourceRoot = fs.realpathSync(absolute);
+    if (!isPathInsideOrEqual(realRepoRoot, realSourceRoot)) return null;
+  } catch {
+    return null;
+  }
+
+  return absolute;
+}
+
+function isPathInsideOrEqual(parentPath: string, childPath: string): boolean {
+  const relative = path.relative(parentPath, childPath);
+  return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
 }
 
 function walkSource(dir: string, repoPath: string, results: string[]): void {

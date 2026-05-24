@@ -222,6 +222,45 @@ test('auto source discovery includes Node module extensions while preserving gen
   assert.deepEqual([...discoveredPaths].sort(), [...sourceFiles].sort());
 });
 
+test('auto source discovery skips source roots outside the target repo', async (t) => {
+  const repoDir = await createTempRepo(t);
+  const outsideDir = path.resolve(repoDir, '../outside-source-root');
+  t.after(async () => {
+    await fs.rm(outsideDir, { recursive: true, force: true });
+  });
+  const relativeOutsideSourceRoot = path.relative(repoDir, outsideDir);
+  const issue = {
+    number: 294,
+    title: 'Guard auth boundary source discovery',
+    body: 'Auth boundary source discovery should ignore outside source roots.',
+    labels: [],
+    url: 'https://github.com/Erick52106/spec-injector/issues/294',
+    state: 'OPEN',
+  };
+
+  await writeRepoFiles(repoDir, {
+    'src/auth-boundary.ts': 'export const authBoundary = "in repo auth boundary source";\n',
+  });
+  await fs.mkdir(path.join(outsideDir, 'src'), { recursive: true });
+  await fs.writeFile(
+    path.join(outsideDir, 'src/auth-boundary-outside.ts'),
+    'export const authBoundaryOutside = "outside auth boundary source must not be read";\n'
+  );
+
+  const discovered = await discoverSourceFiles(
+    issue,
+    repoDir,
+    ['src', relativeOutsideSourceRoot, outsideDir],
+    10
+  );
+
+  assert.deepEqual(discovered.map((source) => source.filePath), ['src/auth-boundary.ts']);
+  assert.equal(
+    discovered.some((source) => source.content.includes('outside auth boundary source')),
+    false
+  );
+});
+
 function countOccurrences(text: string, needle: string): number {
   return text.split(needle).length - 1;
 }
