@@ -22,7 +22,7 @@
 
 freeze status: active.
 
-#258 freezes the current AWP baseline after #246, #247, and #249. Until the ledger has 至少 5 張真實 AWP PR samples, do not change baseline AWP workflow fields, Worker Profiles tables, `spec workflow-check` CLI flags, JSON schema, exit-code semantics, target repo PR templates, target repo Scope Police rules, or target repo AWP AGENTS sections for non-P0 reasons.
+Issue #258 freezes the current AWP baseline after #246, #247, and #249. Until the ledger has 至少 5 張真實 AWP PR samples, do not change baseline AWP workflow fields, Worker Profiles tables, `spec workflow-check` CLI flags, JSON schema, exit-code semantics, target repo PR templates, target repo Scope Police rules, or target repo AWP AGENTS sections for non-P0 reasons.
 
 P0 break-glass can bypass the sample gate only when a safety or correctness issue would otherwise mislead merge closeout or block all acceptable workarounds. Ordinary naming preferences, PR body formatting, single-PR review nits, theoretical session security models, or one-off workflow friction should stay in the ledger or a bounded follow-up issue.
 
