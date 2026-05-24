@@ -121,6 +121,8 @@ Thread-level limitation：`spec evidence-check` 目前只做 read-only 輔助檢
 - worktree path: `issue-<number>-<slug>`
 - branch name: `<type>/<issue-number>-<slug>`
 
+Repo-local worktree scratch directories（例如 `.worktrees/`、`worktrees/`、`spec-injector-worktrees/`）已被 ignore，避免本機容器變成 commit candidate。除非任務另有要求，canonical shared parent 仍是 `../spec-injector-worktrees`。不要 commit local worktree contents。
+
 Examples:
 
 - `docs/123-agent-worktree-workflow`
