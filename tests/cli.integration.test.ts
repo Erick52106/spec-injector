@@ -798,6 +798,7 @@ test('spec doctor reports current AWP workflow capabilities as JSON', async () =
     'workflow_check_threshold_evidence',
     'workflow_check_readback_evidence',
     'workflow_check_pr_readback',
+    'preflight_target_artifact_gate',
     'target_repo_adoption_contract_doc',
     'ai_bootstrap_install_contract_doc',
     'awp_review_check_command',
@@ -815,6 +816,7 @@ test('spec doctor text output is concise and local-only', async () => {
   assert.match(result.stdout, /status=pass/);
   assert.match(result.stdout, /workflow_check_external_config=pass/);
   assert.match(result.stdout, /workflow_check_pr_readback=pass/);
+  assert.match(result.stdout, /preflight_target_artifact_gate=pass/);
   assert.match(result.stdout, /does not call GitHub/i);
   assert.doesNotMatch(result.stdout, /https:\/\/api\.github\.com/i);
 });
@@ -976,6 +978,46 @@ test('spec doctor fails when installed awp-review-check accepts weak evidence re
   assert.match(capability?.evidence ?? '', /weak evidence_ref/i);
 });
 
+test('spec doctor fails when installed preflight lacks target artifact gate', async (t) => {
+  const fakeSpec = await writeFakeSpec(t, {
+    rootHelp: 'Usage: spec\\nCommands:\\n  workflow-check\\n  awp-review-check\\n  preflight\\n',
+    workflowHelp: [
+      'Usage: spec workflow-check',
+      '--phase <phase>',
+      'Workflow phase: start|commit|merge',
+      '--config <path>',
+      '--finding-disposition <path>',
+      '--threshold-evidence <path>',
+      '--readback-evidence <path>',
+      '--pr <number-or-url>',
+    ].join('\\n'),
+    awpReviewHelp: 'Usage: spec awp-review-check\\n',
+    preflightHelp: [
+      'Usage: spec preflight',
+      '--repo <path>',
+      '--format <format>',
+    ].join('\\n'),
+    preflightTargetArtifactExitCode: 0,
+    preflightTargetArtifactStdout: '{"overall":"pass","checks":[]}\n',
+  });
+
+  const result = await runSpec(['doctor', '--workflow', 'awp', '--format', 'json'], {
+    env: { ...process.env, SPEC_DOCTOR_SPEC_BIN: fakeSpec },
+  });
+
+  assert.notEqual(result.code, 0);
+  const parsed = JSON.parse(result.stdout) as {
+    status: string;
+    missing_capabilities: string[];
+    capabilities: Array<{ id: string; status: string; evidence: string }>;
+  };
+  assert.equal(parsed.status, 'fail');
+  assert.ok(parsed.missing_capabilities.includes('preflight_target_artifact_gate'));
+  const capability = parsed.capabilities.find((entry) => entry.id === 'preflight_target_artifact_gate');
+  assert.equal(capability?.status, 'fail');
+  assert.match(capability?.evidence ?? '', /target artifact/i);
+});
+
 async function writeFakeSpec(
   t: { after(fn: () => void | Promise<void>): void },
   options: {
@@ -986,6 +1028,10 @@ async function writeFakeSpec(
     awpReviewHelpExitCode?: number;
     awpReviewWeakEvidenceExitCode?: number;
     awpReviewWeakEvidenceStdout?: string;
+    preflightHelp?: string;
+    preflightHelpExitCode?: number;
+    preflightTargetArtifactExitCode?: number;
+    preflightTargetArtifactStdout?: string;
   }
 ): Promise<string> {
   const binDir = await fs.mkdtemp(path.join(os.tmpdir(), 'spec-injector-doctor-fake-'));
@@ -998,6 +1044,12 @@ const args = process.argv.slice(2);
 const rootHelp = ${JSON.stringify(options.rootHelp.replaceAll('\\n', '\n'))};
 const workflowHelp = ${JSON.stringify(options.workflowHelp.replaceAll('\\n', '\n'))};
 const awpReviewHelp = ${JSON.stringify(options.awpReviewHelp.replaceAll('\\n', '\n'))};
+const preflightHelp = ${JSON.stringify((options.preflightHelp ?? [
+  'Usage: spec preflight',
+  '--repo <path>',
+  '--target-repo <path>',
+  '--format <format>',
+].join('\\n')).replaceAll('\\n', '\n'))};
 if (args.length === 0 || (args.length === 1 && args[0] === '--help')) {
   process.stdout.write(rootHelp);
   process.exit(0);
@@ -1010,9 +1062,17 @@ if (args[0] === 'awp-review-check' && args[1] === '--help') {
   process.stdout.write(awpReviewHelp);
   process.exit(${options.awpReviewHelpExitCode ?? 0});
 }
+if (args[0] === 'preflight' && args[1] === '--help') {
+  process.stdout.write(preflightHelp);
+  process.exit(${options.preflightHelpExitCode ?? 0});
+}
 if (args[0] === 'awp-review-check') {
   process.stdout.write(${JSON.stringify(options.awpReviewWeakEvidenceStdout ?? '{"status":"fail","missing_fields":["ledger_evidence_ref"]}\n')});
   process.exit(${options.awpReviewWeakEvidenceExitCode ?? 1});
+}
+if (args[0] === 'preflight') {
+  process.stdout.write(${JSON.stringify(options.preflightTargetArtifactStdout ?? '{"overall":"fail","checks":[{"severity":"fail","summary":"target repo has staged spec artifacts","detail":"Forbidden staged artifacts: .spec-injector/out/issue-350-task-package.md"}]}\n')});
+  process.exit(${options.preflightTargetArtifactExitCode ?? 1});
 }
 process.stderr.write('unknown fake spec invocation: ' + args.join(' '));
 process.exit(1);

@@ -49,8 +49,12 @@ async function runDoctor(workflow: string): Promise<DoctorResult> {
   const [version, commit] = await Promise.all([readPackageVersion(), readCommit()]);
   const rootHelp = runSpecHelp(['--help']);
   const workflowHelp = runSpecHelp(['workflow-check', '--help']);
+  const preflightHelp = runSpecHelp(['preflight', '--help']);
   const awpReviewHelp = runSpecHelp(['awp-review-check', '--help']);
-  const awpReviewDurableRefs = await checkAwpReviewDurableEvidenceRefs();
+  const [preflightTargetArtifactGate, awpReviewDurableRefs] = await Promise.all([
+    checkPreflightTargetArtifactGate(preflightHelp),
+    checkAwpReviewDurableEvidenceRefs(),
+  ]);
   const [adoptionContract, bootstrapContract] = await Promise.all([
     readDocContract('docs/target-repo-adoption-contract.md', [/status\/ref/i, /Scope Police/i, /does not mutate downstream repos/i]),
     readDocContract('docs/ai-bootstrap-install-contract.md', [/SPEC_INJECTOR_DIR/i, /spec doctor --workflow awp --format json/i, /durable review evidence refs/i, /does not call GitHub/i]),
@@ -100,6 +104,7 @@ async function runDoctor(workflow: string): Promise<DoctorResult> {
       required: true,
       evidence: 'spec workflow-check --help includes --pr',
     },
+    preflightTargetArtifactGate,
     {
       id: 'target_repo_adoption_contract_doc',
       status: adoptionContract ? 'pass' : 'fail',
@@ -143,6 +148,92 @@ async function runDoctor(workflow: string): Promise<DoctorResult> {
       ? 'AWP workflow capabilities available; doctor is local-only and does not call GitHub or mutate target repos'
       : `AWP workflow capabilities missing: ${missingCapabilities.join(', ')}`,
   };
+}
+
+async function checkPreflightTargetArtifactGate(preflightHelp: { stdout: string; stderr: string; exitCode: number }): Promise<Capability> {
+  const id = 'preflight_target_artifact_gate';
+  const evidence = 'local target artifact smoke uses spec preflight --target-repo with staged .spec-injector/out task package';
+  const helpOutput = `${preflightHelp.stdout}\n${preflightHelp.stderr}`;
+  if (preflightHelp.exitCode !== 0 || !hasLongOptionWithValue(helpOutput, 'target-repo', 'path')) {
+    return {
+      id,
+      status: 'fail',
+      required: true,
+      evidence: `preflight --help does not expose target artifact gate: ${formatCommandResult(preflightHelp)}`,
+    };
+  }
+
+  const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'spec-injector-doctor-preflight-'));
+  try {
+    const mainRepo = path.join(tempRoot, 'source-main');
+    const worktree = path.join(tempRoot, 'source-worktree');
+    const targetRepo = path.join(tempRoot, 'target-repo');
+    await Promise.all([
+      fs.mkdir(mainRepo, { recursive: true }),
+      fs.mkdir(targetRepo, { recursive: true }),
+    ]);
+
+    await fs.writeFile(path.join(mainRepo, 'README.md'), '# Doctor preflight source fixture\n', 'utf8');
+    const mainInit = run(['git', 'init', '--initial-branch=main'], { cwd: mainRepo });
+    if (mainInit.exitCode !== 0) return failCapability(id, evidence, mainInit);
+    run(['git', 'config', 'user.email', 'spec-injector@example.test'], { cwd: mainRepo });
+    run(['git', 'config', 'user.name', 'Spec Injector Doctor'], { cwd: mainRepo });
+    const mainAdd = run(['git', 'add', 'README.md'], { cwd: mainRepo });
+    if (mainAdd.exitCode !== 0) return failCapability(id, evidence, mainAdd);
+    const mainCommit = run(['git', 'commit', '-m', 'doctor preflight source fixture'], { cwd: mainRepo });
+    if (mainCommit.exitCode !== 0) return failCapability(id, evidence, mainCommit);
+    const worktreeAdd = run(['git', 'worktree', 'add', '-b', 'doctor-preflight-smoke', worktree, 'main'], { cwd: mainRepo });
+    if (worktreeAdd.exitCode !== 0) return failCapability(id, evidence, worktreeAdd);
+
+    await fs.writeFile(path.join(targetRepo, 'README.md'), '# Doctor target fixture\n', 'utf8');
+    const targetInit = run(['git', 'init', '--initial-branch=main'], { cwd: targetRepo });
+    if (targetInit.exitCode !== 0) return failCapability(id, evidence, targetInit);
+    run(['git', 'config', 'user.email', 'spec-injector@example.test'], { cwd: targetRepo });
+    run(['git', 'config', 'user.name', 'Spec Injector Doctor'], { cwd: targetRepo });
+    const targetAdd = run(['git', 'add', 'README.md'], { cwd: targetRepo });
+    if (targetAdd.exitCode !== 0) return failCapability(id, evidence, targetAdd);
+    const targetCommit = run(['git', 'commit', '-m', 'doctor target fixture'], { cwd: targetRepo });
+    if (targetCommit.exitCode !== 0) return failCapability(id, evidence, targetCommit);
+
+    const stagedArtifact = path.join(targetRepo, '.spec-injector', 'out', 'issue-350-task-package.md');
+    await fs.mkdir(path.dirname(stagedArtifact), { recursive: true });
+    await fs.writeFile(stagedArtifact, '# generated task package\n', 'utf8');
+    const artifactAdd = run(['git', 'add', '.spec-injector/out/issue-350-task-package.md'], { cwd: targetRepo });
+    if (artifactAdd.exitCode !== 0) return failCapability(id, evidence, artifactAdd);
+
+    const result = run([
+      ...doctorExecutableCommand(),
+      'preflight',
+      '--repo',
+      worktree,
+      '--target-repo',
+      targetRepo,
+      '--format',
+      'json',
+    ]);
+    const output = `${result.stdout}\n${result.stderr}`;
+    const rejectedTargetArtifact = result.exitCode !== 0 &&
+      /target repo has staged spec artifacts/i.test(output) &&
+      /\.spec-injector\/out\/issue-350-task-package\.md/i.test(output);
+
+    return {
+      id,
+      status: rejectedTargetArtifact ? 'pass' : 'fail',
+      required: true,
+      evidence: rejectedTargetArtifact
+        ? 'local target artifact smoke rejected staged .spec-injector/out task package'
+        : `target artifact smoke was accepted or failed without target artifact evidence: ${formatCommandResult(result)}`,
+    };
+  } catch (err) {
+    return {
+      id,
+      status: 'fail',
+      required: true,
+      evidence: `target artifact smoke could not run: ${(err as Error).message}`,
+    };
+  } finally {
+    await fs.rm(tempRoot, { recursive: true, force: true });
+  }
 }
 
 function parseWorkflow(value: string): string {
