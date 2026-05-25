@@ -801,6 +801,7 @@ test('spec doctor reports current AWP workflow capabilities as JSON', async () =
     'target_repo_adoption_contract_doc',
     'ai_bootstrap_install_contract_doc',
     'awp_review_check_command',
+    'awp_review_durable_evidence_refs',
   ]) {
     assert.equal(parsed.capabilities.find((capability) => capability.id === id)?.status, 'pass', id);
   }
@@ -944,6 +945,37 @@ test('spec doctor fails when installed workflow-check lacks #242 AWP flags', asy
   assert.ok(parsed.missing_capabilities.includes('workflow_check_pr_readback'));
 });
 
+test('spec doctor fails when installed awp-review-check accepts weak evidence refs', async (t) => {
+  const fakeSpec = await writeFakeSpec(t, {
+    rootHelp: 'Usage: spec\\nCommands:\\n  workflow-check\\n  awp-review-check\\n',
+    workflowHelp: [
+      'Usage: spec workflow-check',
+      '--phase <phase>',
+      'Workflow phase: start|commit|merge',
+      '--config <path>',
+      '--finding-disposition <path>',
+      '--threshold-evidence <path>',
+      '--readback-evidence <path>',
+      '--pr <number-or-url>',
+    ].join('\\n'),
+    awpReviewHelp: 'Usage: spec awp-review-check\\n',
+    awpReviewWeakEvidenceExitCode: 0,
+    awpReviewWeakEvidenceStdout: '{"status":"pass","missing_fields":[]}\n',
+  });
+
+  const result = await runSpec(['doctor', '--workflow', 'awp', '--format', 'json'], {
+    env: { ...process.env, SPEC_DOCTOR_SPEC_BIN: fakeSpec },
+  });
+
+  assert.notEqual(result.code, 0);
+  const parsed = JSON.parse(result.stdout) as { status: string; missing_capabilities: string[]; capabilities: Array<{ id: string; status: string; evidence: string }> };
+  assert.equal(parsed.status, 'fail');
+  assert.ok(parsed.missing_capabilities.includes('awp_review_durable_evidence_refs'));
+  const capability = parsed.capabilities.find((entry) => entry.id === 'awp_review_durable_evidence_refs');
+  assert.equal(capability?.status, 'fail');
+  assert.match(capability?.evidence ?? '', /weak evidence_ref/i);
+});
+
 async function writeFakeSpec(
   t: { after(fn: () => void | Promise<void>): void },
   options: {
@@ -952,6 +984,8 @@ async function writeFakeSpec(
     workflowHelpExitCode?: number;
     awpReviewHelp: string;
     awpReviewHelpExitCode?: number;
+    awpReviewWeakEvidenceExitCode?: number;
+    awpReviewWeakEvidenceStdout?: string;
   }
 ): Promise<string> {
   const binDir = await fs.mkdtemp(path.join(os.tmpdir(), 'spec-injector-doctor-fake-'));
@@ -975,6 +1009,10 @@ if (args[0] === 'workflow-check' && args[1] === '--help') {
 if (args[0] === 'awp-review-check' && args[1] === '--help') {
   process.stdout.write(awpReviewHelp);
   process.exit(${options.awpReviewHelpExitCode ?? 0});
+}
+if (args[0] === 'awp-review-check') {
+  process.stdout.write(${JSON.stringify(options.awpReviewWeakEvidenceStdout ?? '{"status":"fail","missing_fields":["ledger_evidence_ref"]}\n')});
+  process.exit(${options.awpReviewWeakEvidenceExitCode ?? 1});
 }
 process.stderr.write('unknown fake spec invocation: ' + args.join(' '));
 process.exit(1);

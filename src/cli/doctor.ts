@@ -1,4 +1,5 @@
 import fs from 'node:fs/promises';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { run } from '../utils/shell.js';
@@ -49,9 +50,10 @@ async function runDoctor(workflow: string): Promise<DoctorResult> {
   const rootHelp = runSpecHelp(['--help']);
   const workflowHelp = runSpecHelp(['workflow-check', '--help']);
   const awpReviewHelp = runSpecHelp(['awp-review-check', '--help']);
+  const awpReviewDurableRefs = await checkAwpReviewDurableEvidenceRefs();
   const [adoptionContract, bootstrapContract] = await Promise.all([
     readDocContract('docs/target-repo-adoption-contract.md', [/status\/ref/i, /Scope Police/i, /does not mutate downstream repos/i]),
-    readDocContract('docs/ai-bootstrap-install-contract.md', [/SPEC_INJECTOR_DIR/i, /spec doctor --workflow awp --format json/i, /does not call GitHub/i]),
+    readDocContract('docs/ai-bootstrap-install-contract.md', [/SPEC_INJECTOR_DIR/i, /spec doctor --workflow awp --format json/i, /durable review evidence refs/i, /does not call GitHub/i]),
   ]);
 
   const workflowOutput = `${workflowHelp.stdout}\n${workflowHelp.stderr}`;
@@ -116,6 +118,7 @@ async function runDoctor(workflow: string): Promise<DoctorResult> {
       required: false,
       evidence: 'spec awp-review-check --help',
     },
+    awpReviewDurableRefs,
   ];
 
   const missingCapabilities = capabilities
@@ -156,6 +159,111 @@ function parseFormat(value: string): OutputFormat {
 
 function runSpecHelp(args: string[]) {
   return run([...doctorExecutableCommand(), ...args]);
+}
+
+async function checkAwpReviewDurableEvidenceRefs(): Promise<Capability> {
+  const evidence = 'local weak evidence_ref smoke uses spec awp-review-check with evidence_ref=done';
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'spec-injector-doctor-awp-review-'));
+  try {
+    await fs.writeFile(path.join(tempDir, 'README.md'), '# Doctor AWP review fixture\n', 'utf8');
+    const init = run(['git', 'init', '--initial-branch=main'], { cwd: tempDir });
+    if (init.exitCode !== 0) return failCapability('awp_review_durable_evidence_refs', evidence, init);
+    run(['git', 'config', 'user.email', 'spec-injector@example.test'], { cwd: tempDir });
+    run(['git', 'config', 'user.name', 'Spec Injector Doctor'], { cwd: tempDir });
+    const add = run(['git', 'add', 'README.md'], { cwd: tempDir });
+    if (add.exitCode !== 0) return failCapability('awp_review_durable_evidence_refs', evidence, add);
+    const commit = run(['git', 'commit', '-m', 'doctor fixture'], { cwd: tempDir });
+    if (commit.exitCode !== 0) return failCapability('awp_review_durable_evidence_refs', evidence, commit);
+    const head = run(['git', 'rev-parse', 'HEAD'], { cwd: tempDir });
+    if (head.exitCode !== 0) return failCapability('awp_review_durable_evidence_refs', evidence, head);
+
+    const headSha = head.stdout.trim();
+    const evidencePath = path.join(tempDir, 'awp-review-weak-ref.json');
+    await fs.writeFile(evidencePath, `${JSON.stringify(buildWeakEvidenceRefFixture(headSha), null, 2)}\n`, 'utf8');
+    const result = run([
+      ...doctorExecutableCommand(),
+      'awp-review-check',
+      '--repo',
+      tempDir,
+      '--evidence',
+      evidencePath,
+      '--format',
+      'json',
+    ]);
+    const output = `${result.stdout}\n${result.stderr}`;
+    const rejectedWeakRef = result.exitCode !== 0 && /ledger_evidence_ref/i.test(output);
+
+    return {
+      id: 'awp_review_durable_evidence_refs',
+      status: rejectedWeakRef ? 'pass' : 'fail',
+      required: true,
+      evidence: rejectedWeakRef
+        ? 'local weak evidence_ref smoke rejected with ledger_evidence_ref'
+        : `weak evidence_ref smoke was accepted or failed without ledger_evidence_ref: ${formatCommandResult(result)}`,
+    };
+  } catch (err) {
+    return {
+      id: 'awp_review_durable_evidence_refs',
+      status: 'fail',
+      required: true,
+      evidence: `weak evidence_ref smoke could not run: ${(err as Error).message}`,
+    };
+  } finally {
+    await fs.rm(tempDir, { recursive: true, force: true });
+  }
+}
+
+function buildWeakEvidenceRefFixture(headSha: string) {
+  return {
+    autonomous_signal: 'yes',
+    batch_id: 'doctor-weak-evidence-ref',
+    review_head_sha: headSha,
+    current_head_sha: headSha,
+    patch_budget: {
+      base_changed_lines: 100,
+      followup_changed_lines: 10,
+      budget_ratio: 0.1,
+      split_assessment: 'n/a',
+    },
+    findings: [
+      {
+        finding_id: 'doctor-weak-ref',
+        source: 'coderabbit',
+        head_sha: headSha,
+        category: 'normalization_gap',
+        adoption_decision: 'adopt',
+        fix_strategy: 'test_only',
+        risk_if_local_patch: 'low',
+        validation_required: 'pnpm test',
+        finding_fingerprint: 'doctor-weak-ref',
+        is_outdated: 'no',
+        duplicate_of: 'n/a',
+        concept_key: 'doctor-weak-ref',
+        finding_count_for_concept: 1,
+        root_cause_assessment: 'n/a',
+        state_model_required: 'no',
+        matrix_tests_required: 'no',
+        disposition: 'adopted',
+        rationale: 'n/a',
+        validation: 'pnpm test',
+        evidence_ref: 'done',
+      },
+    ],
+  };
+}
+
+function failCapability(id: string, evidence: string, result: { stdout: string; stderr: string; exitCode: number }): Capability {
+  return {
+    id,
+    status: 'fail',
+    required: true,
+    evidence: `${evidence}: ${formatCommandResult(result)}`,
+  };
+}
+
+function formatCommandResult(result: { stdout: string; stderr: string; exitCode: number }): string {
+  const message = `${result.stderr}\n${result.stdout}`.trim();
+  return message ? `exit ${result.exitCode}: ${message}` : `exit ${result.exitCode}`;
 }
 
 function hasLongOption(output: string, optionName: string): boolean {
