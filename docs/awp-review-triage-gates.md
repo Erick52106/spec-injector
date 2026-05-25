@@ -80,7 +80,7 @@ validation=<command/ref or n/a>
 evidence_ref=<url/path/summary>
 ```
 
-`partial`, `rejected`, `deferred`, and `superseded` require a rationale. Missing disposition for an actionable finding fails or returns manual depending on the available evidence.
+`partial`, `rejected`, `deferred`, and `superseded` require a rationale. Missing disposition for an actionable finding fails or returns manual depending on the available evidence. For actionable findings, `evidence_ref` must be durable evidence, not a placeholder. Accepted refs are HTTP(S) URLs, `workflow-check:` refs, or GitHub `#issuecomment-<id>` anchors. Weak values such as `done`, `ok`, `pending`, `unknown`, `missing`, `n/a`, or `none` do not satisfy closeout ledger evidence.
 
 Downstream PR bodies do not need to inline the full ledger. They can reference a stable local, PR-body, or issue-comment evidence ref.
 
