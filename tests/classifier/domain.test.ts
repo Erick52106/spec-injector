@@ -540,6 +540,25 @@ test('runtime backend worker wording still triggers backend domain', () => {
   ));
 });
 
+test('runtime worker dispatch controller wording still triggers backend domain', () => {
+  const result = classifyDomainsWithEvidence(issue({
+    title: 'Implement worker dispatch controller',
+    body: [
+      'Add runtime dispatch behavior for worker controller execution.',
+      'This product code path coordinates runtime work without workflow metadata.',
+    ].join('\n'),
+    labels: ['area:backend'],
+  }));
+
+  assert.ok(result.domains.includes('backend'), `Expected backend in ${result.domains.join(', ')}`);
+  assert.ok(result.evidence.some((e) =>
+    e.domain === 'backend' && e.term === 'worker' && e.source === 'title'
+  ));
+  assert.ok(result.evidence.some((e) =>
+    e.domain === 'backend' && e.term === 'controller' && e.source === 'title'
+  ));
+});
+
 test('backend controller wording stays backend even with AWP closeout evidence', () => {
   const result = classifyDomainsWithEvidence(issue({
     title: 'Fix checkout controller behavior',
