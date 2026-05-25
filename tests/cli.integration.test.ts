@@ -4188,6 +4188,33 @@ test('spec awp-review-check accepts fresh review batch and collapses duplicate f
   assert.equal(parsed.closeout_ledger_status, 'pass');
 });
 
+test('spec awp-review-check fails weak closeout evidence refs for actionable findings', async (t) => {
+  const repoDir = await createTempRepo(t, 'spec-injector-awp-review-weak-ref-');
+  await writeConfig(repoDir, { version: 2, guardrails: [] });
+  await initCleanGitRepo(repoDir);
+  const evidencePath = await writeAwpReviewFixture(repoDir, 'fresh-duplicate-pass.json');
+  const raw = JSON.parse(await fs.readFile(evidencePath, 'utf8')) as Record<string, unknown>;
+  const findings = raw.findings as Array<Record<string, unknown>>;
+  findings[0] = {
+    ...findings[0],
+    evidence_ref: 'done',
+  };
+  await fs.writeFile(evidencePath, `${JSON.stringify(raw, null, 2)}\n`, 'utf8');
+
+  const result = await runSpec([
+    'awp-review-check',
+    '--repo', repoDir,
+    '--evidence', evidencePath,
+    '--format', 'json',
+  ]);
+
+  assert.notEqual(result.code, 0);
+  const parsed = JSON.parse(result.stdout) as Record<string, unknown>;
+  assert.equal(parsed.status, 'fail');
+  assert.equal(parsed.closeout_ledger_status, 'fail');
+  assert.ok((parsed.missing_fields as string[]).includes('ledger_evidence_ref'));
+});
+
 test('spec awp-review-check fails stale review head evidence before patching', async (t) => {
   const repoDir = await createTempRepo(t, 'spec-injector-awp-review-stale-');
   await writeConfig(repoDir, { version: 2, guardrails: [] });
