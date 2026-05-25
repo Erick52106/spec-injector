@@ -8,6 +8,8 @@ import {
   getUpstreamState,
   getWorktreeState,
 } from '../utils/git.js';
+import { isSpecArtifactPath, normalizeArtifactPath } from '../utils/artifacts.js';
+import { run } from '../utils/shell.js';
 
 type PreflightSeverity = 'pass' | 'warning' | 'fail' | 'needs-human-review';
 
@@ -26,6 +28,10 @@ type PreflightOptions = {
   targetRepo?: string;
   format?: string;
 };
+
+type GitPathListResult =
+  | { kind: 'ok'; label: string; paths: string[] }
+  | { kind: 'error'; label: string; message: string };
 
 export async function preflight(opts: PreflightOptions): Promise<void> {
   const format = parseFormat(opts.format);
@@ -185,12 +191,104 @@ function buildPreflightReport(repoPath: string, opts: PreflightOptions): {
     } else {
       checks.push(needsHumanReview('unable to determine target repo worktree state', targetState.message));
     }
+    checks.push(...buildTargetArtifactChecks(targetRepoPath));
   }
 
   return {
     overall: summarizeOverall(checks),
     checks,
   };
+}
+
+function buildTargetArtifactChecks(targetRepoPath: string): PreflightCheck[] {
+  const checks: PreflightCheck[] = [];
+  const staged = readGitPathList(
+    targetRepoPath,
+    ['git', 'diff', '--cached', '--name-only', '--diff-filter=ACMR', '-z'],
+    'staged target repo paths'
+  );
+  const unstaged = readGitPathList(
+    targetRepoPath,
+    ['git', 'diff', '--name-only', '--diff-filter=ACMR', '-z'],
+    'unstaged target repo paths'
+  );
+  const untracked = readGitPathList(
+    targetRepoPath,
+    ['git', 'ls-files', '--others', '--exclude-standard', '-z'],
+    'untracked target repo paths'
+  );
+
+  const inspectionFailures = [staged, unstaged, untracked].filter((result) => result.kind === 'error');
+  for (const failure of inspectionFailures) {
+    checks.push(needsHumanReview(`unable to inspect ${failure.label}`, failure.message));
+  }
+  if (inspectionFailures.length > 0) return checks;
+
+  const stagedOk = requireGitPathList(staged);
+  const unstagedOk = requireGitPathList(unstaged);
+  const untrackedOk = requireGitPathList(untracked);
+
+  const stagedArtifacts = unique(stagedOk.paths.filter((entry) => isSpecArtifactPath(entry)));
+  if (stagedArtifacts.length > 0) {
+    checks.push(fail(
+      'target repo has staged spec artifacts',
+      `Forbidden staged artifacts: ${stagedArtifacts.join(', ')}. Stop and unstage/remove from target PR; preflight did not modify the target repo.`
+    ));
+  } else {
+    checks.push(pass('target repo has no staged spec artifacts', targetRepoPath));
+  }
+
+  const dirtyArtifacts = unique([
+    ...unstagedOk.paths.filter((entry) => isSpecArtifactPath(entry)),
+    ...untrackedOk.paths.filter((entry) => isSpecArtifactPath(entry)),
+    ...existingGeneratedArtifactPaths(targetRepoPath),
+  ]);
+  if (dirtyArtifacts.length > 0) {
+    checks.push(warning(
+      'target repo has local spec artifact risk',
+      `Local-only artifacts detected: ${dirtyArtifacts.join(', ')}. Keep these out of commits and do not copy private context or generated output into the target repo.`
+    ));
+  } else {
+    checks.push(pass('target repo has no local spec artifact risk', targetRepoPath));
+  }
+
+  return checks;
+}
+
+function readGitPathList(
+  repoPath: string,
+  argv: string[],
+  label: string
+): GitPathListResult {
+  const result = run(argv, { cwd: repoPath });
+  if (result.exitCode !== 0) {
+    return { kind: 'error', label, message: formatShellError(result) };
+  }
+
+  return {
+    kind: 'ok',
+    label,
+    paths: result.stdout.split('\0').filter(Boolean).map(normalizeArtifactPath),
+  };
+}
+
+function requireGitPathList(result: GitPathListResult): Extract<GitPathListResult, { kind: 'ok' }> {
+  if (result.kind === 'ok') return result;
+  throw new Error(`Internal preflight path inspection error: ${result.label}`);
+}
+
+function existingGeneratedArtifactPaths(targetRepoPath: string): string[] {
+  const candidates = [
+    '.spec-injector/out',
+    '.spec-injector/routing',
+    '.spec-injector/readback',
+  ];
+
+  return candidates.filter((candidate) => fs.existsSync(path.join(targetRepoPath, candidate)));
+}
+
+function unique(values: string[]): string[] {
+  return [...new Set(values.filter(Boolean))];
 }
 
 function requireGitString(
@@ -282,4 +380,9 @@ function canonicalizePath(filePath: string): string {
   } catch {
     return path.resolve(filePath);
   }
+}
+
+function formatShellError(result: { stdout: string; stderr: string; exitCode: number }): string {
+  const message = `${result.stderr}\n${result.stdout}`.trim();
+  return message || `exit ${result.exitCode}`;
 }

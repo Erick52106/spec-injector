@@ -197,6 +197,7 @@ Notes:
 - `spec plan ... --dry-run --format prompt --verbose` is the recommended pre-implementation command for AI planning.
 - For a full generated task package file, omit `--dry-run`; output is written under `.spec-injector/out/`.
 - `spec workflow-check` is a local-only, stdout-first workflow gate for autonomous PR evidence. It does not edit GitHub, add/commit files, write task packages, comment, merge, or mutate downstream repos.
+- `spec preflight --target-repo <path>` remains read-only and reports staged downstream spec artifacts as blockers before they become PR evidence problems.
 - Autonomous worker-routing flow 可在 implementation 開始前使用 [Hybrid AWP routing policy](docs/hybrid-awp-routing-policy.md) 作為 start-gate source of truth。
 - Downstream AI entrypoints 可引用 [AI bootstrap install contract](docs/ai-bootstrap-install-contract.md)，用 `SPEC_INJECTOR_DIR` local runner fallback 與 `spec doctor --workflow awp --format json` 檢查 AWP capability，不需要 global install。
 - `spec workflow-check --format json` emits the same stable fields as the text output: `phase`, `status`, `repo`, `head_sha`, `checked_at`, `missing_fields`, `warnings`, and `evidence_summary`. Additive fields such as `blocking_reason` and `manual_reason` point to the first deterministic blocker or manual gate.
