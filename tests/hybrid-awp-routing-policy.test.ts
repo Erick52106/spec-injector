@@ -139,7 +139,13 @@ test('target repo adoption contract remains linked from workflow docs', async ()
   assert.match(contract, /Target Repo Adoption Contract/);
   assert.match(contract, /tachigo/i);
   assert.match(contract, /tachiya/i);
+  assert.match(contract, /workflow-check --repo \. --config <external-config>/);
+  assert.match(contract, /external config/i);
+  assert.match(contract, /status\/ref evidence only/i);
+  assert.match(contract, /local routing\/readback JSON/);
   assert.match(contract, /Do not commit `.spec-injector\/out\/`/);
+  assert.match(contract, /Do not commit `.spec-injector\/`/);
+  assert.match(contract, /private ledgers/);
   assert.match(contract, /does not mutate downstream repos/i);
   assert.match(workflow, /\[target repo adoption contract\]\(target-repo-adoption-contract\.md\)/);
 });
