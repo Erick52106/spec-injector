@@ -591,9 +591,14 @@ export async function discoverSourceFiles(
   const sourceSignals = detectSourceDiscoverySignals(issue);
 
   const candidates: string[] = [];
+  const diagnostics: DocSection[] = [];
   for (const srcPath of sourcePaths) {
-    const absolute = resolveInRepoSourceRoot(repoPath, srcPath);
-    if (absolute) walkSource(absolute, repoPath, candidates);
+    const resolution = resolveInRepoSourceRoot(repoPath, srcPath);
+    if (resolution.kind === 'directory') {
+      walkSource(resolution.absolutePath, repoPath, candidates);
+    } else if (resolution.kind === 'file') {
+      diagnostics.push(invalidDiscoverySourceSection(srcPath));
+    }
   }
 
   const scored: ScoredReference[] = [];
@@ -631,17 +636,20 @@ export async function discoverSourceFiles(
 
   scored.sort((a, b) => b.score - a.score);
 
-  return scored.slice(0, maxFiles).map((entry) => ({
-    filePath: entry.filePath,
-    content: entry.content,
-    found: entry.found,
-    readStatus: entry.readStatus,
+  return [
+    ...diagnostics,
+    ...scored.slice(0, maxFiles).map((entry) => ({
+      filePath: entry.filePath,
+      content: entry.content,
+      found: entry.found,
+      readStatus: entry.readStatus,
       readErrorCode: entry.readErrorCode,
       truncated: entry.truncated,
       truncatedBytes: entry.truncatedBytes,
       originalBytes: entry.originalBytes,
       kind: 'source' as DocSourceKind,
-    }));
+    })),
+  ];
 }
 
 function unreadableDocSection(
@@ -659,22 +667,44 @@ function unreadableDocSection(
   };
 }
 
-function resolveInRepoSourceRoot(repoPath: string, sourcePath: string): string | null {
+function invalidDiscoverySourceSection(sourcePath: string): DocSection {
+  return {
+    filePath: normalizeConfiguredSourcePath(sourcePath),
+    content: '',
+    found: false,
+    kind: 'missing',
+    readStatus: 'invalid-discovery-source',
+    reasons: ['configured path', 'discovery.source expects directory roots for auto-discovery'],
+  };
+}
+
+function normalizeConfiguredSourcePath(sourcePath: string): string {
+  return normalizeRepoPath(sourcePath.replace(/\\/g, '/').replace(/^\.\/+/, ''));
+}
+
+type SourceRootResolution =
+  | { kind: 'directory'; absolutePath: string }
+  | { kind: 'file' }
+  | { kind: 'ignore' };
+
+function resolveInRepoSourceRoot(repoPath: string, sourcePath: string): SourceRootResolution {
   const repoRoot = path.resolve(repoPath);
   const absolute = path.resolve(repoRoot, sourcePath);
-  if (!isPathInsideOrEqual(repoRoot, absolute)) return null;
+  if (!isPathInsideOrEqual(repoRoot, absolute)) return { kind: 'ignore' };
 
   try {
-    if (!fs.statSync(absolute).isDirectory()) return null;
+    const stat = fs.statSync(absolute);
+    if (stat.isFile()) return { kind: 'file' };
+    if (!stat.isDirectory()) return { kind: 'ignore' };
 
     const realRepoRoot = fs.realpathSync(repoRoot);
     const realSourceRoot = fs.realpathSync(absolute);
-    if (!isPathInsideOrEqual(realRepoRoot, realSourceRoot)) return null;
+    if (!isPathInsideOrEqual(realRepoRoot, realSourceRoot)) return { kind: 'ignore' };
   } catch {
-    return null;
+    return { kind: 'ignore' };
   }
 
-  return absolute;
+  return { kind: 'directory', absolutePath: absolute };
 }
 
 function isPathInsideOrEqual(parentPath: string, childPath: string): boolean {
