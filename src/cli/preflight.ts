@@ -21,6 +21,7 @@ type PreflightCheck = {
   severity: PreflightSeverity;
   summary: string;
   detail: string;
+  artifact_matches?: SpecArtifactMatch[];
 };
 
 type PreflightFormat = 'text' | 'json';
@@ -236,7 +237,8 @@ function buildTargetArtifactChecks(targetRepoPath: string): PreflightCheck[] {
   if (stagedArtifacts.length > 0) {
     checks.push(fail(
       'target repo has staged spec artifacts',
-      `Forbidden staged artifacts: ${formatArtifactMatches(stagedArtifacts)}. Stop and unstage/remove from target PR; preflight did not modify the target repo.`
+      `Forbidden staged artifacts: ${formatArtifactMatches(stagedArtifacts)}. Stop and unstage/remove from target PR; preflight did not modify the target repo.`,
+      stagedArtifacts
     ));
   } else {
     checks.push(pass('target repo has no staged spec artifacts', targetRepoPath));
@@ -250,7 +252,8 @@ function buildTargetArtifactChecks(targetRepoPath: string): PreflightCheck[] {
   if (dirtyArtifacts.length > 0) {
     checks.push(warning(
       'target repo has local spec artifact risk',
-      `Local-only artifacts detected: ${formatArtifactMatches(dirtyArtifacts)}. Keep these out of commits and do not copy private context or generated output into the target repo.`
+      `Local-only artifacts detected: ${formatArtifactMatches(dirtyArtifacts)}. Keep these out of commits and do not copy private context or generated output into the target repo.`,
+      dirtyArtifacts
     ));
   } else {
     checks.push(pass('target repo has no local spec artifact risk', targetRepoPath));
@@ -372,16 +375,20 @@ function pass(summary: string, detail: string): PreflightCheck {
   return { severity: 'pass', summary, detail };
 }
 
-function warning(summary: string, detail: string): PreflightCheck {
-  return { severity: 'warning', summary, detail };
+function warning(summary: string, detail: string, artifactMatches: SpecArtifactMatch[] = []): PreflightCheck {
+  return withArtifactMatches({ severity: 'warning', summary, detail }, artifactMatches);
 }
 
-function fail(summary: string, detail: string): PreflightCheck {
-  return { severity: 'fail', summary, detail };
+function fail(summary: string, detail: string, artifactMatches: SpecArtifactMatch[] = []): PreflightCheck {
+  return withArtifactMatches({ severity: 'fail', summary, detail }, artifactMatches);
 }
 
 function needsHumanReview(summary: string, detail: string): PreflightCheck {
   return { severity: 'needs-human-review', summary, detail };
+}
+
+function withArtifactMatches(check: PreflightCheck, artifactMatches: SpecArtifactMatch[]): PreflightCheck {
+  return artifactMatches.length > 0 ? { ...check, artifact_matches: artifactMatches } : check;
 }
 
 function toWorktreeSlug(branchName: string): string {

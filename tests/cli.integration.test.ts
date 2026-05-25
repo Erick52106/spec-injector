@@ -4923,6 +4923,49 @@ test('spec preflight fails when target repo has staged spec artifacts', async (t
   await assertFileExists(stagedArtifact);
 });
 
+test('spec preflight --format json exposes target artifact matches', async (t) => {
+  const fixture = await createPreflightFixture(t);
+  const targetRepoDir = await createTempRepo(t, 'spec-injector-target-staged-artifact-json-');
+  await writeRepoFiles(targetRepoDir, {
+    'README.md': '# Target Repo Fixture\n',
+  });
+  await initCleanGitRepo(targetRepoDir);
+  const stagedArtifact = path.join(targetRepoDir, '.spec-injector', 'out', 'issue-358-task-package.md');
+  await fs.mkdir(path.dirname(stagedArtifact), { recursive: true });
+  await fs.writeFile(stagedArtifact, '# generated task package\n', 'utf8');
+  await runCommand('git', ['add', '.spec-injector/out/issue-358-task-package.md'], targetRepoDir);
+
+  const result = await runSpec([
+    'preflight',
+    '--repo', fixture.worktreeDir,
+    '--expected-branch', fixture.branchName,
+    '--target-repo', targetRepoDir,
+    '--format', 'json',
+  ], { env: fixture.env });
+
+  assert.notEqual(result.code, 0);
+  assert.equal(result.stderr, '');
+  const parsed = JSON.parse(result.stdout) as {
+    overall: string;
+    checks: Array<{
+      severity: string;
+      summary: string;
+      detail: string;
+      artifact_matches?: Array<{ path: string; kind: string; reason: string }>;
+    }>;
+  };
+  assert.equal(parsed.overall, 'fail');
+  const artifactCheck = parsed.checks.find((check) => check.summary === 'target repo has staged spec artifacts');
+  assert.equal(artifactCheck?.severity, 'fail');
+  assert.deepEqual(artifactCheck?.artifact_matches, [
+    {
+      path: '.spec-injector/out/issue-358-task-package.md',
+      kind: 'spec-agent-dir',
+      reason: 'spec-injector workspace artifact',
+    },
+  ]);
+});
+
 test('spec preflight warns when target repo has local routing or readback artifacts', async (t) => {
   const fixture = await createPreflightFixture(t);
   const targetRepoDir = await createTempRepo(t, 'spec-injector-target-local-artifact-');
