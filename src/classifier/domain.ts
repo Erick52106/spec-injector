@@ -56,6 +56,24 @@ const GENERIC_API_CONTRACT_REASON = 'generic API contract wording';
 const GENERIC_DATABASE_TRANSACTION_SIGNALS = ['transactions', 'transaction'];
 const GENERIC_DATABASE_TRANSACTION_CONTEXT = ['api', 'backend', 'billing', 'contract', 'dashboard', 'details', 'endpoint', 'frontend', 'history', 'list', 'page', 'product', 'record', 'records', 'request', 'response', 'route', 'settings', 'support', 'user'];
 const GENERIC_DATABASE_TRANSACTION_REASON = 'generic transaction wording';
+const AWP_WORKFLOW_BACKEND_SIGNALS = ['worker', 'controller'];
+const AWP_WORKFLOW_REJECTED_WORKER_SIGNALS = ['worker'];
+const AWP_WORKFLOW_WORKER_CONTEXT = [
+  'awp',
+  'hybrid awp',
+  'autonomous worker profiles',
+  'autonomous worker routing',
+  'worker dispatch',
+  'worker profile',
+  'worker profiles',
+  'controller-direct fallback',
+  'controller direct fallback',
+  'delegation_outcome',
+  'routing_mode',
+  'workflow governance',
+  'workflow-governance',
+];
+const AWP_WORKFLOW_WORKER_REASON = 'AWP workflow worker wording';
 
 export function classifyDomains(issue: Issue): string[] {
   return classifyDomainsWithEvidence(issue).domains;
@@ -88,6 +106,7 @@ export function classifyDomainsWithEvidence(issue: Issue): DomainClassificationR
   }
 
   suppressWeakToolingEvidence(scores, evidenceByDomain, fields);
+  suppressAwpWorkflowWorkerBackendEvidence(scores, evidenceByDomain, fields);
 
   const domains = Object.entries(scores)
     .sort((a, b) => b[1] - a[1])
@@ -138,6 +157,11 @@ function buildRejectedDomainReasons(
     if (reason) rejected.push(reason);
   }
 
+  if (!detected.has('backend') && hasAwpWorkflowWorkerContext(fields)) {
+    const reason = findRejectedSignal(fields, AWP_WORKFLOW_REJECTED_WORKER_SIGNALS, AWP_WORKFLOW_WORKER_REASON, 'backend');
+    if (reason) rejected.push(reason);
+  }
+
   return rejected;
 }
 
@@ -183,6 +207,26 @@ function suppressWeakToolingEvidence(
   evidenceByDomain.delete('tooling');
 }
 
+function suppressAwpWorkflowWorkerBackendEvidence(
+  scores: Record<string, number>,
+  evidenceByDomain: Map<string, DomainEvidence[]>,
+  fields: Array<{ source: DomainEvidenceSource; value: string }>
+): void {
+  const evidence = evidenceByDomain.get('backend') ?? [];
+  if (evidence.length === 0) return;
+
+  const hasOnlyAwpWorkerSignals = evidence.every((entry) => AWP_WORKFLOW_BACKEND_SIGNALS.includes(entry.term));
+  if (!hasOnlyAwpWorkerSignals) return;
+
+  const hasWorkerEvidence = evidence.some((entry) => entry.term === 'worker');
+  if (!hasWorkerEvidence) return;
+
+  if (!hasAwpWorkflowWorkerContext(fields)) return;
+
+  delete scores.backend;
+  evidenceByDomain.delete('backend');
+}
+
 function hasStrongPackageManagerContext(fields: Array<{ source: DomainEvidenceSource; value: string }>): boolean {
   const text = fields.map(({ value }) => value).join(' ');
   return STRONG_PACKAGE_MANAGER_CONTEXT_PATTERNS.some((pattern) => pattern.test(text));
@@ -209,4 +253,9 @@ function hasGenericApiContractContext(fields: Array<{ source: DomainEvidenceSour
 function hasGenericDatabaseTransactionContext(fields: Array<{ source: DomainEvidenceSource; value: string }>): boolean {
   const text = fields.map(({ value }) => value).join(' ');
   return GENERIC_DATABASE_TRANSACTION_CONTEXT.some((term) => matchesTerm(text, term));
+}
+
+function hasAwpWorkflowWorkerContext(fields: Array<{ source: DomainEvidenceSource; value: string }>): boolean {
+  const text = fields.map(({ value }) => value).join(' ');
+  return AWP_WORKFLOW_WORKER_CONTEXT.some((term) => matchesTerm(text, term));
 }
