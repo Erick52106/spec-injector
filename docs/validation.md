@@ -222,7 +222,7 @@ Required review checks:
 - Distinguish observations, false positives, false negatives, and follow-up issues.
 - Dogfood does not become target repo implementation.
 - Target repo state is reported if dirty, and work stops before running destructive cleanup.
-- Staged `.spec-injector/`, generated task package, routing/readback JSON, private context, or private ledger artifacts in target repos are blockers, not cleanup prompts.
+- Staged `.spec-injector/`, generated task package, routing/readback JSON, private context, or private ledger artifacts in target repos are blockers, not cleanup prompts. Preflight artifact reports include a concise match reason so reviewers can tell which artifact family triggered the gate.
 - Follow-up issues are separate from target repo code changes.
 
 ### 11. Companion / mascot / future runtime planning

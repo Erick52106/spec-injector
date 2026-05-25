@@ -4914,6 +4914,7 @@ test('spec preflight fails when target repo has staged spec artifacts', async (t
   assert.match(result.stdout, /Preflight summary:\s+FAIL/i);
   assert.match(result.stdout, /target repo has staged spec artifacts/i);
   assert.match(result.stdout, /\.spec-injector\/out\/issue-342-task-package\.md/i);
+  assert.match(result.stdout, /spec-injector workspace artifact/i);
   assert.match(result.stdout, /preflight did not modify the target repo/i);
   assertNoRawStackTrace(result);
   const gitLog = (await readGhLog(fixture.gitLogPath)).join('\n');
@@ -4942,6 +4943,7 @@ test('spec preflight warns when target repo has local routing or readback artifa
   assert.match(result.stdout, /Preflight summary:\s+WARNING/i);
   assert.match(result.stdout, /target repo has local spec artifact risk/i);
   assert.match(result.stdout, /awp-readback-evidence\.json/i);
+  assert.match(result.stdout, /routing\/readback evidence artifact/i);
   assert.match(result.stdout, /Keep these out of commits/i);
   const gitLog = (await readGhLog(fixture.gitLogPath)).join('\n');
   assertNoGitMutationCommands(gitLog);
