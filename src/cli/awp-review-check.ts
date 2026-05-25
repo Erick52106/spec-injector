@@ -1,5 +1,6 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { isDurableEvidenceRef } from '../utils/evidence-ref.js';
 import { ensureRepoPath } from '../utils/fs.js';
 import { run } from '../utils/shell.js';
 
@@ -91,7 +92,6 @@ const VALID_SOURCES = new Set(['coderabbit', 'codex', 'human', 'ci']);
 const VALID_DECISIONS = new Set(['adopt', 'partial', 'reject', 'defer']);
 const VALID_STRATEGIES = new Set(['local_patch', 'normalize_state_model', 'docs_only', 'test_only', 'no_change', 'split_followup']);
 const VALID_DISPOSITIONS = new Set(['adopted', 'partial', 'rejected', 'deferred', 'superseded']);
-const WEAK_EVIDENCE_REFS = new Set(['', 'n/a', 'none', 'missing', 'unknown', 'pending', 'done', 'ok']);
 const PATCH_BUDGET_RATIO = 0.3;
 
 export async function awpReviewCheck(opts: AwpReviewCheckOptions): Promise<void> {
@@ -451,13 +451,6 @@ function normalize(value: unknown): string {
 
 function normalizeRef(value: unknown): string | null {
   return meaningful(value) ? String(value).trim() : null;
-}
-
-function isDurableEvidenceRef(value: unknown): boolean {
-  const ref = String(value ?? '').trim();
-  const normalized = ref.toLowerCase();
-  if (WEAK_EVIDENCE_REFS.has(normalized)) return false;
-  return /^https?:\/\//i.test(ref) || /^workflow-check:/i.test(ref) || /#issuecomment-\d+/i.test(ref);
 }
 
 function unique(values: string[]): string[] {
