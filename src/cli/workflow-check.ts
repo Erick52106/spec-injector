@@ -8,8 +8,8 @@ import type { Config } from '../config/types.js';
 import { fetchIssue } from '../github/issue.js';
 import type { Issue } from '../github/types.js';
 import {
+  classifySpecArtifactPath,
   configuredPrivateArtifactPrefixes,
-  isSpecArtifactPath,
   normalizeArtifactPath,
 } from '../utils/artifacts.js';
 import { isDurableEvidenceRef } from '../utils/evidence-ref.js';
@@ -930,7 +930,9 @@ function readStagedPaths(repoPath: string, config: Config): { forbidden: string[
   }
 
   const stagedPaths = result.stdout.split('\0').filter(Boolean).map(normalizeArtifactPath);
-  const forbidden = stagedPaths.filter((stagedPath) => isForbiddenArtifactPath(stagedPath, config));
+  const forbidden = stagedPaths
+    .map((stagedPath) => formatForbiddenArtifactPath(stagedPath, config))
+    .filter((stagedPath): stagedPath is string => stagedPath !== null);
   return { forbidden, warnings: [] };
 }
 
@@ -944,8 +946,9 @@ function getDirtyUnstagedWarning(repoPath: string): string | null {
   return result.stdout.trim() ? 'Repo has dirty or untracked files; workflow-check did not modify or clean them.' : null;
 }
 
-function isForbiddenArtifactPath(gitPath: string, config: Config): boolean {
-  return isSpecArtifactPath(gitPath, { privateExcludes: configuredPrivateExcludes(config) });
+function formatForbiddenArtifactPath(gitPath: string, config: Config): string | null {
+  const match = classifySpecArtifactPath(gitPath, { privateExcludes: configuredPrivateExcludes(config) });
+  return match ? `${match.path} (${match.reason})` : null;
 }
 
 function configuredPrivateExcludes(config: Config): string[] {
