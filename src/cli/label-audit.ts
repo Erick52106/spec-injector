@@ -13,6 +13,14 @@ type LabelAuditCheck = {
 type LabelAuditOptions = {
   repo: string;
   limit?: string;
+  format?: string;
+};
+
+type LabelAuditFormat = 'text' | 'json';
+
+type LabelAuditReport = {
+  overall: Severity;
+  checks: LabelAuditCheck[];
 };
 
 type IssuePayload = {
@@ -69,14 +77,19 @@ const STATUS_IMPLEMENTED = 'status:implemented';
 const STATUS_NEEDS_DESIGN = 'status:needs-design';
 
 export async function labelAudit(opts: LabelAuditOptions): Promise<void> {
+  const format = parseFormat(opts.format);
   try {
     const report = buildLabelAuditReport(opts, process.cwd());
-    printReport(report);
+    printReport(report, format);
 
     if (report.overall === 'needs-human-review') {
       process.exit(1);
     }
   } catch (err) {
+    if (format === 'json') {
+      printReport(singleNeedsHumanReviewReport((err as Error).message), format);
+      process.exit(1);
+    }
     console.error(`✗ Label audit failed: ${(err as Error).message}`);
     process.exit(1);
   }
@@ -85,7 +98,7 @@ export async function labelAudit(opts: LabelAuditOptions): Promise<void> {
 function buildLabelAuditReport(
   opts: LabelAuditOptions,
   repoRoot: string
-): { overall: Severity; checks: LabelAuditCheck[] } {
+): LabelAuditReport {
   const taxonomyRead = loadAcceptedTaxonomy(repoRoot);
   if ('error' in taxonomyRead) {
     return singleNeedsHumanReviewReport(taxonomyRead.error);
@@ -573,6 +586,12 @@ function parseLimit(limitOption: string | undefined): number {
   return parsed;
 }
 
+function parseFormat(formatOption: string | undefined): LabelAuditFormat {
+  if (!formatOption || formatOption === 'text') return 'text';
+  if (formatOption === 'json') return 'json';
+  throw new Error(`Invalid label-audit format "${formatOption}". Expected one of: text, json.`);
+}
+
 function readJsonResult<T>(
   argv: string[],
   readErrorMessage: string,
@@ -600,7 +619,7 @@ function firstMeaningfulMessage(...values: string[]): string {
   return 'no details returned';
 }
 
-function singleNeedsHumanReviewReport(detail: string): { overall: Severity; checks: LabelAuditCheck[] } {
+function singleNeedsHumanReviewReport(detail: string): LabelAuditReport {
   return {
     overall: 'needs-human-review',
     checks: [needsHumanReview('could not complete label audit with high confidence', detail)],
@@ -617,7 +636,12 @@ function summarizeOverall(checks: LabelAuditCheck[]): Severity {
   return 'pass';
 }
 
-function printReport(report: { overall: Severity; checks: LabelAuditCheck[] }): void {
+function printReport(report: LabelAuditReport, format: LabelAuditFormat): void {
+  if (format === 'json') {
+    console.log(JSON.stringify(report, null, 2));
+    return;
+  }
+
   const counts = {
     pass: report.checks.filter((check) => check.severity === 'pass').length,
     warning: report.checks.filter((check) => check.severity === 'warning').length,

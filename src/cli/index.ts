@@ -269,6 +269,7 @@ program
   .description('Run a read-only label and milestone metadata audit for issues and PRs')
   .requiredOption('--repo <owner/name>', 'GitHub repository owner/name to audit')
   .option('--limit <number>', 'Maximum number of issues / PRs to fetch per list (default: 200)')
+  .option('--format <format>', 'Output format: text or json (default: text)')
   .addHelpText('after', `
 Checks:
   - open issue area / type / status coverage
@@ -283,6 +284,7 @@ Safety:
   .action(async (opts: {
     repo: string;
     limit?: string;
+    format?: string;
   }) => {
     const { labelAudit } = await import('./label-audit.js');
     await labelAudit(opts);

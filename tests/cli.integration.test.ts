@@ -12,6 +12,7 @@ import {
   createEvidenceCheckFixture,
   createExternalConfigPlanFixture,
   createFailingGitEnv,
+  createLabelAuditFixture,
   createMissingPath,
   createPreflightFixture,
   createSpecPlanFixture,
@@ -751,6 +752,7 @@ test('spec plan/config/clean help describe AI-facing usage and safety constraint
   assert.equal(labelAuditHelp.code, 0, labelAuditHelp.stderr);
   assert.match(labelAuditHelp.stdout, /label and milestone metadata audit/i);
   assert.match(labelAuditHelp.stdout, /--repo <owner\/name>/);
+  assert.match(labelAuditHelp.stdout, /--format <format>/);
   assert.match(labelAuditHelp.stdout, /reports only/i);
   assert.match(labelAuditHelp.stdout, /does not create, rename, delete, or mutate/i);
 });
@@ -4246,6 +4248,152 @@ test('spec evidence-check passes for complete PR and issue evidence without muta
   assert.match(result.stdout, /validation evidence lists exact commands/i);
   assert.equal(result.stderr, '');
   const ghLog = (await readGhLog(fixture.ghLogPath)).join('\n');
+  assertNoGhMutationCommands(ghLog);
+});
+
+test('spec label-audit keeps text output as the default and does not mutate GitHub state', async (t) => {
+  const fixture = await createLabelAuditFixture(t, {
+    issues: [{
+      number: 320,
+      title: 'Add label audit JSON output',
+      url: 'https://github.com/Erick52106/spec-injector/issues/320',
+      state: 'OPEN',
+      stateReason: null,
+      labels: [
+        { name: 'type:chore' },
+        { name: 'area:cli' },
+        { name: 'status:ready' },
+        { name: 'layer1 : Core Compiler' },
+      ],
+      milestone: { title: 'Layer 1 — Core Compiler' },
+    }],
+    prs: [],
+  });
+
+  const result = await runSpec([
+    'label-audit',
+    '--repo', fixture.repo,
+  ], { env: fixture.env });
+
+  assert.equal(result.code, 0, result.stderr);
+  assert.match(result.stdout, /Label audit summary:\s+PASS/i);
+  assert.match(result.stdout, /\[PASS\] issue #320 has type metadata/i);
+  assert.equal(result.stderr, '');
+
+  const ghLog = (await readGhLog(fixture.ghLogPath)).join('\n');
+  assert.match(ghLog, /issue list/);
+  assert.match(ghLog, /pr list/);
+  assertNoGhMutationCommands(ghLog);
+});
+
+test('spec label-audit --format json prints parseable warning report without text summary', async (t) => {
+  const fixture = await createLabelAuditFixture(t, {
+    issues: [{
+      number: 321,
+      title: 'Missing classification labels',
+      url: 'https://github.com/Erick52106/spec-injector/issues/321',
+      state: 'OPEN',
+      stateReason: null,
+      labels: [],
+      milestone: null,
+    }],
+    prs: [],
+  });
+
+  const result = await runSpec([
+    'label-audit',
+    '--repo', fixture.repo,
+    '--format', 'json',
+  ], { env: fixture.env });
+
+  assert.equal(result.code, 0, result.stderr);
+  assert.equal(result.stderr, '');
+  assert.doesNotMatch(result.stdout, /Label audit summary:/i);
+  assert.doesNotMatch(result.stdout, /\[(PASS|WARNING|NEEDS-HUMAN-REVIEW)\]/i);
+
+  const report = JSON.parse(result.stdout) as {
+    overall?: unknown;
+    checks?: Array<Record<string, unknown>>;
+  };
+  assert.equal(report.overall, 'warning');
+  assert.ok(Array.isArray(report.checks));
+  assert.ok(report.checks.length > 0);
+  for (const check of report.checks) {
+    assert.equal(typeof check.severity, 'string');
+    assert.equal(typeof check.summary, 'string');
+    assert.equal(typeof check.detail, 'string');
+  }
+  assert.ok(report.checks.some((check) =>
+    check.severity === 'warning' &&
+    String(check.summary).includes('issue #321 is missing a type')
+  ));
+
+  const ghLog = (await readGhLog(fixture.ghLogPath)).join('\n');
+  assertNoGhMutationCommands(ghLog);
+});
+
+test('spec label-audit --format json prints parseable needs-human-review report and exits non-zero', async (t) => {
+  const fixture = await createLabelAuditFixture(t, {
+    issues: [{
+      number: 322,
+      title: 'Conflicting status labels',
+      url: 'https://github.com/Erick52106/spec-injector/issues/322',
+      state: 'OPEN',
+      stateReason: null,
+      labels: [
+        { name: 'type:chore' },
+        { name: 'type:ci' },
+        { name: 'area:cli' },
+        { name: 'status:ready' },
+        { name: 'status:in-review' },
+        { name: 'layer1 : Core Compiler' },
+      ],
+      milestone: { title: 'Layer 1 — Core Compiler' },
+    }],
+    prs: [],
+  });
+
+  const result = await runSpec([
+    'label-audit',
+    '--repo', fixture.repo,
+    '--format', 'json',
+  ], { env: fixture.env });
+
+  assert.notEqual(result.code, 0);
+  assert.equal(result.stderr, '');
+  assert.doesNotMatch(result.stdout, /Label audit summary:/i);
+
+  const report = JSON.parse(result.stdout) as {
+    overall?: unknown;
+    checks?: Array<Record<string, unknown>>;
+  };
+  assert.equal(report.overall, 'needs-human-review');
+  assert.ok(Array.isArray(report.checks));
+  assert.ok(report.checks.some((check) =>
+    check.severity === 'needs-human-review' &&
+    String(check.summary).includes('issue #322 has multiple type labels')
+  ));
+
+  const ghLog = (await readGhLog(fixture.ghLogPath)).join('\n');
+  assertNoGhMutationCommands(ghLog);
+});
+
+test('spec label-audit rejects invalid --format value before reading gh', async (t) => {
+  const fixture = await createLabelAuditFixture(t);
+
+  const result = await runSpec([
+    'label-audit',
+    '--repo', fixture.repo,
+    '--format', 'yaml',
+  ], { env: fixture.env });
+
+  assert.notEqual(result.code, 0);
+  assert.match(result.stderr, /Invalid label-audit format "yaml"/i);
+  assert.match(result.stderr, /Expected one of: text, json/i);
+  assertNoRawStackTrace(result);
+
+  const ghLog = (await readGhLog(fixture.ghLogPath)).join('\n');
+  assert.equal(ghLog.trim(), '');
   assertNoGhMutationCommands(ghLog);
 });
 
