@@ -5757,6 +5757,74 @@ test('spec validate succeeds for initialized repo and reports config summary', a
   assert.match(result.stdout, /Discovery/);
 });
 
+test('spec validate warns when discovery.source contains an existing file entry', async (t) => {
+  const repoDir = await createTempRepo(t);
+  await writeRepoFiles(repoDir, {
+    'src/payment-worker.ts': 'export const paymentWorker = true;\n',
+    'src/lib/payment-helper.ts': 'export const paymentHelper = true;\n',
+  });
+  await writeConfig(repoDir, {
+    version: 2,
+    discovery: {
+      source: ['src/payment-worker.ts', 'src/lib'],
+      max_source_files: 5,
+    },
+  });
+
+  const result = await runSpec(['validate', '--repo', repoDir]);
+
+  assert.equal(result.code, 0, result.stderr);
+  assert.match(result.stdout, /config\.json is valid/i);
+  assert.match(result.stdout, /Warning: discovery\.source entry `src\/payment-worker\.ts` is a file/i);
+  assert.match(result.stdout, /discovery\.source expects directory roots for auto-discovery/i);
+  assert.match(result.stdout, /will not be auto-discovered/i);
+  assert.doesNotMatch(result.stdout, /`src\/lib` is a file/i);
+});
+
+test('spec validate keeps outside-repo discovery.source entries non-fatal', async (t) => {
+  const repoDir = await createTempRepo(t);
+  const outsideDir = path.resolve(repoDir, '../outside-validate-source');
+  t.after(async () => {
+    await fs.rm(outsideDir, { recursive: true, force: true });
+  });
+  await fs.mkdir(outsideDir, { recursive: true });
+  await fs.writeFile(path.join(outsideDir, 'outside.ts'), 'export const outside = true;\n');
+  await writeConfig(repoDir, {
+    version: 2,
+    discovery: {
+      source: ['../outside-validate-source/outside.ts'],
+      max_source_files: 5,
+    },
+  });
+
+  const result = await runSpec(['validate', '--repo', repoDir]);
+
+  assert.equal(result.code, 0, result.stderr);
+  assert.match(result.stdout, /config\.json is valid/i);
+  assert.doesNotMatch(result.stdout, /outside\.ts.*will not be auto-discovered/i);
+});
+
+test('spec validate keeps missing discovery.source entries non-fatal', async (t) => {
+  const repoDir = await createTempRepo(t);
+  await writeRepoFiles(repoDir, {
+    'src/lib/payment-helper.ts': 'export const paymentHelper = true;\n',
+  });
+  await writeConfig(repoDir, {
+    version: 2,
+    discovery: {
+      source: ['src/lib', 'src/missing.ts'],
+      max_source_files: 5,
+    },
+  });
+
+  const result = await runSpec(['validate', '--repo', repoDir]);
+
+  assert.equal(result.code, 0, result.stderr);
+  assert.equal(result.stderr, '');
+  assert.match(result.stdout, /config\.json is valid/i);
+  assert.doesNotMatch(result.stdout, /missing\.ts.*will not be auto-discovered/i);
+});
+
 test('spec validate fails clearly when config is missing and does not create files', async (t) => {
   const repoDir = await createTempRepo(t);
 
