@@ -30,6 +30,10 @@ Notes:
   --format prompt  Emit a compact AI planning prompt instead of the full package
   --config <path>  Read an external config file without copying it into the target repo
   --verbose        Print fetch / config / discovery pipeline steps
+
+Examples:
+  spec plan 326 --repo /path/to/repo --dry-run
+  spec plan https://github.com/owner/repo/issues/326 --format prompt --dry-run
 `)
   .action(async (issue: string, opts: { repo?: string; config?: string; dryRun?: boolean; verbose?: boolean; format?: string }) => {
     const { plan } = await import('./plan.js');
@@ -62,6 +66,9 @@ program
 Checks .spec-injector/config.json against schema v2.
 
 If config is missing, run \`spec init\` first.
+
+Examples:
+  spec validate --repo /path/to/repo
 `)
   .action(async (opts: { repo?: string }) => {
     const { validate } = await import('./validate.js');
@@ -134,6 +141,10 @@ Checks:
 Safety:
   Does not auto-fix, stash, clean, reset, checkout, or mutate target repos.
   Failing checks should trigger stop-and-report before implementation continues.
+
+Examples:
+  spec preflight --repo /path/to/worktree --expected-branch codex/issue-326
+  spec preflight --repo /path/to/worktree --target-repo /path/to/target --format json
 `)
   .action(async (opts: {
     repo?: string;
@@ -191,6 +202,11 @@ Checks:
 Safety:
   Local-only workflow gate. Prints to stdout by default.
   Does not edit GitHub, add/commit files, write task packages, comment, merge, or mutate downstream repos.
+
+Examples:
+  spec workflow-check --repo /path/to/worktree --phase start --issue 326
+  spec workflow-check --phase commit --pr-body PR_BODY.md
+  spec workflow-check --phase merge --pr-body PR_BODY.md --head-sha abc123
 `)
   .action(async (opts: {
     repo?: string;
@@ -252,6 +268,10 @@ Checks:
 Safety:
   Read-only guardrail. Does not edit PRs, edit/close issues, comment, merge, or resolve review threads.
   Stale HEAD or stale evidence should trigger stop-and-report before merge readiness.
+
+Examples:
+  spec evidence-check --repo owner/repo --pr 123 --issue 326
+  spec evidence-check --pr https://github.com/owner/repo/pull/123 --expected-head abc123
 `)
   .action(async (opts: {
     pr: string;
@@ -282,6 +302,10 @@ Checks:
 Safety:
   Reports only. Does not create, rename, delete, or mutate labels, issues, milestones, or PR metadata.
   Needs human review means stop-and-report; the checker does not auto-decide remediation.
+
+Examples:
+  spec label-audit --repo owner/repo --limit 100
+  spec label-audit --repo owner/repo --format json
 `)
   .action(async (opts: {
     repo: string;
