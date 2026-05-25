@@ -12,6 +12,7 @@ import {
   isSpecArtifactPath,
   normalizeArtifactPath,
 } from '../utils/artifacts.js';
+import { isDurableEvidenceRef } from '../utils/evidence-ref.js';
 
 type WorkflowPhase = 'start' | 'commit' | 'merge';
 type WorkflowStatus = 'pass' | 'fail' | 'manual' | 'skipped';
@@ -1663,11 +1664,7 @@ function hasEvidenceRefValue(body: string, fieldName: string): boolean {
 }
 
 function isEvidenceRefValue(value: string | null | undefined): boolean {
-  if (!value) return false;
-  const normalized = value.trim().toLowerCase();
-  if (WEAK_FALLBACK_REASONS.has(normalized)) return false;
-  if (['missing', 'pending', 'unknown', 'fail', 'failed'].includes(normalized)) return false;
-  return /^https?:\/\//i.test(value) || /^workflow-check:/i.test(value) || /#issuecomment-\d+/.test(value);
+  return isDurableEvidenceRef(value);
 }
 
 function requiredEnum(value: unknown, allowed: string[], fieldName: string): string {
