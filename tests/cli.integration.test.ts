@@ -3695,6 +3695,45 @@ test('spec workflow-check merge closeout fails explicit missing external config 
   assert.deepEqual(await readGhLog(fixture.ghLogPath), []);
 });
 
+test('spec workflow-check merge closeout treats empty external config as explicit config failure', async (t) => {
+  const repoDir = await createTempRepo(t, 'spec-injector-workflow-closeout-empty-config-');
+  await writeConfig(repoDir, { version: 2, guardrails: [] });
+  await initCleanGitRepo(repoDir);
+  const headSha = 'efefefefefefefefefefefefefefefefefefefef';
+  const fixture = await createEvidenceCheckFixture(t, {
+    issueNumber: 336,
+    headSha,
+    prBody: [
+      'Closes #336',
+      '',
+      '## Spec gate evidence',
+      '- spec gate status: pass',
+      '- spec evidence ref: https://github.com/Erick52106/spec-injector/issues/336#issuecomment-1001',
+      '',
+      '## Final merge gate',
+      `- latest head SHA: ${headSha}`,
+      '- ready_to_merge: yes',
+    ].join('\n'),
+  });
+
+  const result = await runSpec([
+    'workflow-check',
+    '--repo', repoDir,
+    '--config', '',
+    '--phase', 'merge',
+    '--pr', `https://github.com/${fixture.repo}/pull/${fixture.prNumber}`,
+    '--format', 'json',
+  ], { env: fixture.env });
+
+  assert.notEqual(result.code, 0);
+  assert.equal(result.stderr, '');
+  const parsed = JSON.parse(result.stdout) as Record<string, unknown>;
+  assert.equal(parsed.status, 'fail');
+  assert.deepEqual(parsed.missing_fields, ['config']);
+  assert.match(String(parsed.evidence_summary), /--config path cannot be empty/i);
+  assert.deepEqual(await readGhLog(fixture.ghLogPath), []);
+});
+
 test('spec workflow-check still requires local config outside merge --pr closeout', async (t) => {
   const repoDir = await createTempRepo(t, 'spec-injector-workflow-no-config-phases-');
   await fs.writeFile(path.join(repoDir, 'README.md'), '# fixture\n', 'utf8');
