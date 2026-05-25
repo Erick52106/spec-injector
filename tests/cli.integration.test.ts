@@ -6461,6 +6461,58 @@ test('spec plan separates issue-mentioned references from auto-discovered refere
   assert.equal(countOccurrences(fullFirst.stdout, '### docs/duplicate-ref.md'), 1);
 });
 
+test('spec plan surfaces sibling test candidates for issue-mentioned source paths', async (t) => {
+  const fixture = await createExplicitPathPlanFixture(t, {
+    issueNumber: 328,
+    title: 'Cookie parser should include validation context',
+    bodyLines: [
+      'Fix the cookie parsing edge case in `src/utils/cookie.ts`.',
+      'The implementation plan should include nearby validation candidates without promoting them to issue-mentioned scope.',
+    ],
+    config: {
+      discovery: {
+        source: ['src'],
+        max_source_files: 2,
+      },
+    },
+    repoFiles: {
+      'src/utils/cookie.ts': 'export function parseCookie() { return "ISSUE_MENTIONED_COOKIE_SOURCE"; }\n',
+      'src/utils/cookie.test.ts': 'export const cookieTest = "SIBLING_COOKIE_TEST_SENTINEL";\n',
+      'src/utils/cookie.spec.ts': 'export const cookieSpec = "SIBLING_COOKIE_SPEC_SENTINEL";\n',
+      'src/auth/session-cookie-service.ts': [
+        'export const sessionCookieService = "HIGH_SCORE_SESSION_COOKIE_SERVICE";',
+        'cookie parser validation context implementation plan edge case cookie parser validation context',
+      ].join('\n'),
+      'src/auth/cookie-validation.ts': [
+        'export const cookieValidation = "HIGH_SCORE_COOKIE_VALIDATION";',
+        'cookie parser validation context implementation plan edge case cookie parser validation context',
+      ].join('\n'),
+    },
+  });
+
+  const promptResult = await runSpec(['plan', fixture.issueUrl, '--repo', fixture.repoDir, '--dry-run', '--format', 'prompt'], { env: fixture.env });
+  const fullResult = await runSpec(['plan', fixture.issueUrl, '--repo', fixture.repoDir, '--dry-run'], { env: fixture.env });
+
+  assert.equal(promptResult.code, 0, promptResult.stderr);
+  assert.equal(fullResult.code, 0, fullResult.stderr);
+
+  const promptIssueSources = sectionBetween(promptResult.stdout, '### Issue-Mentioned Source Files', '### Auto-Discovered Docs');
+  const promptAutoSources = sectionBetween(promptResult.stdout, '### Auto-Discovered Source Files', '## 5. Missing Files');
+
+  assert.match(promptIssueSources, /`src\/utils\/cookie\.ts` — issue-mentioned; mentioned in issue/);
+  assert.doesNotMatch(promptIssueSources, /cookie\.test\.ts|cookie\.spec\.ts/);
+  assert.match(promptAutoSources, /`src\/utils\/cookie\.test\.ts` — auto-discovered/);
+  assert.match(promptAutoSources, /`src\/utils\/cookie\.spec\.ts` — auto-discovered/);
+  assert.doesNotMatch(promptAutoSources, /src\/utils\/cookie\.ts/);
+
+  const fullAutoSources = sectionBetween(fullResult.stdout, '## 7. Auto-Discovered Source Files', '## 8. Matched Guardrails');
+  assert.match(fullAutoSources, /### src\/utils\/cookie\.test\.ts/);
+  assert.match(fullAutoSources, /SIBLING_COOKIE_TEST_SENTINEL/);
+  assert.match(fullAutoSources, /### src\/utils\/cookie\.spec\.ts/);
+  assert.match(fullAutoSources, /SIBLING_COOKIE_SPEC_SENTINEL/);
+  assert.doesNotMatch(fullAutoSources, /ISSUE_MENTIONED_COOKIE_SOURCE/);
+});
+
 test('spec plan surfaces checkout implementation references for add-to-cart server action issues', async (t) => {
   const fixture = await createExplicitPathPlanFixture(t, {
     issueNumber: 165,

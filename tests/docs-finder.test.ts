@@ -351,6 +351,61 @@ test('auto source discovery includes Node module extensions while preserving gen
   assert.deepEqual([...discoveredPaths].sort(), [...sourceFiles].sort());
 });
 
+test('auto source discovery includes same-directory sibling tests for issue-mentioned sources', async (t) => {
+  const repoDir = await createTempRepo(t);
+  const issue = {
+    number: 328,
+    title: 'Include sibling test candidates',
+    body: 'Relevant source: `src/utils/cookie.ts`',
+    labels: [],
+    url: 'https://github.com/Erick52106/spec-injector/issues/328',
+    state: 'OPEN',
+  };
+
+  await writeRepoFiles(repoDir, {
+    'src/utils/cookie.ts': 'export function parseCookie() { return true; }\n',
+    'src/utils/cookie.test.ts': 'import { parseCookie } from "./cookie";\n',
+    'src/utils/cookie.spec.ts': 'export const cookieSpec = true;\n',
+    'src/utils/unrelated.test.ts': 'export const unrelated = true;\n',
+    'src/auth/session-cookie-service.ts': 'export const sessionCookieService = "cookie validation session";\n',
+  });
+
+  const explicit = await extractExplicitIssueFileReferences(issue, repoDir);
+  const discovered = await discoverSourceFiles(issue, repoDir, ['src'], 2, explicit.sources);
+  const discoveredPaths = discovered.map((source) => source.filePath);
+
+  assert.deepEqual(explicit.sources.map((source) => source.filePath), ['src/utils/cookie.ts']);
+  assert.deepEqual([...discoveredPaths].sort(), ['src/utils/cookie.spec.ts', 'src/utils/cookie.test.ts']);
+  assert.equal(discovered.some((source) => source.filePath === 'src/utils/unrelated.test.ts'), false);
+});
+
+test('auto source discovery dedupes sibling tests from overlapping source roots', async (t) => {
+  const repoDir = await createTempRepo(t);
+  const issue = {
+    number: 328,
+    title: 'Include sibling test candidates',
+    body: 'Relevant source: `src/utils/cookie.ts`',
+    labels: [],
+    url: 'https://github.com/Erick52106/spec-injector/issues/328',
+    state: 'OPEN',
+  };
+
+  await writeRepoFiles(repoDir, {
+    'src/utils/cookie.ts': 'export function parseCookie() { return true; }\n',
+    'src/utils/cookie.test.ts': 'import { parseCookie } from "./cookie";\n',
+    'src/utils/cookie.spec.ts': 'export const cookieSpec = true;\n',
+    'src/utils/session-cookie-service.ts': 'export const sessionCookieService = "cookie validation session";\n',
+  });
+
+  const explicit = await extractExplicitIssueFileReferences(issue, repoDir);
+  const discovered = await discoverSourceFiles(issue, repoDir, ['src', 'src/utils'], 2, explicit.sources);
+
+  assert.deepEqual([...discovered.map((source) => source.filePath)].sort(), [
+    'src/utils/cookie.spec.ts',
+    'src/utils/cookie.test.ts',
+  ]);
+});
+
 test('auto source discovery skips source roots outside the target repo', async (t) => {
   const repoDir = await createTempRepo(t);
   const outsideDir = path.resolve(repoDir, '../outside-source-root');

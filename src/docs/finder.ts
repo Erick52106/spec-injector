@@ -577,12 +577,15 @@ const SOURCE_EXTENSIONS = new Set(['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs',
 const SKIP_DIRS = new Set(['node_modules', '.git', 'dist', 'build', '.cache', 'vendor', 'coverage']);
 const GENERATED_SOURCE_DIRS = new Set(['generated', '__generated__']);
 const ALIAS_HINT_SKIP_DIRS = new Set([...SKIP_DIRS, '.spec-injector']);
+const SIBLING_TEST_SUFFIXES = ['.test', '.spec'] as const;
+const SIBLING_TEST_SCORE_BOOST = 1000;
 
 export async function discoverSourceFiles(
   issue: Issue,
   repoPath: string,
   sourcePaths: string[],
-  maxFiles: number
+  maxFiles: number,
+  issueMentionedSources: DocSection[] = []
 ): Promise<DocSection[]> {
   if (sourcePaths.length === 0 || maxFiles <= 0) return [];
 
@@ -600,9 +603,11 @@ export async function discoverSourceFiles(
       diagnostics.push(invalidDiscoverySourceSection(srcPath));
     }
   }
+  const candidatePaths = [...new Set(candidates)].sort(comparePath);
+  const siblingTestCandidates = collectSiblingTestCandidates(issueMentionedSources, repoPath, candidatePaths);
 
   const scored: ScoredReference[] = [];
-  for (const relPath of candidates) {
+  for (const relPath of candidatePaths) {
     const absolute = path.resolve(repoPath, relPath);
     const readResult = await safeReadFile(absolute);
     if (readResult.status !== 'ok') {
@@ -620,7 +625,8 @@ export async function discoverSourceFiles(
       continue;
     }
     const snippet = createSourceContentSnippet(readResult.content);
-    const score = scoreSrc(keywords, relPath, readResult.content, sourceSignals);
+    const score = scoreSrc(keywords, relPath, readResult.content, sourceSignals) +
+      (siblingTestCandidates.has(relPath) ? SIBLING_TEST_SCORE_BOOST : 0);
     if (score > 0) {
       scored.push({
         filePath: relPath,
@@ -634,7 +640,7 @@ export async function discoverSourceFiles(
     }
   }
 
-  scored.sort((a, b) => b.score - a.score);
+  scored.sort((a, b) => b.score - a.score || comparePath(a.filePath, b.filePath));
 
   return [
     ...diagnostics,
@@ -650,6 +656,35 @@ export async function discoverSourceFiles(
       kind: 'source' as DocSourceKind,
     })),
   ];
+}
+
+function collectSiblingTestCandidates(
+  issueMentionedSources: DocSection[],
+  repoPath: string,
+  discoveredCandidatePaths: string[]
+): Set<string> {
+  const discoveredCandidates = new Set(discoveredCandidatePaths);
+  const siblingCandidates = new Set<string>();
+
+  for (const source of issueMentionedSources) {
+    if (!source.found || source.kind !== 'issue-source') continue;
+    for (const candidatePath of siblingTestPathCandidates(source.filePath)) {
+      if (!discoveredCandidates.has(candidatePath)) continue;
+      if (!fs.existsSync(path.resolve(repoPath, candidatePath))) continue;
+      siblingCandidates.add(candidatePath);
+    }
+  }
+
+  return siblingCandidates;
+}
+
+function siblingTestPathCandidates(sourcePath: string): string[] {
+  const extension = path.posix.extname(sourcePath);
+  if (!SOURCE_EXTENSIONS.has(extension)) return [];
+  const parsed = path.posix.parse(sourcePath);
+  return SIBLING_TEST_SUFFIXES.map((suffix) =>
+    path.posix.join(parsed.dir, `${parsed.name}${suffix}${extension}`)
+  );
 }
 
 function unreadableDocSection(
