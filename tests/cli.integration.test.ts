@@ -793,7 +793,10 @@ test('spec doctor reports current AWP workflow capabilities as JSON', async () =
     'workflow_check_phase_start_commit_merge',
     'workflow_check_finding_disposition',
     'workflow_check_threshold_evidence',
+    'workflow_check_readback_evidence',
     'workflow_check_pr_readback',
+    'target_repo_adoption_contract_doc',
+    'ai_bootstrap_install_contract_doc',
     'awp_review_check_command',
   ]) {
     assert.equal(parsed.capabilities.find((capability) => capability.id === id)?.status, 'pass', id);
@@ -820,6 +823,7 @@ test('spec doctor accepts workflow-check phase tokens with non-pipe separators',
       'Supported phases: start, commit, merge',
       '--finding-disposition <path>',
       '--threshold-evidence <path>',
+      '--readback-evidence <path>',
       '--pr <number-or-url>',
     ].join('\\n'),
     awpReviewHelp: 'Usage: spec awp-review-check\\n',
@@ -843,6 +847,7 @@ test('spec doctor does not report target repo HEAD when installed package root i
   const packageDir = path.join(targetRepo, 'node_modules', 'spec-injector');
   await fs.mkdir(packageDir, { recursive: true });
   await fs.cp(path.join(repoRoot, 'dist'), path.join(packageDir, 'dist'), { recursive: true });
+  await fs.cp(path.join(repoRoot, 'docs'), path.join(packageDir, 'docs'), { recursive: true });
   await fs.symlink(path.join(repoRoot, 'node_modules'), path.join(packageDir, 'node_modules'), 'dir');
   const packageJson = JSON.parse(await fs.readFile(path.join(repoRoot, 'package.json'), 'utf8')) as { version: string };
   await fs.writeFile(path.join(packageDir, 'package.json'), `${JSON.stringify({ version: packageJson.version }, null, 2)}\n`, 'utf8');
@@ -901,6 +906,7 @@ test('spec doctor fails when installed workflow-check lacks #242 AWP flags', asy
   assert.equal(parsed.status, 'fail');
   assert.ok(parsed.missing_capabilities.includes('workflow_check_finding_disposition'));
   assert.ok(parsed.missing_capabilities.includes('workflow_check_threshold_evidence'));
+  assert.ok(parsed.missing_capabilities.includes('workflow_check_readback_evidence'));
   assert.ok(parsed.missing_capabilities.includes('workflow_check_pr_readback'));
 });
 
@@ -2284,6 +2290,177 @@ test('spec workflow-check accepts tachigo and tachiya AWP compatibility fixtures
     assert.equal(parsed.status, 'pass');
     assert.equal(parsed.threshold_calibration_status, 'pass');
   }
+});
+
+test('spec workflow-check merge phase fails stale pre-PR closeout wording', async (t) => {
+  const repoDir = await createTempRepo(t, 'spec-injector-workflow-stale-closeout-');
+  await writeConfig(repoDir, { version: 2, guardrails: [] });
+  await initCleanGitRepo(repoDir);
+  const headSha = (await runCommand('git', ['rev-parse', 'HEAD'], repoDir)).stdout.trim();
+  const prBodyPath = path.join(repoDir, 'PR_BODY.md');
+  await fs.writeFile(prBodyPath, [
+    'Closes #329',
+    '',
+    '## Spec gate evidence',
+    '- spec gate status: pass',
+    '- spec evidence ref: workflow-check:commit:329',
+    '',
+    '## Final merge gate',
+    '- Ready-to-merge decision：pending with reason - PR not created yet',
+    `- latest head SHA: ${headSha}`,
+  ].join('\n'), 'utf8');
+
+  const result = await runSpec([
+    'workflow-check',
+    '--repo', repoDir,
+    '--phase', 'merge',
+    '--pr-body', prBodyPath,
+    '--head-sha', headSha,
+    '--format', 'json',
+  ]);
+
+  assert.notEqual(result.code, 0);
+  const parsed = JSON.parse(result.stdout) as Record<string, unknown>;
+  assert.equal(parsed.status, 'fail');
+  assert.ok((parsed.missing_fields as string[]).includes('stale_closeout_evidence'));
+  assert.equal(parsed.blocking_reason, 'stale_closeout_evidence');
+});
+
+test('spec workflow-check merge phase uses local readback evidence for review-required manual gate', async (t) => {
+  const repoDir = await createTempRepo(t, 'spec-injector-workflow-local-readback-');
+  await writeConfig(repoDir, { version: 2, guardrails: [] });
+  await initCleanGitRepo(repoDir);
+  const headSha = (await runCommand('git', ['rev-parse', 'HEAD'], repoDir)).stdout.trim();
+  const prBodyPath = path.join(repoDir, 'PR_BODY.md');
+  await fs.writeFile(prBodyPath, [
+    'Closes #329',
+    '',
+    '## Spec gate evidence',
+    '- spec gate status: pass',
+    '- spec evidence ref: workflow-check:commit:329',
+    '- routing evidence status: pass',
+    '- routing evidence ref: workflow-check:start:329',
+    '- finding disposition status: pass',
+    '',
+    '## Implementation Evidence',
+    '- Issue evidence: https://github.com/Erick52106/spec-injector/issues/329#issuecomment-1001',
+    `- Commit: ${headSha}`,
+    '',
+    '## Final merge gate',
+    `- latest head SHA: ${headSha}`,
+    '- ready_to_merge: yes',
+  ].join('\n'), 'utf8');
+  const readbackPath = path.join(repoDir, 'readback.json');
+  await fs.writeFile(readbackPath, JSON.stringify({
+    head_sha: headSha,
+    checks_status: 'pass',
+    unresolved_review_threads_count: 0,
+    coderabbit_status: 'skipped',
+    codex_connector_status: 'skipped',
+    review_decision: 'REVIEW_REQUIRED',
+    merge_state_status: 'BLOCKED',
+    draft_status: 'pass',
+    source_issue_evidence_status: 'pass',
+    spec_gate_status: 'pass',
+    routing_evidence_status: 'pass',
+    finding_disposition_status: 'pass',
+    ready_to_merge: 'manual',
+  }, null, 2), 'utf8');
+
+  const result = await runSpec([
+    'workflow-check',
+    '--repo', repoDir,
+    '--phase', 'merge',
+    '--pr-body', prBodyPath,
+    '--head-sha', headSha,
+    '--readback-evidence', readbackPath,
+    '--format', 'json',
+  ]);
+
+  assert.equal(result.code, 0, result.stderr);
+  const parsed = JSON.parse(result.stdout) as Record<string, unknown>;
+  assert.equal(parsed.status, 'manual');
+  assert.equal(parsed.closeout_readback_status, 'manual');
+  assert.equal(parsed.human_review_status, 'manual');
+  assert.equal(parsed.ready_to_merge, 'manual');
+  assert.ok((parsed.missing_fields as string[]).includes('human_review_status'));
+  assert.ok((parsed.missing_fields as string[]).includes('ready_to_merge'));
+  assert.equal(parsed.manual_reason, 'human_review_status');
+});
+
+test('spec workflow-check finding disposition accepts docs wording and blocks needs human review', async (t) => {
+  const repoDir = await createTempRepo(t, 'spec-injector-workflow-finding-docs-wording-');
+  await writeConfig(repoDir, { version: 2, guardrails: [] });
+  await initCleanGitRepo(repoDir);
+  const headSha = (await runCommand('git', ['rev-parse', 'HEAD'], repoDir)).stdout.trim();
+  const thinBody = await fs.readFile(path.join(repoRoot, 'tests', 'fixtures', 'workflow', 'tachigo-thin-pr-body.md'), 'utf8');
+  const prBodyPath = path.join(repoDir, 'PR_BODY.md');
+  await fs.writeFile(prBodyPath, thinBody.replaceAll('__HEAD_SHA__', headSha), 'utf8');
+  const acceptedPath = path.join(repoDir, 'accepted-findings.json');
+  await fs.writeFile(acceptedPath, JSON.stringify({
+    findings: [
+      {
+        finding_id: 'finding-1',
+        source: 'coderabbit',
+        status: 'not adopted',
+        resolved: 'yes',
+        rationale_ref: 'workflow-check:finding:rationale-1',
+      },
+      {
+        finding_id: 'finding-2',
+        source: 'chatgpt-codex-connector',
+        status: 'optional polish',
+        resolved: 'yes',
+        rationale_ref: 'workflow-check:finding:rationale-2',
+      },
+      {
+        finding_id: 'finding-3',
+        source: 'self-review',
+        status: 'noise / not applicable',
+        resolved: 'yes',
+        rationale_ref: 'workflow-check:finding:rationale-3',
+      },
+    ],
+  }, null, 2), 'utf8');
+
+  const accepted = await runSpec([
+    'workflow-check',
+    '--repo', repoDir,
+    '--phase', 'merge',
+    '--pr-body', prBodyPath,
+    '--head-sha', headSha,
+    '--finding-disposition', acceptedPath,
+    '--format', 'json',
+  ]);
+  assert.equal(accepted.code, 0, accepted.stderr);
+  assert.equal((JSON.parse(accepted.stdout) as Record<string, unknown>).finding_disposition_status, 'pass');
+
+  const blockedPath = path.join(repoDir, 'blocked-findings.json');
+  await fs.writeFile(blockedPath, JSON.stringify({
+    findings: [
+      {
+        finding_id: 'finding-4',
+        source: 'human',
+        status: 'needs human review',
+        resolved: 'no',
+        rationale_ref: 'workflow-check:finding:rationale-4',
+      },
+    ],
+  }, null, 2), 'utf8');
+
+  const blocked = await runSpec([
+    'workflow-check',
+    '--repo', repoDir,
+    '--phase', 'merge',
+    '--pr-body', prBodyPath,
+    '--head-sha', headSha,
+    '--finding-disposition', blockedPath,
+    '--format', 'json',
+  ]);
+  assert.notEqual(blocked.code, 0);
+  const parsed = JSON.parse(blocked.stdout) as Record<string, unknown>;
+  assert.equal(parsed.finding_disposition_status, 'fail');
+  assert.ok((parsed.missing_fields as string[]).includes('review_finding_needs_human_review'));
 });
 
 test('spec workflow-check merge phase collects closeout readback evidence with mocked gh', async (t) => {

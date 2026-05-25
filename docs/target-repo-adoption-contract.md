@@ -8,9 +8,9 @@ Target repos can use the published CLI behavior directly when `spec-injector` is
 
 - `spec workflow-check --phase start` can emit local Hybrid AWP routing evidence.
 - `spec workflow-check --phase commit` can validate staged-state safety plus PR body status/ref evidence.
-- `spec workflow-check --phase merge` can validate final merge gate evidence, HEAD freshness, finding disposition evidence, threshold calibration evidence, and optional read-only closeout readback.
+- `spec workflow-check --phase merge` can validate final merge gate evidence, HEAD freshness, finding disposition evidence, threshold calibration evidence, stale pending closeout wording, and optional read-only closeout readback.
 - Text output is human-readable; `--format json` emits machine-readable status fields for downstream ledgers.
-- Local JSON inputs such as `--routing-evidence`, `--finding-disposition`, and `--threshold-evidence` stay stdout-first and local-only.
+- Local JSON inputs such as `--routing-evidence`, `--finding-disposition`, `--threshold-evidence`, and `--readback-evidence` stay stdout-first and local-only.
 - Offline/manual checklist fallback remains valid for repos that have not fully adopted `spec-injector`.
 - Target repo PR bodies only need stable status/ref evidence, not full task packages or full AWP review ledgers.
 
@@ -58,6 +58,10 @@ A `tachigo` autonomous PR body can keep a thin evidence section:
 
 The target repo gate only needs the `status` / `ref` fields. The full routing plan, threshold ledger, and finding disposition ledger can remain behind the referenced evidence.
 
+If a PR body still contains pre-PR closeout wording such as `pending`, `unknown`, or `PR not created yet` in the final merge gate, `spec workflow-check --phase merge` treats that as stale evidence. Refresh the PR body before using it as merge evidence.
+
+Review finding dispositions can use either machine-friendly values or the human review vocabulary used in repo workflows: `adopted`, `not adopted`, `optional polish`, `noise / not applicable`, and `needs human review`. `needs human review` is a blocking disposition until a human decision is recorded.
+
 ## Tachiya Example
 
 A `tachiya` PR can use the same status/ref shape even if the repository keeps a different PR template:
@@ -85,5 +89,6 @@ If `tachiya` only has manual checklist fallback for a small change, the checker 
 - Keep generated outputs and private context out of git.
 - Store only status/ref evidence in PR bodies unless a repo explicitly wants more detail.
 - Run `spec workflow-check --format json` locally or in a trusted tooling step.
+- For remote readback collected by another tool, pass a local `--readback-evidence <path>` JSON file rather than asking Scope Police to parse full review transcripts.
 - Use target repo PRs only when changing repo-local docs, templates, CI, or Scope Police enforcement.
 - Preserve human merge authorization as the final gate.

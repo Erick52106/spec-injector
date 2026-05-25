@@ -14,7 +14,7 @@ Issue / PR label taxonomy、visual hierarchy、combination rules、migration sta
 
 Autonomous Worker Profiles / Codex autonomous PR work 的 start-gate routing source of truth 見 [Hybrid AWP routing policy](hybrid-awp-routing-policy.md)。該 policy 只適用於有明確 autonomous routing signal 的 workflow；一般 human PR 或非 autonomous work 不應因缺少 AWP routing evidence 而 fail。
 
-核心 AWP baseline 變更受 [AWP Dogfood Outcome Ledger](awp-dogfood-outcome-ledger.md) 的 #258 freeze gate 控制。未累積至少 5 張真實 AWP PR outcome sample 前，除 P0 break-glass 外，不新增 session / hook / enforcement surface，也不更改 `spec workflow-check` flags 或 schema。
+核心 AWP baseline 變更受 [AWP Dogfood Outcome Ledger](awp-dogfood-outcome-ledger.md) 的 #258 freeze gate 控制。未累積至少 5 張真實 AWP PR outcome sample 前，除 P0 break-glass 外，不新增 session / hook / enforcement surface。Dogfood 已重複證實的 local-only evidence hardening 可以 additive 方式進入 `spec workflow-check`，但不得變成 worker runtime、GitHub mutation 或 downstream Scope Police full-evidence parser。
 
 若 autonomous workflow 有 start-gate routing evidence，可在 commit / merge 階段用 local file 傳入 `spec workflow-check --routing-evidence <path>`。該檢查只讀本地 PR body 與本地 routing JSON，驗證 status/ref、delegation log、Spark / ops evidence、5.4 worker evidence、explicit fallback reason 與 merge HEAD freshness；它不讀取或修改 GitHub remote state，也不要求 downstream Scope Police 解析完整 routing plan。
 
@@ -114,6 +114,8 @@ CodeRabbit / Codex auto review findings 只能作為 auxiliary signals。`spec e
 Thread-level limitation：`spec evidence-check` 目前只做 read-only 輔助檢核，不會完整 enforce GitHub review thread / conversation closeout。它可提醒 PR body / evidence / HEAD / validation / findings shape，但不能保證每條 CodeRabbit / Codex / human thread 都已關閉。`PASS` 僅表示輔助欄位滿足程度，不是 merge approval。該 checker 不能 auto-comment、auto-resolve、auto-merge、auto-close，也不會 mutate GitHub issue / PR metadata；最終 thread-level closeout 必須由 human 逐條確認與接手。
 
 `spec workflow-check --phase merge --pr <number-or-url>` 可做 local-only merge closeout readback。它會讀取 PR body、draft state、review metadata、`gh pr checks` summary 與 review threads，並把無法可靠判斷的 GitHub / `gh` output drift 回報成 `manual` fallback，而不是把工具層 schema mismatch 誤判成 PR 本身不可 merge。這個 `--pr` readback path 不依賴 target repo `.spec-injector/config.json`；若 local config 不存在，checker 會保留 warning 並繼續 readback，避免 repo-local closeout 被 config bootstrap 狀態誤擋。`start` / `commit` phase 仍需要 local config。若 checks readback 回傳缺欄位、未知 enum、或只有無法歸類的 status shape，controller 應以 PR 頁面、`gh pr checks`、Actions UI、review thread readback 補人工 evidence；不得因 manual fallback 自動 merge，也不得讓 checker auto-comment、auto-resolve 或 mutate GitHub。
+
+若 GitHub readback 已由外部 workflow 或 controller 收集，可用 `spec workflow-check --phase merge --pr-body <path> --head-sha <sha> --readback-evidence <path>` 驗證本地 closeout JSON。該 JSON 只作為 local input，不授權 checker 呼叫 GitHub 或修改遠端狀態。`reviewDecision=REVIEW_REQUIRED` / `mergeStateStatus=BLOCKED` 這類需要 human approval 的狀態應回 `manual`，不是假裝 pass。PR body 內殘留 `pending`、`unknown`、`PR not created yet` 等 pre-PR closeout wording 時，merge gate 應 fail 並要求刷新 evidence。
 
 ## Worktree naming
 
