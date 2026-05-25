@@ -24,6 +24,7 @@ type WorkflowCheckOptions = {
   routingEvidence?: string;
   findingDisposition?: string;
   thresholdEvidence?: string;
+  readbackEvidence?: string;
 };
 
 type WorkflowCheckResult = {
@@ -65,6 +66,8 @@ type WorkflowCheckResult = {
   spec_gate_status?: string;
   routing_evidence_status?: string;
   ready_to_merge?: 'yes' | 'no' | 'manual';
+  blocking_reason?: string;
+  manual_reason?: string;
 };
 
 type PrBodyEvidence = {
@@ -97,6 +100,7 @@ type PrBodyEvidence = {
   hasFindingDispositionRef: boolean;
   findingDispositionRef: string | null;
   readyToMerge: 'yes' | 'no' | 'manual' | null;
+  hasStaleCloseoutEvidence: boolean;
 };
 
 type RoutingTaskClass =
@@ -194,6 +198,7 @@ const SPEC_REF_PATTERN = /\b(?:spec[_ -]evidence[_ -]ref|spec[_ -]gate[_ -]ref|w
 const MANUAL_FALLBACK_PATTERN = /\bmanual(?: checklist)? fallback\b|\bmanual spec gate\b|\bmanual workflow gate\b/i;
 const FINAL_MERGE_GATE_PATTERN = /\bfinal merge gate\b|\bmerge gate\b/i;
 const LATEST_HEAD_PATTERN = /\b(?:latest head|head sha|commit hash|head)\b[^\n\r]{0,80}\b[0-9a-f]{7,40}\b/i;
+const STALE_CLOSEOUT_PATTERN = /\b(?:ready[- ]to[- ]merge decision|required checks|coderabbit|chatgpt-codex-connector|remote review|final merge gate)\b[^\n\r]{0,160}\b(?:pending|unknown|pr not created yet|not available before pr creation)\b/i;
 const ROUTING_STATUS_PATTERN = /\b(?:routing[_ -]evidence[_ -]status|routing status)\b\s*[:=]\s*(pass|fail|manual|skipped|pending|unknown)\s*$/im;
 const GENERIC_STATUS_VALUES = ['pass', 'fail', 'manual', 'skipped', 'pending', 'unknown'] as const;
 const AUTONOMOUS_SIGNAL_PATTERN = /\b(?:Autonomous Worker Profiles|Hybrid AWP|AWP|Codex autonomous PR|controller_fallback|Delegation Execution Log)\b/i;
@@ -204,7 +209,7 @@ const WORKER_54_EVIDENCE_PATTERN = /\b(?:worker_5_4|5\.4 worker|implementation w
 const CONTROLLER_ONLY_PATTERN = /\b(?:controller-only|controller only|controller_fallback\s*[:=]\s*allowed|controller fallback\s*[:=]\s*allowed)\b/i;
 const WEAK_FALLBACK_REASONS = new Set(['', 'n/a', 'na', 'none', 'small', 'done', 'ok', 'trivial']);
 const FINDING_SOURCES = ['coderabbit', 'chatgpt-codex-connector', 'human', 'self-review'];
-const FINDING_STATUSES = ['adopted', 'not_adopted', 'deferred_follow_up', 'blocked', 'noise'];
+const FINDING_STATUSES = ['adopted', 'not_adopted', 'optional_polish', 'deferred_follow_up', 'blocked', 'noise', 'needs_human_review'];
 const DELEGATION_OUTCOMES = ['n/a', 'skipped', 'completed', 'fell_through', 'unavailable'] as const;
 const THRESHOLD_TASK_SIZES = ['tiny', 'small', 'medium', 'large'];
 const THRESHOLD_RISKS = ['low', 'medium', 'high'];
@@ -618,6 +623,7 @@ async function runMergePhase(
   let routing: RoutingEvidence | null = null;
   const findingDisposition = await readOptionalFindingDispositionAssessment(opts.findingDisposition, warnings);
   const threshold = await readOptionalThresholdAssessment(opts.thresholdEvidence, warnings);
+  const closeoutReadback = await readOptionalCloseoutReadbackAssessment(opts.readbackEvidence, opts.headSha);
   try {
     evidence = await parsePrBodyEvidence(opts.prBody, opts.headSha);
   } catch (err) {
@@ -646,11 +652,14 @@ async function runMergePhase(
   }
 
   const missingFields = missingMergeFields(evidence, Boolean(opts.headSha));
+  const bodyMissingFields = [...missingFields];
   if (isBlockedSpecStatus(evidence.specStatus)) {
     missingFields.push('ready_spec_gate_status');
+    bodyMissingFields.push('ready_spec_gate_status');
   }
   if (evidence.headMatches === false) {
     missingFields.push('head_sha_freshness');
+    bodyMissingFields.push('head_sha_freshness');
   }
   const routingCheck = routing ? assessRoutingAlignment(routing, evidence, 'merge', opts.headSha) : null;
   const delegationOutcome = resolveDelegationOutcome(evidence, routing);
@@ -658,8 +667,25 @@ async function runMergePhase(
   if (routingCheck) missingFields.push(...routingCheck.routing_mismatch);
   if (findingDisposition) missingFields.push(...findingDisposition.missingFields);
   if (threshold) missingFields.push(...threshold.missingFields);
+  if (closeoutReadback) missingFields.push(...closeoutReadback.missingFields);
+  const hasDeterministicBlocker = mergeMissingFieldsIncludeDeterministicBlocker(missingFields) ||
+    routingCheck?.fallback_status === 'fail' ||
+    findingDisposition?.status === 'fail' ||
+    threshold?.status === 'fail' ||
+    closeoutReadback?.status === 'fail';
+  const canReturnManualForReadback = closeoutReadback?.status === 'manual' &&
+    bodyMissingFields.length === 0 &&
+    routingCheck?.fallback_status !== 'fail' &&
+    findingDisposition?.status !== 'fail' &&
+    threshold?.status !== 'fail';
 
-  if (evidence.hasManualFallback && missingFields.length > 0 && !isBlockedSpecStatus(evidence.specStatus) && evidence.headMatches !== false) {
+  if (
+    evidence.hasManualFallback &&
+    missingFields.length > 0 &&
+    !hasDeterministicBlocker &&
+    !isBlockedSpecStatus(evidence.specStatus) &&
+    evidence.headMatches !== false
+  ) {
     return buildResult({
       phase: 'merge',
       repoPath,
@@ -673,6 +699,7 @@ async function runMergePhase(
       findingDispositionAssessment: findingDisposition,
       threshold: threshold?.evidence,
       thresholdAssessment: threshold,
+      closeout: closeoutReadback ?? undefined,
       delegationOutcome,
     });
   }
@@ -682,15 +709,18 @@ async function runMergePhase(
       phase: 'merge',
       repoPath,
       checkedAt,
-      status: 'fail',
+      status: canReturnManualForReadback ? 'manual' : 'fail',
       missingFields,
-      warnings: [...warnings, ...delegationWarnings, ...(findingDisposition?.warnings ?? []), ...(threshold?.warnings ?? [])],
-      evidenceSummary: renderMergeFailureSummary(missingFields),
+      warnings: [...warnings, ...delegationWarnings, ...(findingDisposition?.warnings ?? []), ...(threshold?.warnings ?? []), ...(closeoutReadback?.warnings ?? [])],
+      evidenceSummary: canReturnManualForReadback
+        ? `merge gate requires manual fallback: ${closeoutReadback.missingFields.join(', ')}`
+        : renderMergeFailureSummary(missingFields),
       routing: routing ?? undefined,
       fallback: routingCheck ?? undefined,
       findingDispositionAssessment: findingDisposition,
       threshold: threshold?.evidence,
       thresholdAssessment: threshold,
+      closeout: closeoutReadback ?? undefined,
       delegationOutcome,
     });
   }
@@ -701,13 +731,14 @@ async function runMergePhase(
     checkedAt,
     status: 'pass',
     missingFields: [],
-    warnings: [...warnings, ...delegationWarnings, ...(findingDisposition?.warnings ?? []), ...(threshold?.warnings ?? [])],
+    warnings: [...warnings, ...delegationWarnings, ...(findingDisposition?.warnings ?? []), ...(threshold?.warnings ?? []), ...(closeoutReadback?.warnings ?? [])],
     evidenceSummary: 'merge gate passed: final merge gate, spec evidence, and HEAD freshness are present',
     routing: routing ?? undefined,
     fallback: routingCheck ?? inferFallbackFromEvidence(evidence),
     findingDispositionAssessment: findingDisposition,
     threshold: threshold?.evidence,
     thresholdAssessment: threshold,
+    closeout: closeoutReadback ?? undefined,
     delegationOutcome,
   });
 }
@@ -973,6 +1004,7 @@ function parsePrBodyEvidenceText(body: string, expectedHeadSha?: string): PrBody
     hasFindingDispositionRef: Boolean(findingDispositionRef),
     findingDispositionRef,
     readyToMerge,
+    hasStaleCloseoutEvidence: STALE_CLOSEOUT_PATTERN.test(body),
   };
 }
 
@@ -1034,6 +1066,79 @@ async function readOptionalFindingDispositionAssessment(
   }
 }
 
+async function readOptionalCloseoutReadbackAssessment(
+  closeoutReadbackPath: string | undefined,
+  expectedHeadSha?: string
+): Promise<CloseoutReadback | null> {
+  if (!closeoutReadbackPath) return null;
+  try {
+    const raw = JSON.parse(await fs.readFile(path.resolve(closeoutReadbackPath), 'utf8')) as Record<string, unknown>;
+    return assessCloseoutReadbackEvidence(raw, expectedHeadSha);
+  } catch (err) {
+    return manualCloseout(['readback_evidence'], [`Could not read closeout readback evidence: ${(err as Error).message}`]);
+  }
+}
+
+function assessCloseoutReadbackEvidence(raw: Record<string, unknown>, expectedHeadSha?: string): CloseoutReadback {
+  const missing: string[] = [];
+  const warnings: string[] = [];
+  const checksStatus = parseWorkflowStatusField(raw.checks_status, 'checks_status', missing);
+  const coderabbitStatus = parseAutomationStatusField(raw.coderabbit_status, 'coderabbit_status', missing);
+  const codexConnectorStatus = parseAutomationStatusField(raw.codex_connector_status, 'codex_connector_status', missing);
+  const draftStatus = parseWorkflowStatusField(raw.draft_status, 'draft_status', missing);
+  const sourceIssueEvidenceStatus = parseWorkflowStatusField(raw.source_issue_evidence_status, 'source_issue_evidence_status', missing);
+  const specGateStatus = parseWorkflowStatusField(raw.spec_gate_status, 'spec_gate_status', missing);
+  const routingEvidenceStatus = parseWorkflowStatusField(raw.routing_evidence_status, 'routing_evidence_status', missing);
+  const findingDispositionStatus = parseWorkflowStatusField(raw.finding_disposition_status, 'finding_disposition_status', missing);
+  const readyToMerge = parseReadyToMergeValue(raw.ready_to_merge, missing);
+  const unresolvedReviewThreadsCount = parseReviewThreadCount(raw.unresolved_review_threads_count, missing);
+  const humanReviewStatus = summarizeReadbackHumanReview(raw, missing);
+
+  if (expectedHeadSha && raw.head_sha !== expectedHeadSha) missing.push('head_sha_freshness');
+  if (checksStatus !== 'pass') missing.push('checks_status');
+  if (unresolvedReviewThreadsCount !== null && unresolvedReviewThreadsCount > 0) missing.push('unresolved_review_threads');
+  if (humanReviewStatus !== 'pass') missing.push('human_review_status');
+  if (draftStatus !== 'pass') missing.push('draft_pr');
+  if (sourceIssueEvidenceStatus !== 'pass') missing.push('source_issue_evidence');
+  if (specGateStatus !== 'pass') missing.push('spec_gate_status');
+  if (routingEvidenceStatus !== 'pass') missing.push('routing_evidence_status');
+  if (findingDispositionStatus !== 'pass') missing.push('finding_disposition_status');
+  if (readyToMerge !== 'yes') missing.push('ready_to_merge');
+
+  const failStatuses: Array<WorkflowStatus | 'skipped'> = [
+    checksStatus,
+    draftStatus,
+    sourceIssueEvidenceStatus,
+    specGateStatus,
+    routingEvidenceStatus,
+    findingDispositionStatus,
+    humanReviewStatus,
+  ];
+  const hasFail = failStatuses.includes('fail') ||
+    readyToMerge === 'no' ||
+    (unresolvedReviewThreadsCount ?? 0) > 0 ||
+    (expectedHeadSha !== undefined && raw.head_sha !== expectedHeadSha);
+  const hasManual = missing.length > 0 || failStatuses.includes('manual') || readyToMerge === 'manual';
+  const status: WorkflowStatus = hasFail ? 'fail' : hasManual ? 'manual' : 'pass';
+
+  return {
+    status,
+    missingFields: unique(missing),
+    warnings,
+    checksStatus,
+    unresolvedReviewThreadsCount,
+    coderabbitStatus,
+    codexConnectorStatus,
+    humanReviewStatus,
+    draftStatus,
+    sourceIssueEvidenceStatus,
+    specGateStatus,
+    routingEvidenceStatus,
+    findingDispositionStatus,
+    readyToMerge,
+  };
+}
+
 function assessFindingDisposition(evidence: FindingDispositionEvidence): GateAssessment {
   const missing: string[] = [];
   const warnings: string[] = [];
@@ -1044,11 +1149,12 @@ function assessFindingDisposition(evidence: FindingDispositionEvidence): GateAss
   for (const finding of evidence.findings) {
     if (!meaningful(finding.finding_id)) missing.push('finding_id');
     if (!FINDING_SOURCES.includes(normalize(finding.source))) missing.push('finding_source');
-    const status = normalize(finding.status);
+    const status = normalizeFindingStatus(finding.status);
     if (!FINDING_STATUSES.includes(status)) missing.push('finding_status');
     if (!['yes', 'no', 'n/a'].includes(normalize(finding.resolved))) missing.push('finding_resolved');
     if (status === 'blocked') missing.push('review_finding_blocked');
-    if (['not_adopted', 'blocked', 'noise'].includes(status) && !isEvidenceRefValue(finding.rationale_ref)) {
+    if (status === 'needs_human_review') missing.push('review_finding_needs_human_review');
+    if (['not_adopted', 'optional_polish', 'blocked', 'noise', 'needs_human_review'].includes(status) && !isEvidenceRefValue(finding.rationale_ref)) {
       missing.push('finding_rationale_ref');
     }
     if (status === 'deferred_follow_up' && !isFollowUpRef(finding.follow_up_issue)) {
@@ -1118,6 +1224,7 @@ function missingMergeFields(evidence: PrBodyEvidence, expectedHeadProvided: bool
   const missing = missingCommitFields(evidence);
   if (!evidence.hasFinalMergeGate) missing.push('final_merge_gate');
   if (!evidence.hasLatestHead) missing.push(expectedHeadProvided ? 'head_sha_freshness' : 'latest_head_sha');
+  if (evidence.hasStaleCloseoutEvidence) missing.push('stale_closeout_evidence');
   return missing;
 }
 
@@ -1128,7 +1235,26 @@ function isBlockedSpecStatus(status: PrBodyEvidence['specStatus']): boolean {
 function renderMergeFailureSummary(missingFields: string[]): string {
   if (missingFields.includes('spec_evidence_ref')) return 'merge gate missing spec evidence ref';
   if (missingFields.includes('head_sha_freshness')) return 'merge gate evidence does not match expected head SHA';
+  if (missingFields.includes('stale_closeout_evidence')) return 'merge gate contains stale pending closeout evidence';
   return `merge gate missing ${missingFields.join(', ')}`;
+}
+
+function mergeMissingFieldsIncludeDeterministicBlocker(missingFields: string[]): boolean {
+  return missingFields.some((field) => [
+    'stale_closeout_evidence',
+    'ready_spec_gate_status',
+    'head_sha_freshness',
+    'review_finding_blocked',
+    'review_finding_needs_human_review',
+    'checks_status',
+    'unresolved_review_threads',
+    'draft_pr',
+    'source_issue_evidence',
+    'spec_gate_status',
+    'routing_evidence_status',
+    'finding_disposition_status',
+    'ready_to_merge',
+  ].includes(field));
 }
 
 function buildResult(input: {
@@ -1202,6 +1328,13 @@ function buildResult(input: {
     result.finding_disposition_status = input.closeout.findingDispositionStatus;
     result.ready_to_merge = input.closeout.readyToMerge;
   }
+  const primaryMissingField = result.missing_fields[0];
+  if (primaryMissingField && result.status === 'fail') {
+    result.blocking_reason = primaryMissingField;
+  }
+  if (primaryMissingField && result.status === 'manual') {
+    result.manual_reason = primaryMissingField;
+  }
   return result;
 }
 
@@ -1255,6 +1388,8 @@ function printResult(result: WorkflowCheckResult, format: OutputFormat): void {
     'spec_gate_status',
     'routing_evidence_status',
     'ready_to_merge',
+    'blocking_reason',
+    'manual_reason',
   ] as const) {
     if (result[key]) console.log(`${key}=${result[key]}`);
   }
@@ -1562,6 +1697,63 @@ function parseReadyToMerge(body: string): 'yes' | 'no' | 'manual' | null {
   if (normalized === 'true') return 'yes';
   if (normalized === 'false') return 'no';
   return null;
+}
+
+function parseWorkflowStatusField(value: unknown, fieldName: string, missing: string[]): WorkflowStatus {
+  const normalized = normalize(value);
+  if (['pass', 'fail', 'manual', 'skipped'].includes(normalized)) return normalized as WorkflowStatus;
+  missing.push(fieldName);
+  return 'manual';
+}
+
+function parseAutomationStatusField(value: unknown, fieldName: string, missing: string[]): WorkflowStatus | 'skipped' {
+  const normalized = normalize(value);
+  if (['pass', 'fail', 'manual', 'skipped'].includes(normalized)) return normalized as WorkflowStatus | 'skipped';
+  missing.push(fieldName);
+  return 'manual';
+}
+
+function parseReadyToMergeValue(value: unknown, missing: string[]): 'yes' | 'no' | 'manual' {
+  const normalized = normalize(value);
+  if (['yes', 'no', 'manual'].includes(normalized)) return normalized as 'yes' | 'no' | 'manual';
+  if (normalized === 'true') return 'yes';
+  if (normalized === 'false') return 'no';
+  missing.push('ready_to_merge');
+  return 'manual';
+}
+
+function parseReviewThreadCount(value: unknown, missing: string[]): number | null {
+  if (typeof value === 'number' && Number.isInteger(value) && value >= 0) return value;
+  if (value === null || value === undefined) {
+    missing.push('unresolved_review_threads_count');
+    return null;
+  }
+  const parsed = Number(value);
+  if (Number.isInteger(parsed) && parsed >= 0) return parsed;
+  missing.push('unresolved_review_threads_count');
+  return null;
+}
+
+function summarizeReadbackHumanReview(raw: Record<string, unknown>, missing: string[]): WorkflowStatus {
+  const explicit = raw.human_review_status;
+  if (explicit !== undefined) return parseWorkflowStatusField(explicit, 'human_review_status', missing);
+
+  const reviewDecision = normalize(raw.review_decision);
+  const mergeStateStatus = normalize(raw.merge_state_status);
+  if (['approved'].includes(reviewDecision)) return 'pass';
+  if (['changes_requested'].includes(reviewDecision)) return 'fail';
+  if (['review_required'].includes(reviewDecision)) return 'manual';
+  if (['blocked', 'dirty'].includes(mergeStateStatus)) return 'manual';
+  missing.push('human_review_status');
+  return 'manual';
+}
+
+function normalizeFindingStatus(value: unknown): string {
+  const normalized = normalize(value)
+    .replace(/\s*\/\s*/g, '_')
+    .replace(/[\s-]+/g, '_');
+  if (normalized === 'not_applicable' || normalized === 'noise_not_applicable') return 'noise';
+  return normalized;
 }
 
 function summarizeWorkflowStatus(statuses: WorkflowStatus[]): WorkflowStatus {

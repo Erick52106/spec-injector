@@ -184,6 +184,7 @@ spec workflow-check --repo . --phase commit --pr-body /path/to/pr-body.md --rout
 spec awp-review-check --repo . --evidence /path/to/awp-review-evidence.json
 spec workflow-check --repo . --phase merge --pr-body /path/to/pr-body.md --finding-disposition /path/to/findings.json
 spec workflow-check --repo . --phase merge --pr-body /path/to/pr-body.md --threshold-evidence /path/to/threshold.json
+spec workflow-check --repo . --phase merge --pr-body /path/to/pr-body.md --head-sha <sha> --readback-evidence /path/to/readback.json
 spec workflow-check --repo . --phase merge --pr <number-or-url> --format json
 spec doctor --workflow awp --format json
 ```
@@ -198,8 +199,8 @@ Notes:
 - `spec workflow-check` is a local-only, stdout-first workflow gate for autonomous PR evidence. It does not edit GitHub, add/commit files, write task packages, comment, merge, or mutate downstream repos.
 - Autonomous worker-routing flow 可在 implementation 開始前使用 [Hybrid AWP routing policy](docs/hybrid-awp-routing-policy.md) 作為 start-gate source of truth。
 - Downstream AI entrypoints 可引用 [AI bootstrap install contract](docs/ai-bootstrap-install-contract.md)，用 `SPEC_INJECTOR_DIR` local runner fallback 與 `spec doctor --workflow awp --format json` 檢查 AWP capability，不需要 global install。
-- `spec workflow-check --format json` emits the same stable fields as the text output: `phase`, `status`, `repo`, `head_sha`, `checked_at`, `missing_fields`, `warnings`, and `evidence_summary`.
-- Hybrid AWP checks add optional JSON/text fields such as `routing_mode`, `routing_task_class`, `spark_required`, `worker_5_4_required`, `controller_role`, `controller_fallback`, `controller_fallback_reason`, `delegation_outcome`, `fallback_status`, `fallback_reason_quality`, `routing_mismatch`, `human_review_status`, and `draft_status`.
+- `spec workflow-check --format json` emits the same stable fields as the text output: `phase`, `status`, `repo`, `head_sha`, `checked_at`, `missing_fields`, `warnings`, and `evidence_summary`. Additive fields such as `blocking_reason` and `manual_reason` point to the first deterministic blocker or manual gate.
+- Hybrid AWP checks add optional JSON/text fields such as `routing_mode`, `routing_task_class`, `spark_required`, `worker_5_4_required`, `controller_role`, `controller_fallback`, `controller_fallback_reason`, `delegation_outcome`, `fallback_status`, `fallback_reason_quality`, `routing_mismatch`, `closeout_readback_status`, `checks_status`, `human_review_status`, `draft_status`, `ready_to_merge`, and `unresolved_review_threads_count`.
 - Downstream repos such as `tachigo` / `tachiya` only need to copy or reference the workflow-check `status` and evidence `ref` in their PR body / ledger. Their Scope Police workflows should not parse full `spec plan` or task-package evidence. See the [target repo adoption contract](docs/target-repo-adoption-contract.md).
 - AWP review follow-up 可使用 [AWP review triage gates](docs/awp-review-triage-gates.md) 與 `spec awp-review-check --repo . --evidence <path>` 檢查 review batch freshness、duplicate collapse、root-cause gate、patch budget 與 closeout ledger。這個 checker 只讀 local JSON，不讀寫 GitHub、不 resolve thread、不 auto-fix、不 merge。
 
@@ -207,7 +208,7 @@ Notes:
 
 - `start`: validates repo config. With `--issue`, it performs a dry-run bounded context check through `spec plan --dry-run --format prompt --verbose` without writing a task package. If the issue has an AWP / Codex autonomous routing signal, it also emits a deterministic Hybrid AWP routing plan; if no autonomous signal is present, routing fields are `n/a` and ordinary workflows do not fail.
 - `commit`: checks staged files for `.spec-injector/`, generated task packages / spec output, and private context artifacts. With `--pr-body`, it also checks for spec gate status/ref or manual fallback evidence. With `--routing-evidence`, it checks local PR body routing status/ref, delegation log, Spark / ops evidence, 5.4 worker evidence, and explicit fallback quality.
-- `merge`: checks a local PR body for final merge gate evidence, spec gate status/ref, and latest HEAD SHA. With `--head-sha`, stale or mismatched evidence fails. With `--routing-evidence`, stale start-gate routing evidence or routing/PR-body mismatch fails. With `--pr`, merge closeout readback can continue without local `.spec-injector/config.json`; missing local config is reported as a warning while GitHub PR body / checks / reviews are read.
+- `merge`: checks a local PR body for final merge gate evidence, spec gate status/ref, latest HEAD SHA, and stale pending closeout wording. With `--head-sha`, stale or mismatched evidence fails. With `--routing-evidence`, stale start-gate routing evidence or routing/PR-body mismatch fails. With `--readback-evidence`, local merge closeout JSON can classify checks / review threads / review decision as pass, fail, or manual without calling GitHub. With `--pr`, merge closeout readback can continue without local `.spec-injector/config.json`; missing local config is reported as a warning while GitHub PR body / checks / reviews are read.
 
 ## Optional live gh smoke test
 

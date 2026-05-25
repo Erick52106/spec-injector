@@ -23,6 +23,7 @@ The AWP workflow requires `workflow-check` support for:
 - `--phase start|commit|merge`
 - `--finding-disposition`
 - `--threshold-evidence`
+- `--readback-evidence`
 - `--pr`
 
 `spec doctor --workflow awp --format json` is the stable machine-readable readiness check. A `status` of `pass` means the installed CLI exposes the current AWP workflow capabilities. A `status` of `fail` means the bootstrap should use the local runner fallback below or stop for human review.
@@ -77,6 +78,7 @@ Target repo docs can then invoke:
 ```bash
 $SPEC_RUNNER workflow-check --repo . --phase start --issue <number-or-url> --format json
 $SPEC_RUNNER workflow-check --repo . --phase commit --pr-body /path/to/pr-body.md --format json
+$SPEC_RUNNER workflow-check --repo . --phase merge --pr-body /path/to/pr-body.md --head-sha <sha> --readback-evidence /path/to/readback.json --format json
 $SPEC_RUNNER workflow-check --repo . --phase merge --pr <number-or-url> --format json
 ```
 

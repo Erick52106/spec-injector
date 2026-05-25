@@ -192,12 +192,14 @@ program
   .option('--routing-evidence <path>', 'Path to local Hybrid AWP start-gate routing evidence JSON')
   .option('--finding-disposition <path>', 'Path to local review finding disposition evidence JSON')
   .option('--threshold-evidence <path>', 'Path to local threshold calibration evidence JSON')
+  .option('--readback-evidence <path>', 'Path to local merge closeout readback evidence JSON')
   .addHelpText('after', `
 Checks:
   - start: validate config; with --issue, dry-run bounded context generation without writing a task package
   - commit: detect staged .spec-injector/spec output/private context artifacts and optional PR body spec/routing evidence
   - merge: require final merge gate, spec gate status/ref, routing evidence alignment, finding disposition evidence, threshold evidence, and latest HEAD evidence in the local PR body
   - merge with --pr: collect read-only closeout readback evidence from gh without mutating GitHub
+  - merge with --readback-evidence: validate local closeout readback JSON without calling GitHub
 
 Safety:
   Local-only workflow gate. Prints to stdout by default.
@@ -219,6 +221,7 @@ Examples:
     routingEvidence?: string;
     findingDisposition?: string;
     thresholdEvidence?: string;
+    readbackEvidence?: string;
   }) => {
     const { workflowCheck } = await import('./workflow-check.js');
     await workflowCheck(opts);

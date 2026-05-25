@@ -49,6 +49,10 @@ async function runDoctor(workflow: string): Promise<DoctorResult> {
   const rootHelp = runSpecHelp(['--help']);
   const workflowHelp = runSpecHelp(['workflow-check', '--help']);
   const awpReviewHelp = runSpecHelp(['awp-review-check', '--help']);
+  const [adoptionContract, bootstrapContract] = await Promise.all([
+    readDocContract('docs/target-repo-adoption-contract.md', [/status\/ref/i, /Scope Police/i, /does not mutate downstream repos/i]),
+    readDocContract('docs/ai-bootstrap-install-contract.md', [/SPEC_INJECTOR_DIR/i, /spec doctor --workflow awp --format json/i, /does not call GitHub/i]),
+  ]);
 
   const workflowOutput = `${workflowHelp.stdout}\n${workflowHelp.stderr}`;
   const capabilities: Capability[] = [
@@ -77,10 +81,28 @@ async function runDoctor(workflow: string): Promise<DoctorResult> {
       evidence: 'spec workflow-check --help includes --threshold-evidence',
     },
     {
+      id: 'workflow_check_readback_evidence',
+      status: /--readback-evidence\b/.test(workflowOutput) ? 'pass' : 'fail',
+      required: true,
+      evidence: 'spec workflow-check --help includes --readback-evidence',
+    },
+    {
       id: 'workflow_check_pr_readback',
       status: hasLongOption(workflowOutput, 'pr') ? 'pass' : 'fail',
       required: true,
       evidence: 'spec workflow-check --help includes --pr',
+    },
+    {
+      id: 'target_repo_adoption_contract_doc',
+      status: adoptionContract ? 'pass' : 'fail',
+      required: true,
+      evidence: 'docs/target-repo-adoption-contract.md documents status/ref thin wiring and no mutation',
+    },
+    {
+      id: 'ai_bootstrap_install_contract_doc',
+      status: bootstrapContract ? 'pass' : 'fail',
+      required: true,
+      evidence: 'docs/ai-bootstrap-install-contract.md documents SPEC_INJECTOR_DIR fallback and local-only doctor',
     },
     {
       id: 'awp_review_check_command',
@@ -155,6 +177,15 @@ async function readPackageVersion(): Promise<string> {
     return parsed.version ?? 'unknown';
   } catch {
     return 'unknown';
+  }
+}
+
+async function readDocContract(docPath: string, requiredPatterns: RegExp[]): Promise<boolean> {
+  try {
+    const content = await fs.readFile(path.join(packageRoot(), docPath), 'utf8');
+    return requiredPatterns.every((pattern) => pattern.test(content));
+  } catch {
+    return false;
   }
 }
 
