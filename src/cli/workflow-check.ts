@@ -15,6 +15,7 @@ type DelegationOutcome = 'n/a' | 'skipped' | 'completed' | 'fell_through' | 'una
 
 type WorkflowCheckOptions = {
   repo?: string;
+  config?: string;
   phase: string;
   format?: string;
   issue?: string;
@@ -224,6 +225,21 @@ export async function workflowCheck(opts: WorkflowCheckOptions): Promise<void> {
   const checkedAt = new Date().toISOString();
   const warnings: string[] = [];
   let config: Config | null = null;
+  const configProvided = opts.config !== undefined;
+
+  if (configProvided && opts.config === '') {
+    const result = buildResult({
+      phase,
+      repoPath,
+      checkedAt,
+      status: 'fail',
+      missingFields: ['config'],
+      warnings,
+      evidenceSummary: 'workflow-check could not validate repo config: --config path cannot be empty',
+    });
+    printResult(result, format);
+    process.exit(1);
+  }
 
   try {
     ensureRepoPath(repoPath);
@@ -242,9 +258,9 @@ export async function workflowCheck(opts: WorkflowCheckOptions): Promise<void> {
   }
 
   try {
-    config = await loadConfig(repoPath);
+    config = await loadConfig(repoPath, { configPath: opts.config });
   } catch (err) {
-    if (isMergePrCloseout(phase, opts)) {
+    if (isMergePrCloseout(phase, opts) && !configProvided) {
       warnings.push(`Local config unavailable; merge --pr closeout continued with readback-only evidence: ${(err as Error).message}`);
     } else {
       const result = buildResult({
@@ -388,6 +404,7 @@ async function runStartPhase(
       dryRun: true,
       format: 'prompt',
       verbose: true,
+      config: opts.config,
     });
   });
 

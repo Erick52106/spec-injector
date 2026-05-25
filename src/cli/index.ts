@@ -183,6 +183,7 @@ program
   .command('workflow-check')
   .description('Run local-only workflow gate checks for autonomous PR evidence')
   .option('--repo <path>', 'Path to target repo (default: CWD)')
+  .option('--config <path>', 'External config file path (may be outside target repo)')
   .requiredOption('--phase <phase>', 'Workflow phase: start|commit|merge')
   .option('--format <format>', 'Output format: text or json (default: text)')
   .option('--issue <number-or-url>', 'Issue number or URL for start-phase dry-run bounded context checks')
@@ -203,15 +204,18 @@ Checks:
 
 Safety:
   Local-only workflow gate. Prints to stdout by default.
+  --config <path> reads an external config file without copying it into the target repo.
   Does not edit GitHub, add/commit files, write task packages, comment, merge, or mutate downstream repos.
 
 Examples:
   spec workflow-check --repo /path/to/worktree --phase start --issue 326
   spec workflow-check --phase commit --pr-body PR_BODY.md
+  spec workflow-check --repo /path/to/worktree --config /path/to/config.json --phase commit --pr-body PR_BODY.md
   spec workflow-check --phase merge --pr-body PR_BODY.md --head-sha abc123
 `)
   .action(async (opts: {
     repo?: string;
+    config?: string;
     phase: string;
     format?: string;
     issue?: string;
