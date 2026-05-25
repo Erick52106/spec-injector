@@ -8,7 +8,11 @@ import {
   getUpstreamState,
   getWorktreeState,
 } from '../utils/git.js';
-import { isSpecArtifactPath, normalizeArtifactPath } from '../utils/artifacts.js';
+import {
+  classifySpecArtifactPath,
+  normalizeArtifactPath,
+  type SpecArtifactMatch,
+} from '../utils/artifacts.js';
 import { run } from '../utils/shell.js';
 
 type PreflightSeverity = 'pass' | 'warning' | 'fail' | 'needs-human-review';
@@ -228,25 +232,25 @@ function buildTargetArtifactChecks(targetRepoPath: string): PreflightCheck[] {
   const unstagedOk = requireGitPathList(unstaged);
   const untrackedOk = requireGitPathList(untracked);
 
-  const stagedArtifacts = unique(stagedOk.paths.filter((entry) => isSpecArtifactPath(entry)));
+  const stagedArtifacts = uniqueArtifactMatches(stagedOk.paths.map((entry) => classifySpecArtifactPath(entry)).filter(isArtifactMatch));
   if (stagedArtifacts.length > 0) {
     checks.push(fail(
       'target repo has staged spec artifacts',
-      `Forbidden staged artifacts: ${stagedArtifacts.join(', ')}. Stop and unstage/remove from target PR; preflight did not modify the target repo.`
+      `Forbidden staged artifacts: ${formatArtifactMatches(stagedArtifacts)}. Stop and unstage/remove from target PR; preflight did not modify the target repo.`
     ));
   } else {
     checks.push(pass('target repo has no staged spec artifacts', targetRepoPath));
   }
 
-  const dirtyArtifacts = unique([
-    ...unstagedOk.paths.filter((entry) => isSpecArtifactPath(entry)),
-    ...untrackedOk.paths.filter((entry) => isSpecArtifactPath(entry)),
-    ...existingGeneratedArtifactPaths(targetRepoPath),
+  const dirtyArtifacts = uniqueArtifactMatches([
+    ...unstagedOk.paths.map((entry) => classifySpecArtifactPath(entry)).filter(isArtifactMatch),
+    ...untrackedOk.paths.map((entry) => classifySpecArtifactPath(entry)).filter(isArtifactMatch),
+    ...existingGeneratedArtifactPaths(targetRepoPath).map((entry) => classifySpecArtifactPath(entry)).filter(isArtifactMatch),
   ]);
   if (dirtyArtifacts.length > 0) {
     checks.push(warning(
       'target repo has local spec artifact risk',
-      `Local-only artifacts detected: ${dirtyArtifacts.join(', ')}. Keep these out of commits and do not copy private context or generated output into the target repo.`
+      `Local-only artifacts detected: ${formatArtifactMatches(dirtyArtifacts)}. Keep these out of commits and do not copy private context or generated output into the target repo.`
     ));
   } else {
     checks.push(pass('target repo has no local spec artifact risk', targetRepoPath));
@@ -287,8 +291,23 @@ function existingGeneratedArtifactPaths(targetRepoPath: string): string[] {
   return candidates.filter((candidate) => fs.existsSync(path.join(targetRepoPath, candidate)));
 }
 
-function unique(values: string[]): string[] {
-  return [...new Set(values.filter(Boolean))];
+function isArtifactMatch(value: SpecArtifactMatch | null): value is SpecArtifactMatch {
+  return value !== null;
+}
+
+function uniqueArtifactMatches(matches: SpecArtifactMatch[]): SpecArtifactMatch[] {
+  const seen = new Set<string>();
+  const uniqueMatches: SpecArtifactMatch[] = [];
+  for (const match of matches) {
+    if (seen.has(match.path)) continue;
+    seen.add(match.path);
+    uniqueMatches.push(match);
+  }
+  return uniqueMatches;
+}
+
+function formatArtifactMatches(matches: SpecArtifactMatch[]): string {
+  return matches.map((match) => `${match.path} (${match.reason})`).join(', ');
 }
 
 function requireGitString(
