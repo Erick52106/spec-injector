@@ -793,6 +793,7 @@ test('spec doctor reports current AWP workflow capabilities as JSON', async () =
   for (const id of [
     'workflow_check_command',
     'workflow_check_phase_start_commit_merge',
+    'workflow_check_external_config',
     'workflow_check_finding_disposition',
     'workflow_check_threshold_evidence',
     'workflow_check_readback_evidence',
@@ -811,6 +812,7 @@ test('spec doctor text output is concise and local-only', async () => {
   assert.equal(result.code, 0, result.stderr);
   assert.match(result.stdout, /workflow=awp/);
   assert.match(result.stdout, /status=pass/);
+  assert.match(result.stdout, /workflow_check_external_config=pass/);
   assert.match(result.stdout, /workflow_check_pr_readback=pass/);
   assert.match(result.stdout, /does not call GitHub/i);
   assert.doesNotMatch(result.stdout, /https:\/\/api\.github\.com/i);
@@ -823,6 +825,7 @@ test('spec doctor accepts workflow-check phase tokens with non-pipe separators',
       'Usage: spec workflow-check',
       '--phase <phase>',
       'Supported phases: start, commit, merge',
+      '--config <path>',
       '--finding-disposition <path>',
       '--threshold-evidence <path>',
       '--readback-evidence <path>',
@@ -839,6 +842,35 @@ test('spec doctor accepts workflow-check phase tokens with non-pipe separators',
   const parsed = JSON.parse(result.stdout) as { status: string; capabilities: Array<{ id: string; status: string }> };
   assert.equal(parsed.status, 'pass');
   assert.equal(parsed.capabilities.find((capability) => capability.id === 'workflow_check_phase_start_commit_merge')?.status, 'pass');
+});
+
+test('spec doctor fails when installed workflow-check lacks external config support', async (t) => {
+  const fakeSpec = await writeFakeSpec(t, {
+    rootHelp: 'Usage: spec\\nCommands:\\n  workflow-check\\n  awp-review-check\\n',
+    workflowHelp: [
+      'Usage: spec workflow-check',
+      '--phase <phase>',
+      'Workflow phase: start|commit|merge',
+      '--finding-disposition <path>',
+      '--threshold-evidence <path>',
+      '--readback-evidence <path>',
+      '--pr <number-or-url>',
+      '--config',
+    ].join('\\n'),
+    awpReviewHelp: 'Usage: spec awp-review-check\\n',
+  });
+
+  const result = await runSpec(['doctor', '--workflow', 'awp', '--format', 'json'], {
+    env: { ...process.env, SPEC_DOCTOR_SPEC_BIN: fakeSpec },
+  });
+
+  assert.notEqual(result.code, 0);
+  const parsed = JSON.parse(result.stdout) as { status: string; missing_capabilities: string[]; capabilities: Array<{ id: string; status: string; evidence: string }> };
+  assert.equal(parsed.status, 'fail');
+  assert.ok(parsed.missing_capabilities.includes('workflow_check_external_config'));
+  const capability = parsed.capabilities.find((entry) => entry.id === 'workflow_check_external_config');
+  assert.equal(capability?.status, 'fail');
+  assert.match(capability?.evidence ?? '', /--config <path>/);
 });
 
 test('spec doctor does not report target repo HEAD when installed package root is nested in another git repo', async (t) => {

@@ -69,6 +69,12 @@ async function runDoctor(workflow: string): Promise<DoctorResult> {
       evidence: 'spec workflow-check --help includes start|commit|merge',
     },
     {
+      id: 'workflow_check_external_config',
+      status: hasLongOptionWithValue(workflowOutput, 'config', 'path') ? 'pass' : 'fail',
+      required: true,
+      evidence: 'spec workflow-check --help includes --config <path>',
+    },
+    {
       id: 'workflow_check_finding_disposition',
       status: /--finding-disposition\b/.test(workflowOutput) ? 'pass' : 'fail',
       required: true,
@@ -155,6 +161,12 @@ function runSpecHelp(args: string[]) {
 function hasLongOption(output: string, optionName: string): boolean {
   const escaped = optionName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   return new RegExp(`(?:^|\\s)--${escaped}(?:\\s|,|$)`, 'm').test(output);
+}
+
+function hasLongOptionWithValue(output: string, optionName: string, valueName: string): boolean {
+  const escapedOption = optionName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const escapedValue = valueName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`(?:^|\\s)--${escapedOption}\\s+<${escapedValue}>(?:\\s|,|$)`, 'm').test(output);
 }
 
 function hasWords(output: string, words: string[]): boolean {
