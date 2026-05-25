@@ -496,6 +496,85 @@ test('zh-TW workflow metadata stays out of runtime domains without explicit sign
   assert.ok(!result.domains.includes('i18n'), `Expected i18n to be absent from ${result.domains.join(', ')}`);
 });
 
+test('AWP workflow worker wording does not imply backend domain', () => {
+  const result = classifyDomainsWithEvidence(issue({
+    title: 'Clarify Autonomous Worker Profiles routing evidence',
+    body: [
+      'Document Hybrid AWP worker dispatch and controller-direct fallback evidence.',
+      'Keep the workflow-governance wording focused on routing_mode and delegation_outcome.',
+      'This is workflow evidence documentation, not runtime product code.',
+    ].join('\n'),
+    labels: ['area:workflow', 'type:docs'],
+  }));
+
+  assert.ok(result.domains.includes('docs'), `Expected docs in ${result.domains.join(', ')}`);
+  assert.ok(!result.domains.includes('backend'), `Expected backend to be absent from ${result.domains.join(', ')}`);
+  assert.ok(!result.evidence.some((e) => e.domain === 'backend'), `Expected no backend evidence, got ${JSON.stringify(result.evidence)}`);
+  assert.ok(result.rejected.some((r) =>
+    r.domain === 'backend' &&
+    r.signal === 'worker' &&
+    r.source === 'title' &&
+    r.reason === 'AWP workflow worker wording'
+  ));
+});
+
+test('runtime backend worker wording still triggers backend domain', () => {
+  const result = classifyDomainsWithEvidence(issue({
+    title: 'Add queue worker handler for scheduled jobs',
+    body: [
+      'Implement the backend worker runtime for cron-triggered queue processing.',
+      'Keep the server handler deterministic and covered by offline tests.',
+    ].join('\n'),
+    labels: ['backend'],
+  }));
+
+  assert.ok(result.domains.includes('backend'), `Expected backend in ${result.domains.join(', ')}`);
+  assert.ok(result.evidence.some((e) =>
+    e.domain === 'backend' && e.term === 'worker' && e.source === 'title'
+  ));
+  assert.ok(result.evidence.some((e) =>
+    e.domain === 'backend' && e.term === 'queue' && e.source === 'title'
+  ));
+  assert.ok(result.evidence.some((e) =>
+    e.domain === 'backend' && e.term === 'cron' && e.source === 'body'
+  ));
+});
+
+test('runtime worker dispatch controller wording still triggers backend domain', () => {
+  const result = classifyDomainsWithEvidence(issue({
+    title: 'Implement worker dispatch controller',
+    body: [
+      'Add runtime dispatch behavior for worker controller execution.',
+      'This product code path coordinates runtime work without workflow metadata.',
+    ].join('\n'),
+    labels: ['area:backend'],
+  }));
+
+  assert.ok(result.domains.includes('backend'), `Expected backend in ${result.domains.join(', ')}`);
+  assert.ok(result.evidence.some((e) =>
+    e.domain === 'backend' && e.term === 'worker' && e.source === 'title'
+  ));
+  assert.ok(result.evidence.some((e) =>
+    e.domain === 'backend' && e.term === 'controller' && e.source === 'title'
+  ));
+});
+
+test('backend controller wording stays backend even with AWP closeout evidence', () => {
+  const result = classifyDomainsWithEvidence(issue({
+    title: 'Fix checkout controller behavior',
+    body: [
+      'Update the checkout controller implementation.',
+      'Keep routing_mode and controller-direct fallback evidence in the PR body after implementation.',
+    ].join('\n'),
+    labels: ['area:backend'],
+  }));
+
+  assert.ok(result.domains.includes('backend'), `Expected backend in ${result.domains.join(', ')}`);
+  assert.ok(result.evidence.some((e) =>
+    e.domain === 'backend' && e.term === 'controller' && e.source === 'title'
+  ));
+});
+
 test('zh-TW generic model and file wording does not imply database', () => {
   const result = classifyDomainsWithEvidence(issue({
     title: '整理 AI 模型回覆文件',
