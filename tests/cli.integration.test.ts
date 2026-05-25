@@ -1294,6 +1294,7 @@ test('spec workflow-check fails commit phase when .spec-injector artifacts are s
   assert.equal(parsed.status, 'fail');
   assert.ok(parsed.missing_fields.includes('staged_forbidden_artifacts'));
   assert.match(parsed.evidence_summary, /\.spec-injector\/out\/issue-224-task-package\.md/);
+  assert.match(parsed.evidence_summary, /spec-injector workspace artifact/);
 });
 
 test('spec workflow-check fails commit phase when staged artifact inspection cannot run', async (t) => {
