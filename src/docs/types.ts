@@ -13,7 +13,7 @@ export interface DocSection {
   content: string;          // file content (empty string when missing)
   found: boolean;
   kind: DocSourceKind;
-  readStatus?: 'missing' | 'unreadable' | 'read-error';
+  readStatus?: 'missing' | 'unreadable' | 'read-error' | 'invalid-discovery-source';
   readErrorCode?: string;
   truncated?: boolean;
   truncatedBytes?: number;

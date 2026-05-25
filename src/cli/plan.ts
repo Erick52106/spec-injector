@@ -292,6 +292,8 @@ function renderReadIssueLabel(doc: DocSection): string {
       return 'unreadable';
     case 'read-error':
       return 'read failed';
+    case 'invalid-discovery-source':
+      return 'invalid discovery.source entry';
     case 'missing':
       return 'not found';
   }
@@ -303,6 +305,8 @@ function renderReadDiagnosticLabel(doc: DocSection): string {
       return 'Unreadable';
     case 'read-error':
       return 'Read failed';
+    case 'invalid-discovery-source':
+      return 'Invalid discovery.source entry';
     case 'missing':
       return 'Not found';
   }
@@ -323,6 +327,9 @@ function renderReadErrorCodeSuffix(doc: DocSection): string {
 }
 
 function renderReadDiagnosticHintSuffix(doc: DocSection): string {
+  if (doc.readStatus === 'invalid-discovery-source' && doc.reasons && doc.reasons.length > 0) {
+    return `; ${doc.reasons.join('; ')}`;
+  }
   const hint = renderPathAliasHint(doc, { useMarkdown: false });
   return hint ? `; ${hint}` : '';
 }

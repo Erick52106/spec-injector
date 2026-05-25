@@ -7366,6 +7366,63 @@ test('spec plan keeps failed auto-discovered references out of prompt reference 
   assert.match(promptResult.stderr, /Read failed: src\/payment-failed\.ts \(EIO\)/);
 });
 
+test('spec plan reports file-shaped discovery.source entries without auto-discovering them', async (t) => {
+  const fixture = await createExplicitPathPlanFixture(t, {
+    issueNumber: 324,
+    title: 'Payment source file shaped discovery source diagnostic',
+    bodyLines: [
+      'Payment work should surface discovery.source diagnostics without treating configured files as source scope.',
+    ],
+    config: {
+      discovery: {
+        docs: [],
+        source: ['src/payment-worker.ts', 'src/lib'],
+        max_docs: 5,
+        max_source_files: 5,
+      },
+    },
+    repoFiles: {
+      'src/payment-worker.ts': 'export const paymentWorker = "CONFIGURED_FILE_SHAPED_SOURCE_SENTINEL payment";\n',
+      'src/lib/payment-helper.ts': 'export const paymentHelper = "AUTO_DISCOVERED_SOURCE_SENTINEL payment";\n',
+    },
+  });
+
+  const promptResult = await runSpec(
+    ['plan', fixture.issueUrl, '--repo', fixture.repoDir, '--dry-run', '--format', 'prompt'],
+    { env: fixture.env }
+  );
+  const fullResult = await runSpec(
+    ['plan', fixture.issueUrl, '--repo', fixture.repoDir, '--dry-run'],
+    { env: fixture.env }
+  );
+
+  assert.equal(promptResult.code, 0, promptResult.stderr);
+  assert.equal(fullResult.code, 0, fullResult.stderr);
+  assertNoRawStackTrace(promptResult);
+  assertNoRawStackTrace(fullResult);
+
+  const promptAutoSources = sectionBetween(promptResult.stdout, '### Auto-Discovered Source Files', '## 5. Missing Files');
+  const promptMissing = sectionBetween(promptResult.stdout, '## 5. Missing Files', '## 6. Instructions');
+  const fullAutoSources = sectionBetween(fullResult.stdout, '## 7. Auto-Discovered Source Files', '## 8. Matched Guardrails');
+  const fullMissing = sectionBetween(fullResult.stdout, '## 9. Missing Files', '## 10. Suggested Verification Checklist');
+
+  assert.match(promptAutoSources, /`src\/lib\/payment-helper\.ts` — auto-discovered/);
+  assert.doesNotMatch(promptAutoSources, /src\/payment-worker\.ts|CONFIGURED_FILE_SHAPED_SOURCE_SENTINEL/);
+  assert.match(
+    promptMissing,
+    /`src\/payment-worker\.ts` — invalid discovery\.source entry \(configured path; discovery\.source expects directory roots for auto-discovery\)/
+  );
+
+  assert.match(fullAutoSources, /### src\/lib\/payment-helper\.ts\n\n_source: auto-discovered_/);
+  assert.doesNotMatch(fullAutoSources, /src\/payment-worker\.ts|CONFIGURED_FILE_SHAPED_SOURCE_SENTINEL/);
+  assert.match(
+    fullMissing,
+    /`src\/payment-worker\.ts` — invalid discovery\.source entry \(configured path; discovery\.source expects directory roots for auto-discovery\)/
+  );
+  assert.match(promptResult.stderr, /Invalid discovery\.source entry: src\/payment-worker\.ts/);
+  assert.match(promptResult.stderr, /discovery\.source expects directory roots for auto-discovery/);
+});
+
 test('spec plan handles deterministic permission-like unreadable diagnostics', async (t) => {
   const fixture = await createExplicitPathPlanFixture(t, {
     issueNumber: 175,
