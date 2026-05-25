@@ -744,6 +744,8 @@ test('spec plan/config/clean help describe AI-facing usage and safety constraint
   assert.match(workflowCheckHelp.stdout, /--phase <phase>/);
   assert.match(workflowCheckHelp.stdout, /start\|commit\|merge/);
   assert.match(workflowCheckHelp.stdout, /--format <format>/);
+  assert.match(workflowCheckHelp.stdout, /--config <path>/);
+  assert.match(workflowCheckHelp.stdout, /external config file path/i);
   assert.match(workflowCheckHelp.stdout, /--routing-evidence <path>/);
   assert.match(workflowCheckHelp.stdout, /stdout/i);
   assert.match(workflowCheckHelp.stdout, /does not edit GitHub/i);
@@ -992,6 +994,152 @@ test('spec workflow-check emits stable JSON contract for commit phase PR body ev
   assert.deepEqual(parsed.missing_fields, []);
   assert.deepEqual(parsed.warnings, []);
   assert.match(String(parsed.evidence_summary), /commit gate passed/i);
+});
+
+test('spec workflow-check commit phase reads external config without requiring target local config', async (t) => {
+  const fixture = await createExternalConfigPlanFixture(t);
+  await initCleanGitRepo(fixture.repoDir);
+  const beforeSnapshot = await readDirectorySnapshot(fixture.repoDir);
+  const headSha = (await runCommand('git', ['rev-parse', 'HEAD'], fixture.repoDir)).stdout.trim();
+  const prBodyPath = path.join(path.dirname(fixture.repoDir), `${path.basename(fixture.repoDir)}-workflow-pr-body.md`);
+  t.after(async () => {
+    await fs.rm(prBodyPath, { force: true });
+  });
+  await fs.writeFile(prBodyPath, [
+    '## Spec workflow gate',
+    '- spec gate status: pass',
+    `- spec evidence ref: workflow-check:start:${headSha}`,
+  ].join('\n'), 'utf8');
+
+  const result = await runSpec([
+    'workflow-check',
+    '--repo', fixture.repoDir,
+    '--config', fixture.configPath,
+    '--phase', 'commit',
+    '--pr-body', prBodyPath,
+    '--format', 'json',
+  ]);
+
+  assert.equal(result.code, 0, result.stderr);
+  assert.equal(result.stderr, '');
+  const parsed = JSON.parse(result.stdout) as Record<string, unknown>;
+  assert.equal(parsed.status, 'pass');
+  assert.deepEqual(parsed.missing_fields, []);
+  assert.match(String(parsed.evidence_summary), /commit gate passed/i);
+  await assertFileMissing(path.join(fixture.repoDir, '.spec-injector'));
+  assert.deepEqual(await readDirectorySnapshot(fixture.repoDir), beforeSnapshot);
+});
+
+test('spec workflow-check start phase reads external config without writing target local config', async (t) => {
+  const fixture = await createExternalConfigPlanFixture(t);
+  await initCleanGitRepo(fixture.repoDir);
+  const beforeSnapshot = await readDirectorySnapshot(fixture.repoDir);
+
+  const result = await runSpec([
+    'workflow-check',
+    '--repo', fixture.repoDir,
+    '--config', fixture.configPath,
+    '--phase', 'start',
+    '--issue', fixture.issueUrl,
+    '--format', 'json',
+  ], { env: fixture.env });
+
+  assert.equal(result.code, 0, result.stderr);
+  assert.equal(result.stderr, '');
+  const parsed = JSON.parse(result.stdout) as Record<string, unknown>;
+  assert.equal(parsed.phase, 'start');
+  assert.notEqual(parsed.status, 'fail');
+  assert.match(String(parsed.evidence_summary), /bounded context generated/i);
+  await assertFileMissing(path.join(fixture.repoDir, '.spec-injector'));
+  assert.deepEqual(await readDirectorySnapshot(fixture.repoDir), beforeSnapshot);
+});
+
+test('spec workflow-check merge phase reads external config without requiring target local config', async (t) => {
+  const fixture = await createExternalConfigPlanFixture(t);
+  await initCleanGitRepo(fixture.repoDir);
+  const beforeSnapshot = await readDirectorySnapshot(fixture.repoDir);
+  const headSha = (await runCommand('git', ['rev-parse', 'HEAD'], fixture.repoDir)).stdout.trim();
+  const prBodyPath = path.join(path.dirname(fixture.repoDir), `${path.basename(fixture.repoDir)}-workflow-merge-pr-body.md`);
+  t.after(async () => {
+    await fs.rm(prBodyPath, { force: true });
+  });
+  await fs.writeFile(prBodyPath, [
+    '## Spec workflow gate',
+    '- spec gate status: pass',
+    `- spec evidence ref: workflow-check:commit:${headSha}`,
+    '',
+    '## Final merge gate',
+    `- latest head SHA: ${headSha}`,
+    '- ready_to_merge: yes',
+  ].join('\n'), 'utf8');
+
+  const result = await runSpec([
+    'workflow-check',
+    '--repo', fixture.repoDir,
+    '--config', fixture.configPath,
+    '--phase', 'merge',
+    '--pr-body', prBodyPath,
+    '--head-sha', headSha,
+    '--format', 'json',
+  ]);
+
+  assert.equal(result.code, 0, result.stderr);
+  assert.equal(result.stderr, '');
+  const parsed = JSON.parse(result.stdout) as Record<string, unknown>;
+  assert.equal(parsed.status, 'pass');
+  assert.deepEqual(parsed.missing_fields, []);
+  assert.match(String(parsed.evidence_summary), /merge gate passed/i);
+  await assertFileMissing(path.join(fixture.repoDir, '.spec-injector'));
+  assert.deepEqual(await readDirectorySnapshot(fixture.repoDir), beforeSnapshot);
+});
+
+test('spec workflow-check reports missing external config without falling back to target config', async (t) => {
+  const fixture = await createExternalConfigPlanFixture(t);
+  await writeConfig(fixture.repoDir, { version: 2, guardrails: [] });
+  await initCleanGitRepo(fixture.repoDir);
+  const missingConfigPath = path.join(path.dirname(fixture.configPath), 'missing-config.json');
+
+  const result = await runSpec([
+    'workflow-check',
+    '--repo', fixture.repoDir,
+    '--config', missingConfigPath,
+    '--phase', 'commit',
+    '--format', 'json',
+  ]);
+
+  assert.notEqual(result.code, 0);
+  assert.equal(result.stderr, '');
+  const parsed = JSON.parse(result.stdout) as { status: string; missing_fields: string[]; warnings: string[]; evidence_summary: string };
+  assert.equal(parsed.status, 'fail');
+  assert.deepEqual(parsed.missing_fields, ['config']);
+  assert.match(parsed.evidence_summary, /External config file not found/i);
+  assert.match(parsed.evidence_summary, new RegExp(escapeRegExp(missingConfigPath)));
+  assert.doesNotMatch(parsed.evidence_summary, /No \.spec-injector\/ directory found/i);
+});
+
+test('spec workflow-check reports invalid external config without falling back to target config', async (t) => {
+  const fixture = await createExternalConfigPlanFixture(t);
+  await writeConfig(fixture.repoDir, { version: 2, guardrails: [] });
+  await initCleanGitRepo(fixture.repoDir);
+  const invalidConfigPath = path.join(path.dirname(fixture.configPath), 'invalid-config.json');
+  await fs.writeFile(invalidConfigPath, '{ invalid json\n', 'utf8');
+
+  const result = await runSpec([
+    'workflow-check',
+    '--repo', fixture.repoDir,
+    '--config', invalidConfigPath,
+    '--phase', 'commit',
+    '--format', 'json',
+  ]);
+
+  assert.notEqual(result.code, 0);
+  assert.equal(result.stderr, '');
+  const parsed = JSON.parse(result.stdout) as { status: string; missing_fields: string[]; warnings: string[]; evidence_summary: string };
+  assert.equal(parsed.status, 'fail');
+  assert.deepEqual(parsed.missing_fields, ['config']);
+  assert.match(parsed.evidence_summary, /Invalid config\.json/i);
+  assert.match(parsed.evidence_summary, new RegExp(escapeRegExp(invalidConfigPath)));
+  assert.doesNotMatch(parsed.evidence_summary, /No \.spec-injector\/ directory found/i);
 });
 
 test('spec workflow-check fails commit phase when .spec-injector artifacts are staged', async (t) => {
@@ -3497,6 +3645,54 @@ test('spec workflow-check merge closeout with --pr does not require local config
   assert.match(ghLog, /pr checks/);
   assert.match(ghLog, /api graphql/);
   assertNoGhMutationCommands(ghLog);
+});
+
+test('spec workflow-check merge closeout fails explicit missing external config before gh readback', async (t) => {
+  const repoDir = await createTempRepo(t, 'spec-injector-workflow-closeout-missing-config-');
+  await writeConfig(repoDir, { version: 2, guardrails: [] });
+  await initCleanGitRepo(repoDir);
+  const headSha = 'cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd';
+  const fixture = await createEvidenceCheckFixture(t, {
+    issueNumber: 336,
+    headSha,
+    prBody: [
+      'Closes #336',
+      '',
+      '## Spec gate evidence',
+      '- spec gate status: pass',
+      '- spec evidence ref: https://github.com/Erick52106/spec-injector/issues/336#issuecomment-1001',
+      '- routing evidence status: pass',
+      '- routing evidence ref: workflow-check:start:336',
+      '- finding disposition status: pass',
+      '',
+      '## Implementation Evidence',
+      '- Issue evidence: https://github.com/Erick52106/spec-injector/issues/336#issuecomment-1001',
+      `- Commit: ${headSha}`,
+      '',
+      '## Final merge gate',
+      `- latest head SHA: ${headSha}`,
+      '- ready_to_merge: yes',
+    ].join('\n'),
+  });
+  const missingConfigPath = path.join(path.dirname(repoDir), 'missing-workflow-check-config.json');
+
+  const result = await runSpec([
+    'workflow-check',
+    '--repo', repoDir,
+    '--config', missingConfigPath,
+    '--phase', 'merge',
+    '--pr', `https://github.com/${fixture.repo}/pull/${fixture.prNumber}`,
+    '--format', 'json',
+  ], { env: fixture.env });
+
+  assert.notEqual(result.code, 0);
+  assert.equal(result.stderr, '');
+  const parsed = JSON.parse(result.stdout) as Record<string, unknown>;
+  assert.equal(parsed.status, 'fail');
+  assert.deepEqual(parsed.missing_fields, ['config']);
+  assert.match(String(parsed.evidence_summary), /External config file not found/i);
+  assert.match(String(parsed.evidence_summary), new RegExp(escapeRegExp(missingConfigPath)));
+  assert.deepEqual(await readGhLog(fixture.ghLogPath), []);
 });
 
 test('spec workflow-check still requires local config outside merge --pr closeout', async (t) => {

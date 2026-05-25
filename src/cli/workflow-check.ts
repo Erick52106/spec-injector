@@ -15,6 +15,7 @@ type DelegationOutcome = 'n/a' | 'skipped' | 'completed' | 'fell_through' | 'una
 
 type WorkflowCheckOptions = {
   repo?: string;
+  config?: string;
   phase: string;
   format?: string;
   issue?: string;
@@ -242,9 +243,9 @@ export async function workflowCheck(opts: WorkflowCheckOptions): Promise<void> {
   }
 
   try {
-    config = await loadConfig(repoPath);
+    config = await loadConfig(repoPath, { configPath: opts.config });
   } catch (err) {
-    if (isMergePrCloseout(phase, opts)) {
+    if (isMergePrCloseout(phase, opts) && !opts.config) {
       warnings.push(`Local config unavailable; merge --pr closeout continued with readback-only evidence: ${(err as Error).message}`);
     } else {
       const result = buildResult({
@@ -388,6 +389,7 @@ async function runStartPhase(
       dryRun: true,
       format: 'prompt',
       verbose: true,
+      config: opts.config,
     });
   });
 
