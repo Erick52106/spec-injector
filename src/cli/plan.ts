@@ -80,8 +80,8 @@ export async function plan(
   // 6b. Auto-discover source files
   const sourcePaths = config.specConfig.discovery?.source ?? [];
   const maxSourceFiles = config.specConfig.discovery?.max_source_files ?? 5;
-  const discoveredSources = await discoverSourceFiles(issue, repoPath, sourcePaths, maxSourceFiles);
   const explicitReferences = await extractExplicitIssueFileReferences(issue, repoPath);
+  const discoveredSources = await discoverSourceFiles(issue, repoPath, sourcePaths, maxSourceFiles, explicitReferences.sources);
   const explicitDocs = mergeReasonSignals(explicitReferences.docs, [...alwaysDocs, ...discoveryDocs, ...discoveredDocs]);
   const explicitSources = mergeReasonSignals(explicitReferences.sources, discoveredSources);
   const explicitDocPaths = new Set(explicitDocs.map((d) => d.filePath));
