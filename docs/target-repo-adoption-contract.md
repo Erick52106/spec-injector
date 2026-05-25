@@ -14,6 +14,33 @@ Target repos can use the published CLI behavior directly when `spec-injector` is
 - Offline/manual checklist fallback remains valid for repos that have not fully adopted `spec-injector`.
 - Target repo PR bodies only need stable status/ref evidence, not full task packages or full AWP review ledgers.
 
+## External Config Recipe
+
+Target repos do not need to commit `.spec-injector/` just to use `workflow-check`. If a repo keeps its spec config in a shared tooling checkout, temporary bootstrap directory, or other approved location outside the target repo, pass that snapshot explicitly:
+
+```bash
+spec workflow-check --repo . --config <external-config> --phase start --issue <number-or-url> --format json
+spec workflow-check --repo . --config <external-config> --phase commit --pr-body /path/to/pr-body.md --format json
+spec workflow-check --repo . --config <external-config> --phase merge --pr-body /path/to/pr-body.md --head-sha <sha> --readback-evidence /path/to/readback.json --format json
+```
+
+Use the external config for local start / commit / merge PR-body gates when the target repo intentionally does not contain a committed `.spec-injector/config.json`. `merge --pr` readback can still run without local config because it reads PR metadata, checks, reviews, and PR body through read-only helpers; if `--config <external-config>` is provided, the path must exist and validate.
+
+Downstream PR bodies and ledgers should copy status/ref evidence only:
+
+- `spec gate status`
+- `spec evidence ref`
+- `routing evidence status`
+- `routing evidence ref`
+- `finding disposition status`
+- `finding disposition ref`
+- `threshold evidence status`
+- `threshold ledger ref`
+- `latest head SHA`
+- `ready_to_merge`
+
+Keep the full `spec plan` output, task packages, routing ledgers, readback JSON, review transcripts, and private context behind the referenced evidence location. Scope Police should validate the thin status/ref surface and must not parse private or generated spec evidence.
+
 ## When Target Repo PRs Are Still Needed
 
 Downstream repos still need their own PR when they want to change repo-local policy or enforcement:
@@ -28,7 +55,8 @@ Downstream repos still need their own PR when they want to change repo-local pol
 
 ## Non-Negotiable Boundaries
 
-- Do not commit `.spec-injector/out/`, generated task packages, local routing JSON, private context, or private ledgers into target repos.
+- Do not commit `.spec-injector/` into target repos when using an external config snapshot.
+- Do not commit `.spec-injector/out/`, generated task packages, local routing/readback JSON, private context, or private ledgers into target repos.
 - Do not make target repo Scope Police parse full `spec plan` output, full task packages, or full AWP review ledgers.
 - Do not use `spec-injector` as a hosted control plane, daemon, dashboard, merge bot, auto-commenter, or hidden LLM wrapper.
 - Do not treat checker `pass` as human approval.
