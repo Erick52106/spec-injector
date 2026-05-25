@@ -1,3 +1,4 @@
+import fs from 'node:fs/promises';
 import path from 'path';
 import { loadConfig } from '../config/loader.js';
 import { ensureRepoPath } from '../utils/fs.js';
@@ -19,6 +20,7 @@ export async function validate(opts: { repo?: string }): Promise<void> {
     if (specConfig.discovery) {
       const d = specConfig.discovery;
       console.log(`  Discovery — docs: ${(d.docs ?? []).length}, source dirs: ${(d.source ?? []).length}, exclude: ${(d.exclude ?? []).length}, max_docs: ${d.max_docs ?? 5}, max_source_files: ${d.max_source_files ?? 5}`);
+      await warnFileShapedSourceEntries(repoPath, d.source ?? []);
     }
     const guardrails = specConfig.guardrails ?? [];
     console.log(`  Guardrails: ${guardrails.length}`);
@@ -29,4 +31,27 @@ export async function validate(opts: { repo?: string }): Promise<void> {
     console.error(`✗ Validation failed: ${(err as Error).message}`);
     process.exit(1);
   }
+}
+
+async function warnFileShapedSourceEntries(repoPath: string, sourceEntries: string[]): Promise<void> {
+  for (const entry of sourceEntries) {
+    const absolutePath = path.resolve(repoPath, entry);
+    if (!isPathInsideRepo(repoPath, absolutePath)) continue;
+    try {
+      const linkStat = await fs.lstat(absolutePath);
+      const resolvedPath = linkStat.isSymbolicLink() ? await fs.realpath(absolutePath) : absolutePath;
+      if (!isPathInsideRepo(repoPath, resolvedPath)) continue;
+      const stat = linkStat.isSymbolicLink() ? await fs.stat(resolvedPath) : linkStat;
+      if (stat.isFile()) {
+        console.log(`  Warning: discovery.source entry \`${entry}\` is a file; discovery.source expects directory roots for auto-discovery, so this file will not be auto-discovered.`);
+      }
+    } catch {
+      // Keep missing or unreadable source roots non-fatal during validate.
+    }
+  }
+}
+
+function isPathInsideRepo(repoPath: string, targetPath: string): boolean {
+  const relative = path.relative(repoPath, targetPath);
+  return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
 }
