@@ -2304,6 +2304,7 @@ test('spec workflow-check merge phase fails stale pre-PR closeout wording', asyn
     '## Spec gate evidence',
     '- spec gate status: pass',
     '- spec evidence ref: workflow-check:commit:329',
+    '- manual workflow gate: available when deterministic blockers are absent',
     '',
     '## Final merge gate',
     '- Ready-to-merge decision：pending with reason - PR not created yet',

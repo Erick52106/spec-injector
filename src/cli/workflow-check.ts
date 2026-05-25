@@ -668,13 +668,24 @@ async function runMergePhase(
   if (findingDisposition) missingFields.push(...findingDisposition.missingFields);
   if (threshold) missingFields.push(...threshold.missingFields);
   if (closeoutReadback) missingFields.push(...closeoutReadback.missingFields);
+  const hasDeterministicBlocker = mergeMissingFieldsIncludeDeterministicBlocker(missingFields) ||
+    routingCheck?.fallback_status === 'fail' ||
+    findingDisposition?.status === 'fail' ||
+    threshold?.status === 'fail' ||
+    closeoutReadback?.status === 'fail';
   const canReturnManualForReadback = closeoutReadback?.status === 'manual' &&
     bodyMissingFields.length === 0 &&
     routingCheck?.fallback_status !== 'fail' &&
     findingDisposition?.status !== 'fail' &&
     threshold?.status !== 'fail';
 
-  if (evidence.hasManualFallback && missingFields.length > 0 && !isBlockedSpecStatus(evidence.specStatus) && evidence.headMatches !== false) {
+  if (
+    evidence.hasManualFallback &&
+    missingFields.length > 0 &&
+    !hasDeterministicBlocker &&
+    !isBlockedSpecStatus(evidence.specStatus) &&
+    evidence.headMatches !== false
+  ) {
     return buildResult({
       phase: 'merge',
       repoPath,
@@ -1226,6 +1237,24 @@ function renderMergeFailureSummary(missingFields: string[]): string {
   if (missingFields.includes('head_sha_freshness')) return 'merge gate evidence does not match expected head SHA';
   if (missingFields.includes('stale_closeout_evidence')) return 'merge gate contains stale pending closeout evidence';
   return `merge gate missing ${missingFields.join(', ')}`;
+}
+
+function mergeMissingFieldsIncludeDeterministicBlocker(missingFields: string[]): boolean {
+  return missingFields.some((field) => [
+    'stale_closeout_evidence',
+    'ready_spec_gate_status',
+    'head_sha_freshness',
+    'review_finding_blocked',
+    'review_finding_needs_human_review',
+    'checks_status',
+    'unresolved_review_threads',
+    'draft_pr',
+    'source_issue_evidence',
+    'spec_gate_status',
+    'routing_evidence_status',
+    'finding_disposition_status',
+    'ready_to_merge',
+  ].includes(field));
 }
 
 function buildResult(input: {
