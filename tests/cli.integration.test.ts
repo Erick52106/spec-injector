@@ -4050,6 +4050,85 @@ test('spec preflight passes for a clean dedicated worktree and avoids mutating g
   assertNoGitMutationCommands(gitLog);
 });
 
+test('spec preflight --format json prints a parseable machine-readable report', async (t) => {
+  const fixture = await createPreflightFixture(t);
+
+  const result = await runSpec([
+    'preflight',
+    '--repo', fixture.worktreeDir,
+    '--expected-branch', fixture.branchName,
+    '--expected-worktree-root', path.dirname(fixture.worktreeDir),
+    '--format', 'json',
+  ], { env: fixture.env });
+
+  assert.equal(result.code, 0, result.stderr);
+  assert.equal(result.stderr, '');
+  assert.doesNotMatch(result.stdout, /Preflight summary/i);
+
+  const parsed = JSON.parse(result.stdout) as {
+    overall?: unknown;
+    checks?: Array<{ severity?: unknown; summary?: unknown; detail?: unknown }>;
+  };
+  assert.equal(parsed.overall, 'pass');
+  assert.ok(Array.isArray(parsed.checks));
+  assert.ok(parsed.checks.length > 0);
+  assert.ok(parsed.checks.every((check) => typeof check.severity === 'string'));
+  assert.ok(parsed.checks.every((check) => typeof check.summary === 'string'));
+  assert.ok(parsed.checks.every((check) => typeof check.detail === 'string'));
+  assert.ok(parsed.checks.some((check) => check.summary === 'current worktree is dedicated'));
+
+  const gitLog = (await readGhLog(fixture.gitLogPath)).join('\n');
+  assertNoGitMutationCommands(gitLog);
+});
+
+test('spec preflight --format json preserves non-zero exit behavior for failing checks', async (t) => {
+  const fixture = await createPreflightFixture(t);
+
+  const result = await runSpec([
+    'preflight',
+    '--repo', fixture.worktreeDir,
+    '--expected-branch', 'feat/some-other-branch',
+    '--format', 'json',
+  ], { env: fixture.env });
+
+  assert.notEqual(result.code, 0);
+  assert.equal(result.stderr, '');
+  const parsed = JSON.parse(result.stdout) as {
+    overall?: unknown;
+    checks?: Array<{ severity?: unknown; summary?: unknown; detail?: unknown }>;
+  };
+  assert.equal(parsed.overall, 'fail');
+  assert.ok(parsed.checks?.some((check) =>
+    check.severity === 'fail' &&
+    check.summary === 'current branch does not match expected branch' &&
+    typeof check.detail === 'string' &&
+    check.detail.includes('feat/some-other-branch')
+  ));
+
+  const gitLog = (await readGhLog(fixture.gitLogPath)).join('\n');
+  assertNoGitMutationCommands(gitLog);
+});
+
+test('spec preflight rejects invalid --format before running git checks', async (t) => {
+  const fixture = await createPreflightFixture(t);
+
+  const result = await runSpec([
+    'preflight',
+    '--repo', fixture.worktreeDir,
+    '--expected-branch', fixture.branchName,
+    '--format', 'yaml',
+  ], { env: fixture.env });
+
+  assert.notEqual(result.code, 0);
+  assert.equal(result.stdout, '');
+  assert.match(result.stderr, /Invalid preflight format "yaml"/i);
+  assert.match(result.stderr, /text, json/i);
+  assertNoRawStackTrace(result);
+
+  const gitLog = (await readGhLog(fixture.gitLogPath)).join('\n');
+  assert.equal(gitLog, '');
+});
+
 test('spec preflight reports the actual main upstream ref in sync summaries', async (t) => {
   const fixture = await createPreflightFixture(t);
   await runCommand('git', ['remote', 'rename', 'origin', 'upstream'], fixture.mainRepoDir);

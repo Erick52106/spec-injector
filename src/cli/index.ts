@@ -122,6 +122,7 @@ program
   .option('--expected-branch <name>', 'Expected current branch name for the dedicated worktree')
   .option('--expected-worktree-root <path>', 'Expected parent directory for dedicated worktrees')
   .option('--target-repo <path>', 'Optional target repo path for read-only safety checks')
+  .option('--format <format>', 'Output format: text or json (default: text)')
   .addHelpText('after', `
 Checks:
   - main repo clean / synced status
@@ -139,6 +140,7 @@ Safety:
     expectedBranch?: string;
     expectedWorktreeRoot?: string;
     targetRepo?: string;
+    format?: string;
   }) => {
     const { preflight } = await import('./preflight.js');
     await preflight(opts);

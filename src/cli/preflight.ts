@@ -17,20 +17,24 @@ type PreflightCheck = {
   detail: string;
 };
 
+type PreflightFormat = 'text' | 'json';
+
 type PreflightOptions = {
   repo?: string;
   expectedBranch?: string;
   expectedWorktreeRoot?: string;
   targetRepo?: string;
+  format?: string;
 };
 
 export async function preflight(opts: PreflightOptions): Promise<void> {
+  const format = parseFormat(opts.format);
   const repoPath = canonicalizePath(path.resolve(opts.repo ?? process.cwd()));
 
   try {
     ensureRepoPath(repoPath);
     const report = buildPreflightReport(repoPath, opts);
-    printReport(report);
+    printReport(report, format);
 
     if (report.overall === 'fail' || report.overall === 'needs-human-review') {
       process.exit(1);
@@ -39,6 +43,12 @@ export async function preflight(opts: PreflightOptions): Promise<void> {
     console.error(`✗ Preflight failed: ${(err as Error).message}`);
     process.exit(1);
   }
+}
+
+function parseFormat(formatOption: string | undefined): PreflightFormat {
+  if (!formatOption || formatOption === 'text') return 'text';
+  if (formatOption === 'json') return 'json';
+  throw new Error(`Invalid preflight format "${formatOption}". Expected one of: text, json.`);
 }
 
 function buildPreflightReport(repoPath: string, opts: PreflightOptions): {
@@ -218,7 +228,12 @@ function summarizeOverall(checks: PreflightCheck[]): PreflightSeverity {
   return 'pass';
 }
 
-function printReport(report: { overall: PreflightSeverity; checks: PreflightCheck[] }): void {
+function printReport(report: { overall: PreflightSeverity; checks: PreflightCheck[] }, format: PreflightFormat): void {
+  if (format === 'json') {
+    console.log(JSON.stringify(report, null, 2));
+    return;
+  }
+
   const counts = {
     pass: report.checks.filter((check) => check.severity === 'pass').length,
     warning: report.checks.filter((check) => check.severity === 'warning').length,
