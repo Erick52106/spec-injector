@@ -21,6 +21,7 @@ spec workflow-check --help
 The AWP workflow requires `workflow-check` support for:
 
 - `--phase start|commit|merge`
+- `--config <path>` for external config snapshots when the target repo does not commit `.spec-injector/`
 - `--finding-disposition`
 - `--threshold-evidence`
 - `--readback-evidence`
@@ -76,9 +77,9 @@ fi
 Target repo docs can then invoke:
 
 ```bash
-$SPEC_RUNNER workflow-check --repo . --phase start --issue <number-or-url> --format json
-$SPEC_RUNNER workflow-check --repo . --phase commit --pr-body /path/to/pr-body.md --format json
-$SPEC_RUNNER workflow-check --repo . --phase merge --pr-body /path/to/pr-body.md --head-sha <sha> --readback-evidence /path/to/readback.json --format json
+$SPEC_RUNNER workflow-check --repo . --config /path/to/config.json --phase start --issue <number-or-url> --format json
+$SPEC_RUNNER workflow-check --repo . --config /path/to/config.json --phase commit --pr-body /path/to/pr-body.md --format json
+$SPEC_RUNNER workflow-check --repo . --config /path/to/config.json --phase merge --pr-body /path/to/pr-body.md --head-sha <sha> --readback-evidence /path/to/readback.json --format json
 $SPEC_RUNNER workflow-check --repo . --phase merge --pr <number-or-url> --format json
 ```
 
