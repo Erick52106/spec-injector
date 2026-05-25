@@ -212,6 +212,7 @@ Required review checks:
 Required:
 
 - Target repo clean check.
+- Target repo staged spec artifact check when `spec preflight --target-repo` is in scope.
 - No target repo implementation.
 - Report-only output.
 - No automatic `stash`, `clean`, or `reset`.
@@ -221,6 +222,7 @@ Required review checks:
 - Distinguish observations, false positives, false negatives, and follow-up issues.
 - Dogfood does not become target repo implementation.
 - Target repo state is reported if dirty, and work stops before running destructive cleanup.
+- Staged `.spec-injector/`, generated task package, routing/readback JSON, private context, or private ledger artifacts in target repos are blockers, not cleanup prompts.
 - Follow-up issues are separate from target repo code changes.
 
 ### 11. Companion / mascot / future runtime planning

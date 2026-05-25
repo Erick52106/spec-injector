@@ -96,7 +96,7 @@ spec preflight \
 spec preflight --repo "$PWD" --target-repo <target-repo-path>
 ```
 
-此檢查只回報 target repo 狀態與 safety reminder，不得修改 target repo、不得建立 target repo `.spec-injector/`、不得在 target repo 建 branch / commit / PR。
+此檢查只回報 target repo 狀態、staged spec artifact risk 與 safety reminder，不得修改 target repo、不得建立 target repo `.spec-injector/`、不得在 target repo 建 branch / commit / PR。若 target repo staged `.spec-injector/`、`.spec-injector/out/`、generated task package、routing/readback JSON 或 private context / ledger 類 artifact，preflight 應 fail 並要求 stop-and-report；若只是在 working tree 看到 local-only suspicious artifact，preflight 應 warning，提醒不要把它們放進 target PR。
 
 PR 建立、source issue evidence comment 留下、且 PR body 回填 evidence URL 後，可執行 repo-local evidence consistency checker：
 

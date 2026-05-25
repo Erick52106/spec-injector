@@ -4766,6 +4766,63 @@ test('spec preflight warns when the target repo is dirty and keeps the boundary 
   await assertFileMissing(path.join(targetRepoDir, '.spec-injector'));
 });
 
+test('spec preflight fails when target repo has staged spec artifacts', async (t) => {
+  const fixture = await createPreflightFixture(t);
+  const targetRepoDir = await createTempRepo(t, 'spec-injector-target-staged-artifact-');
+  await writeRepoFiles(targetRepoDir, {
+    'README.md': '# Target Repo Fixture\n',
+  });
+  await initCleanGitRepo(targetRepoDir);
+  const stagedArtifact = path.join(targetRepoDir, '.spec-injector', 'out', 'issue-342-task-package.md');
+  await fs.mkdir(path.dirname(stagedArtifact), { recursive: true });
+  await fs.writeFile(stagedArtifact, '# generated task package\n', 'utf8');
+  await runCommand('git', ['add', '.spec-injector/out/issue-342-task-package.md'], targetRepoDir);
+
+  const result = await runSpec([
+    'preflight',
+    '--repo', fixture.worktreeDir,
+    '--expected-branch', fixture.branchName,
+    '--target-repo', targetRepoDir,
+  ], { env: fixture.env });
+
+  assert.notEqual(result.code, 0);
+  assert.match(result.stdout, /Preflight summary:\s+FAIL/i);
+  assert.match(result.stdout, /target repo has staged spec artifacts/i);
+  assert.match(result.stdout, /\.spec-injector\/out\/issue-342-task-package\.md/i);
+  assert.match(result.stdout, /preflight did not modify the target repo/i);
+  assertNoRawStackTrace(result);
+  const gitLog = (await readGhLog(fixture.gitLogPath)).join('\n');
+  assertNoGitMutationCommands(gitLog);
+  await assertFileExists(stagedArtifact);
+});
+
+test('spec preflight warns when target repo has local routing or readback artifacts', async (t) => {
+  const fixture = await createPreflightFixture(t);
+  const targetRepoDir = await createTempRepo(t, 'spec-injector-target-local-artifact-');
+  await writeRepoFiles(targetRepoDir, {
+    'README.md': '# Target Repo Fixture\n',
+  });
+  await initCleanGitRepo(targetRepoDir);
+  const localArtifact = path.join(targetRepoDir, 'awp-readback-evidence.json');
+  await fs.writeFile(localArtifact, '{"status":"pass"}\n', 'utf8');
+
+  const result = await runSpec([
+    'preflight',
+    '--repo', fixture.worktreeDir,
+    '--expected-branch', fixture.branchName,
+    '--target-repo', targetRepoDir,
+  ], { env: fixture.env });
+
+  assert.equal(result.code, 0, result.stderr);
+  assert.match(result.stdout, /Preflight summary:\s+WARNING/i);
+  assert.match(result.stdout, /target repo has local spec artifact risk/i);
+  assert.match(result.stdout, /awp-readback-evidence\.json/i);
+  assert.match(result.stdout, /Keep these out of commits/i);
+  const gitLog = (await readGhLog(fixture.gitLogPath)).join('\n');
+  assertNoGitMutationCommands(gitLog);
+  await assertFileExists(localArtifact);
+});
+
 test('spec evidence-check passes for complete PR and issue evidence without mutating GitHub state', async (t) => {
   const fixture = await createEvidenceCheckFixture(t);
 

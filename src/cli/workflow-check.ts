@@ -7,6 +7,11 @@ import { plan } from './plan.js';
 import type { Config } from '../config/types.js';
 import { fetchIssue } from '../github/issue.js';
 import type { Issue } from '../github/types.js';
+import {
+  configuredPrivateArtifactPrefixes,
+  isSpecArtifactPath,
+  normalizeArtifactPath,
+} from '../utils/artifacts.js';
 
 type WorkflowPhase = 'start' | 'commit' | 'merge';
 type WorkflowStatus = 'pass' | 'fail' | 'manual' | 'skipped';
@@ -923,7 +928,7 @@ function readStagedPaths(repoPath: string, config: Config): { forbidden: string[
     };
   }
 
-  const stagedPaths = result.stdout.split('\0').filter(Boolean).map(normalizeGitPath);
+  const stagedPaths = result.stdout.split('\0').filter(Boolean).map(normalizeArtifactPath);
   const forbidden = stagedPaths.filter((stagedPath) => isForbiddenArtifactPath(stagedPath, config));
   return { forbidden, warnings: [] };
 }
@@ -939,18 +944,11 @@ function getDirtyUnstagedWarning(repoPath: string): string | null {
 }
 
 function isForbiddenArtifactPath(gitPath: string, config: Config): boolean {
-  if (gitPath === '.spec-injector' || gitPath.startsWith('.spec-injector/')) return true;
-  if (gitPath.startsWith('spec-output/') || gitPath.startsWith('spec-outputs/')) return true;
-  if (/(^|\/)issue-\d+-task-package\.md$/i.test(gitPath)) return true;
-  if (/(^|\/)(?:task-package|spec-output|spec-evidence)(?:[.-][^/]*)?\.(?:md|json|txt)$/i.test(gitPath)) return true;
-  if (/(^|\/)\.?private[-_]context(\/|\.md$|\.json$|\.txt$)/i.test(gitPath)) return true;
-  return configuredPrivateExcludes(config).some((prefix) => gitPath === prefix || gitPath.startsWith(`${prefix}/`));
+  return isSpecArtifactPath(gitPath, { privateExcludes: configuredPrivateExcludes(config) });
 }
 
 function configuredPrivateExcludes(config: Config): string[] {
-  return (config.specConfig.discovery?.exclude ?? [])
-    .map(normalizeGitPath)
-    .filter((entry) => /private|secret|credential|context/i.test(entry));
+  return configuredPrivateArtifactPrefixes(config.specConfig.discovery?.exclude ?? []);
 }
 
 async function parsePrBodyEvidence(prBodyPath: string, expectedHeadSha?: string): Promise<PrBodyEvidence> {
@@ -1980,10 +1978,6 @@ async function captureConsole(fn: () => Promise<void>): Promise<{ ok: true; warn
     console.warn = originalWarn;
     console.error = originalError;
   }
-}
-
-function normalizeGitPath(value: string): string {
-  return value.replaceAll('\\', '/').replace(/^\.\/+/u, '').replace(/\/+$/u, '');
 }
 
 function unique(values: string[]): string[] {
