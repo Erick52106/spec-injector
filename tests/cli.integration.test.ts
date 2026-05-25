@@ -5783,7 +5783,7 @@ test('spec validate warns when discovery.source contains an existing file entry'
 
 test('spec validate keeps outside-repo discovery.source entries non-fatal', async (t) => {
   const repoDir = await createTempRepo(t);
-  const outsideDir = path.resolve(repoDir, '../outside-validate-source');
+  const outsideDir = path.resolve(repoDir, `../outside-validate-source-${process.pid}-${Date.now()}`);
   t.after(async () => {
     await fs.rm(outsideDir, { recursive: true, force: true });
   });
@@ -5802,6 +5802,32 @@ test('spec validate keeps outside-repo discovery.source entries non-fatal', asyn
   assert.equal(result.code, 0, result.stderr);
   assert.match(result.stdout, /config\.json is valid/i);
   assert.doesNotMatch(result.stdout, /outside\.ts.*will not be auto-discovered/i);
+});
+
+test('spec validate skips file warning for symlinked discovery.source targets outside repo', async (t) => {
+  const repoDir = await createTempRepo(t);
+  const outsideDir = path.resolve(repoDir, `../outside-validate-symlink-${process.pid}-${Date.now()}`);
+  t.after(async () => {
+    await fs.rm(outsideDir, { recursive: true, force: true });
+  });
+  await fs.mkdir(path.join(repoDir, 'src'), { recursive: true });
+  await fs.mkdir(outsideDir, { recursive: true });
+  const outsideFile = path.join(outsideDir, 'outside.ts');
+  await fs.writeFile(outsideFile, 'export const outside = true;\n');
+  await fs.symlink(outsideFile, path.join(repoDir, 'src', 'linked-outside.ts'));
+  await writeConfig(repoDir, {
+    version: 2,
+    discovery: {
+      source: ['src/linked-outside.ts'],
+      max_source_files: 5,
+    },
+  });
+
+  const result = await runSpec(['validate', '--repo', repoDir]);
+
+  assert.equal(result.code, 0, result.stderr);
+  assert.match(result.stdout, /config\.json is valid/i);
+  assert.doesNotMatch(result.stdout, /linked-outside\.ts.*will not be auto-discovered/i);
 });
 
 test('spec validate keeps missing discovery.source entries non-fatal', async (t) => {

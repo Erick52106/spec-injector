@@ -38,7 +38,10 @@ async function warnFileShapedSourceEntries(repoPath: string, sourceEntries: stri
     const absolutePath = path.resolve(repoPath, entry);
     if (!isPathInsideRepo(repoPath, absolutePath)) continue;
     try {
-      const stat = await fs.stat(absolutePath);
+      const linkStat = await fs.lstat(absolutePath);
+      const resolvedPath = linkStat.isSymbolicLink() ? await fs.realpath(absolutePath) : absolutePath;
+      if (!isPathInsideRepo(repoPath, resolvedPath)) continue;
+      const stat = linkStat.isSymbolicLink() ? await fs.stat(resolvedPath) : linkStat;
       if (stat.isFile()) {
         console.log(`  Warning: discovery.source entry \`${entry}\` is a file; discovery.source expects directory roots for auto-discovery, so this file will not be auto-discovered.`);
       }
