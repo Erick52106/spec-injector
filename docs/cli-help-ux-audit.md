@@ -138,8 +138,8 @@ Finding:
 
 ## Follow-up candidates
 
-- add help text tests
-- add examples to each subcommand help
+- addressed: add help text tests
+- addressed: add examples to high-value subcommand help
 - add command UX docs
 - add shell completion
 - improve error message consistency

@@ -697,6 +697,9 @@ test('spec plan/config/clean help describe AI-facing usage and safety constraint
   assert.match(planHelp.stdout, /verbose/i);
   assert.match(planHelp.stdout, /pipeline steps/i);
   assert.match(planHelp.stdout, /\.spec-injector\/out\/issue-<number>-task-package\.md/);
+  assert.match(planHelp.stdout, /Examples:/);
+  assert.match(planHelp.stdout, /spec plan 326 --repo \/path\/to\/repo --dry-run/);
+  assert.match(planHelp.stdout, /spec plan https:\/\/github\.com\/owner\/repo\/issues\/326 --format prompt --dry-run/);
 
   const configHelp = await runSpec(['config', '--help']);
   assert.equal(configHelp.code, 0, configHelp.stderr);
@@ -723,6 +726,8 @@ test('spec plan/config/clean help describe AI-facing usage and safety constraint
   assert.match(preflightHelp.stdout, /expected worktree root/i);
   assert.match(preflightHelp.stdout, /target repo/i);
   assert.match(preflightHelp.stdout, /does not auto-fix/i);
+  assert.match(preflightHelp.stdout, /Examples:/);
+  assert.match(preflightHelp.stdout, /spec preflight --repo \/path\/to\/worktree --expected-branch codex\/issue-326/);
 
   const evidenceCheckHelp = await runSpec(['evidence-check', '--help']);
   assert.equal(evidenceCheckHelp.code, 0, evidenceCheckHelp.stderr);
@@ -730,6 +735,8 @@ test('spec plan/config/clean help describe AI-facing usage and safety constraint
   assert.match(evidenceCheckHelp.stdout, /--pr <number-or-url>/);
   assert.match(evidenceCheckHelp.stdout, /--expected-head <sha>/);
   assert.match(evidenceCheckHelp.stdout, /read-only guardrail/i);
+  assert.match(evidenceCheckHelp.stdout, /Examples:/);
+  assert.match(evidenceCheckHelp.stdout, /spec evidence-check --repo owner\/repo --pr 123 --issue 326/);
 
   const workflowCheckHelp = await runSpec(['workflow-check', '--help']);
   assert.equal(workflowCheckHelp.code, 0, workflowCheckHelp.stderr);
@@ -740,6 +747,9 @@ test('spec plan/config/clean help describe AI-facing usage and safety constraint
   assert.match(workflowCheckHelp.stdout, /--routing-evidence <path>/);
   assert.match(workflowCheckHelp.stdout, /stdout/i);
   assert.match(workflowCheckHelp.stdout, /does not edit GitHub/i);
+  assert.match(workflowCheckHelp.stdout, /Examples:/);
+  assert.match(workflowCheckHelp.stdout, /spec workflow-check --repo \/path\/to\/worktree --phase start --issue 326/);
+  assert.match(workflowCheckHelp.stdout, /spec workflow-check --phase commit --pr-body PR_BODY\.md/);
 
   const doctorHelp = await runSpec(['doctor', '--help']);
   assert.equal(doctorHelp.code, 0, doctorHelp.stderr);
@@ -755,6 +765,8 @@ test('spec plan/config/clean help describe AI-facing usage and safety constraint
   assert.match(labelAuditHelp.stdout, /--format <format>/);
   assert.match(labelAuditHelp.stdout, /reports only/i);
   assert.match(labelAuditHelp.stdout, /does not create, rename, delete, or mutate/i);
+  assert.match(labelAuditHelp.stdout, /Examples:/);
+  assert.match(labelAuditHelp.stdout, /spec label-audit --repo owner\/repo --limit 100/);
 });
 
 test('spec doctor reports current AWP workflow capabilities as JSON', async () => {
