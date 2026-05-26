@@ -202,7 +202,20 @@ async function checkPreflightArtifactCapabilities(preflightHelp: { stdout: strin
     const artifactAdd = run(['git', 'add', '.spec-injector/out/issue-350-task-package.md'], { cwd: targetRepo });
     if (artifactAdd.exitCode !== 0) return failPreflightArtifactCapabilities(evidence, artifactAdd);
 
-    const result = run([
+    const gateResult = run([
+      ...doctorExecutableCommand(),
+      'preflight',
+      '--repo',
+      worktree,
+      '--target-repo',
+      targetRepo,
+    ]);
+    const gateOutput = `${gateResult.stdout}\n${gateResult.stderr}`;
+    const rejectedTargetArtifact = gateResult.exitCode !== 0 &&
+      (/target repo has staged spec artifacts/i.test(gateOutput) || /Forbidden staged artifacts/i.test(gateOutput)) &&
+      gateOutput.includes(DOCTOR_PREFLIGHT_ARTIFACT_PATH);
+
+    const jsonResult = run([
       ...doctorExecutableCommand(),
       'preflight',
       '--repo',
@@ -212,11 +225,7 @@ async function checkPreflightArtifactCapabilities(preflightHelp: { stdout: strin
       '--format',
       'json',
     ]);
-    const output = `${result.stdout}\n${result.stderr}`;
-    const hasArtifactMatches = hasExpectedPreflightArtifactMatches(result.stdout);
-    const rejectedTargetArtifact = result.exitCode !== 0 &&
-      (/target repo has staged spec artifacts/i.test(output) || hasArtifactMatches) &&
-      output.includes(DOCTOR_PREFLIGHT_ARTIFACT_PATH);
+    const hasArtifactMatches = hasExpectedPreflightArtifactMatches(jsonResult.stdout);
 
     return [
       {
@@ -225,7 +234,7 @@ async function checkPreflightArtifactCapabilities(preflightHelp: { stdout: strin
         required: true,
         evidence: rejectedTargetArtifact
           ? 'local target artifact smoke rejected staged .spec-injector/out task package'
-          : `target artifact smoke was accepted or failed without target artifact evidence: ${formatCommandResult(result)}`,
+          : `target artifact smoke was accepted or failed without target artifact evidence: ${formatCommandResult(gateResult)}`,
       },
       {
         id: artifactMatchesJsonId,
@@ -233,7 +242,7 @@ async function checkPreflightArtifactCapabilities(preflightHelp: { stdout: strin
         required: true,
         evidence: hasArtifactMatches
           ? 'local target artifact smoke exposed artifact_matches path/kind/reason'
-          : `target artifact smoke did not expose artifact_matches JSON: ${formatCommandResult(result)}`,
+          : `target artifact smoke did not expose artifact_matches JSON: ${formatCommandResult(jsonResult)}`,
       },
     ];
   } catch (err) {

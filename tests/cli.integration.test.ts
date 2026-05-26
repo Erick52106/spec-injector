@@ -1089,6 +1089,42 @@ test('spec doctor accepts preflight artifact_matches with non-empty structured f
   assert.equal(parsed.capabilities.find((entry) => entry.id === 'preflight_artifact_matches_json')?.status, 'pass');
 });
 
+test('spec doctor reports target artifact gate separately when preflight JSON output is broken', async (t) => {
+  const fakeSpec = await writeFakeSpec(t, {
+    rootHelp: 'Usage: spec\\nCommands:\\n  workflow-check\\n  awp-review-check\\n  preflight\\n',
+    workflowHelp: [
+      'Usage: spec workflow-check',
+      '--phase <phase>',
+      'Workflow phase: start|commit|merge',
+      '--config <path>',
+      '--finding-disposition <path>',
+      '--threshold-evidence <path>',
+      '--readback-evidence <path>',
+      '--pr <number-or-url>',
+    ].join('\\n'),
+    awpReviewHelp: 'Usage: spec awp-review-check\\n',
+    preflightTextArtifactExitCode: 1,
+    preflightTextArtifactStdout: 'target repo has staged spec artifacts: .spec-injector/out/issue-350-task-package.md\n',
+    preflightJsonArtifactExitCode: 0,
+    preflightJsonArtifactStdout: '{"overall":"pass","checks":[]}\n',
+  });
+
+  const result = await runSpec(['doctor', '--workflow', 'awp', '--format', 'json'], {
+    env: { ...process.env, SPEC_DOCTOR_SPEC_BIN: fakeSpec },
+  });
+
+  assert.notEqual(result.code, 0);
+  const parsed = JSON.parse(result.stdout) as {
+    status: string;
+    missing_capabilities: string[];
+    capabilities: Array<{ id: string; status: string; evidence: string }>;
+  };
+  assert.equal(parsed.status, 'fail');
+  assert.equal(parsed.capabilities.find((entry) => entry.id === 'preflight_target_artifact_gate')?.status, 'pass');
+  assert.equal(parsed.capabilities.find((entry) => entry.id === 'preflight_artifact_matches_json')?.status, 'fail');
+  assert.ok(parsed.missing_capabilities.includes('preflight_artifact_matches_json'));
+});
+
 async function writeFakeSpec(
   t: { after(fn: () => void | Promise<void>): void },
   options: {
@@ -1103,6 +1139,10 @@ async function writeFakeSpec(
     preflightHelpExitCode?: number;
     preflightTargetArtifactExitCode?: number;
     preflightTargetArtifactStdout?: string;
+    preflightTextArtifactExitCode?: number;
+    preflightTextArtifactStdout?: string;
+    preflightJsonArtifactExitCode?: number;
+    preflightJsonArtifactStdout?: string;
   }
 ): Promise<string> {
   const binDir = await fs.mkdtemp(path.join(os.tmpdir(), 'spec-injector-doctor-fake-'));
@@ -1142,8 +1182,13 @@ if (args[0] === 'awp-review-check') {
   process.exit(${options.awpReviewWeakEvidenceExitCode ?? 1});
 }
 if (args[0] === 'preflight') {
-  process.stdout.write(${JSON.stringify(options.preflightTargetArtifactStdout ?? '{"overall":"fail","checks":[{"severity":"fail","summary":"target repo has staged spec artifacts","detail":"Forbidden staged artifacts: .spec-injector/out/issue-350-task-package.md (spec-injector workspace artifact)","artifact_matches":[{"path":".spec-injector/out/issue-350-task-package.md","kind":"spec-agent-dir","reason":"spec-injector workspace artifact"}]}]}\n')});
-  process.exit(${options.preflightTargetArtifactExitCode ?? 1});
+  const isJson = args.includes('--format') && args[args.indexOf('--format') + 1] === 'json';
+  if (isJson) {
+    process.stdout.write(${JSON.stringify(options.preflightJsonArtifactStdout ?? options.preflightTargetArtifactStdout ?? '{"overall":"fail","checks":[{"severity":"fail","summary":"target repo has staged spec artifacts","detail":"Forbidden staged artifacts: .spec-injector/out/issue-350-task-package.md (spec-injector workspace artifact)","artifact_matches":[{"path":".spec-injector/out/issue-350-task-package.md","kind":"spec-agent-dir","reason":"spec-injector workspace artifact"}]}]}\n')});
+    process.exit(${options.preflightJsonArtifactExitCode ?? options.preflightTargetArtifactExitCode ?? 1});
+  }
+  process.stdout.write(${JSON.stringify(options.preflightTextArtifactStdout ?? options.preflightTargetArtifactStdout ?? '{"overall":"fail","checks":[{"severity":"fail","summary":"target repo has staged spec artifacts","detail":"Forbidden staged artifacts: .spec-injector/out/issue-350-task-package.md (spec-injector workspace artifact)","artifact_matches":[{"path":".spec-injector/out/issue-350-task-package.md","kind":"spec-agent-dir","reason":"spec-injector workspace artifact"}]}]}\n')});
+  process.exit(${options.preflightTextArtifactExitCode ?? options.preflightTargetArtifactExitCode ?? 1});
 }
 process.stderr.write('unknown fake spec invocation: ' + args.join(' '));
 process.exit(1);
