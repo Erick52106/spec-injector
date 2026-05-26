@@ -51,8 +51,8 @@ async function runDoctor(workflow: string): Promise<DoctorResult> {
   const workflowHelp = runSpecHelp(['workflow-check', '--help']);
   const preflightHelp = runSpecHelp(['preflight', '--help']);
   const awpReviewHelp = runSpecHelp(['awp-review-check', '--help']);
-  const [preflightTargetArtifactGate, awpReviewDurableRefs] = await Promise.all([
-    checkPreflightTargetArtifactGate(preflightHelp),
+  const [preflightArtifactCapabilities, awpReviewDurableRefs] = await Promise.all([
+    checkPreflightArtifactCapabilities(preflightHelp),
     checkAwpReviewDurableEvidenceRefs(),
   ]);
   const [adoptionContract, bootstrapContract] = await Promise.all([
@@ -104,7 +104,7 @@ async function runDoctor(workflow: string): Promise<DoctorResult> {
       required: true,
       evidence: 'spec workflow-check --help includes --pr',
     },
-    preflightTargetArtifactGate,
+    ...preflightArtifactCapabilities,
     {
       id: 'target_repo_adoption_contract_doc',
       status: adoptionContract ? 'pass' : 'fail',
@@ -150,17 +150,17 @@ async function runDoctor(workflow: string): Promise<DoctorResult> {
   };
 }
 
-async function checkPreflightTargetArtifactGate(preflightHelp: { stdout: string; stderr: string; exitCode: number }): Promise<Capability> {
-  const id = 'preflight_target_artifact_gate';
+async function checkPreflightArtifactCapabilities(preflightHelp: { stdout: string; stderr: string; exitCode: number }): Promise<Capability[]> {
+  const targetArtifactGateId = 'preflight_target_artifact_gate';
+  const artifactMatchesJsonId = 'preflight_artifact_matches_json';
   const evidence = 'local target artifact smoke uses spec preflight --target-repo with staged .spec-injector/out task package';
   const helpOutput = `${preflightHelp.stdout}\n${preflightHelp.stderr}`;
   if (preflightHelp.exitCode !== 0 || !hasLongOptionWithValue(helpOutput, 'target-repo', 'path')) {
-    return {
-      id,
-      status: 'fail',
-      required: true,
-      evidence: `preflight --help does not expose target artifact gate: ${formatCommandResult(preflightHelp)}`,
-    };
+    const failureEvidence = `preflight --help does not expose target artifact gate: ${formatCommandResult(preflightHelp)}`;
+    return [
+      { id: targetArtifactGateId, status: 'fail', required: true, evidence: failureEvidence },
+      { id: artifactMatchesJsonId, status: 'fail', required: true, evidence: failureEvidence },
+    ];
   }
 
   const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'spec-injector-doctor-preflight-'));
@@ -175,31 +175,31 @@ async function checkPreflightTargetArtifactGate(preflightHelp: { stdout: string;
 
     await fs.writeFile(path.join(mainRepo, 'README.md'), '# Doctor preflight source fixture\n', 'utf8');
     const mainInit = run(['git', 'init', '--initial-branch=main'], { cwd: mainRepo });
-    if (mainInit.exitCode !== 0) return failCapability(id, evidence, mainInit);
+    if (mainInit.exitCode !== 0) return failPreflightArtifactCapabilities(evidence, mainInit);
     run(['git', 'config', 'user.email', 'spec-injector@example.test'], { cwd: mainRepo });
     run(['git', 'config', 'user.name', 'Spec Injector Doctor'], { cwd: mainRepo });
     const mainAdd = run(['git', 'add', 'README.md'], { cwd: mainRepo });
-    if (mainAdd.exitCode !== 0) return failCapability(id, evidence, mainAdd);
+    if (mainAdd.exitCode !== 0) return failPreflightArtifactCapabilities(evidence, mainAdd);
     const mainCommit = run(['git', 'commit', '-m', 'doctor preflight source fixture'], { cwd: mainRepo });
-    if (mainCommit.exitCode !== 0) return failCapability(id, evidence, mainCommit);
+    if (mainCommit.exitCode !== 0) return failPreflightArtifactCapabilities(evidence, mainCommit);
     const worktreeAdd = run(['git', 'worktree', 'add', '-b', 'doctor-preflight-smoke', worktree, 'main'], { cwd: mainRepo });
-    if (worktreeAdd.exitCode !== 0) return failCapability(id, evidence, worktreeAdd);
+    if (worktreeAdd.exitCode !== 0) return failPreflightArtifactCapabilities(evidence, worktreeAdd);
 
     await fs.writeFile(path.join(targetRepo, 'README.md'), '# Doctor target fixture\n', 'utf8');
     const targetInit = run(['git', 'init', '--initial-branch=main'], { cwd: targetRepo });
-    if (targetInit.exitCode !== 0) return failCapability(id, evidence, targetInit);
+    if (targetInit.exitCode !== 0) return failPreflightArtifactCapabilities(evidence, targetInit);
     run(['git', 'config', 'user.email', 'spec-injector@example.test'], { cwd: targetRepo });
     run(['git', 'config', 'user.name', 'Spec Injector Doctor'], { cwd: targetRepo });
     const targetAdd = run(['git', 'add', 'README.md'], { cwd: targetRepo });
-    if (targetAdd.exitCode !== 0) return failCapability(id, evidence, targetAdd);
+    if (targetAdd.exitCode !== 0) return failPreflightArtifactCapabilities(evidence, targetAdd);
     const targetCommit = run(['git', 'commit', '-m', 'doctor target fixture'], { cwd: targetRepo });
-    if (targetCommit.exitCode !== 0) return failCapability(id, evidence, targetCommit);
+    if (targetCommit.exitCode !== 0) return failPreflightArtifactCapabilities(evidence, targetCommit);
 
     const stagedArtifact = path.join(targetRepo, '.spec-injector', 'out', 'issue-350-task-package.md');
     await fs.mkdir(path.dirname(stagedArtifact), { recursive: true });
     await fs.writeFile(stagedArtifact, '# generated task package\n', 'utf8');
     const artifactAdd = run(['git', 'add', '.spec-injector/out/issue-350-task-package.md'], { cwd: targetRepo });
-    if (artifactAdd.exitCode !== 0) return failCapability(id, evidence, artifactAdd);
+    if (artifactAdd.exitCode !== 0) return failPreflightArtifactCapabilities(evidence, artifactAdd);
 
     const result = run([
       ...doctorExecutableCommand(),
@@ -215,24 +215,62 @@ async function checkPreflightTargetArtifactGate(preflightHelp: { stdout: string;
     const rejectedTargetArtifact = result.exitCode !== 0 &&
       /target repo has staged spec artifacts/i.test(output) &&
       /\.spec-injector\/out\/issue-350-task-package\.md/i.test(output);
+    const hasArtifactMatches = hasExpectedPreflightArtifactMatches(result.stdout);
 
-    return {
-      id,
-      status: rejectedTargetArtifact ? 'pass' : 'fail',
-      required: true,
-      evidence: rejectedTargetArtifact
-        ? 'local target artifact smoke rejected staged .spec-injector/out task package'
-        : `target artifact smoke was accepted or failed without target artifact evidence: ${formatCommandResult(result)}`,
-    };
+    return [
+      {
+        id: targetArtifactGateId,
+        status: rejectedTargetArtifact ? 'pass' : 'fail',
+        required: true,
+        evidence: rejectedTargetArtifact
+          ? 'local target artifact smoke rejected staged .spec-injector/out task package'
+          : `target artifact smoke was accepted or failed without target artifact evidence: ${formatCommandResult(result)}`,
+      },
+      {
+        id: artifactMatchesJsonId,
+        status: rejectedTargetArtifact && hasArtifactMatches ? 'pass' : 'fail',
+        required: true,
+        evidence: hasArtifactMatches
+          ? 'local target artifact smoke exposed artifact_matches path/kind/reason'
+          : `target artifact smoke did not expose artifact_matches JSON: ${formatCommandResult(result)}`,
+      },
+    ];
   } catch (err) {
-    return {
-      id,
-      status: 'fail',
-      required: true,
-      evidence: `target artifact smoke could not run: ${(err as Error).message}`,
-    };
+    const failureEvidence = `target artifact smoke could not run: ${(err as Error).message}`;
+    return [
+      { id: targetArtifactGateId, status: 'fail', required: true, evidence: failureEvidence },
+      { id: artifactMatchesJsonId, status: 'fail', required: true, evidence: failureEvidence },
+    ];
   } finally {
     await fs.rm(tempRoot, { recursive: true, force: true });
+  }
+}
+
+function failPreflightArtifactCapabilities(evidence: string, result: { stdout: string; stderr: string; exitCode: number }): Capability[] {
+  return [
+    failCapability('preflight_target_artifact_gate', evidence, result),
+    failCapability('preflight_artifact_matches_json', evidence, result),
+  ];
+}
+
+function hasExpectedPreflightArtifactMatches(stdout: string): boolean {
+  try {
+    const parsed = JSON.parse(stdout) as {
+      checks?: Array<{
+        summary?: unknown;
+        artifact_matches?: Array<{ path?: unknown; kind?: unknown; reason?: unknown }>;
+      }>;
+    };
+    return (parsed.checks ?? []).some((check) =>
+      check.summary === 'target repo has staged spec artifacts' &&
+      (check.artifact_matches ?? []).some((match) =>
+        match.path === '.spec-injector/out/issue-350-task-package.md' &&
+        match.kind === 'spec-agent-dir' &&
+        match.reason === 'spec-injector workspace artifact'
+      )
+    );
+  } catch {
+    return false;
   }
 }
 
