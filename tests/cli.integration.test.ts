@@ -1056,6 +1056,39 @@ test('spec doctor fails when installed preflight omits artifact_matches JSON', a
   assert.match(capability?.evidence ?? '', /artifact_matches/i);
 });
 
+test('spec doctor accepts preflight artifact_matches with non-empty structured fields', async (t) => {
+  const fakeSpec = await writeFakeSpec(t, {
+    rootHelp: 'Usage: spec\\nCommands:\\n  workflow-check\\n  awp-review-check\\n  preflight\\n',
+    workflowHelp: [
+      'Usage: spec workflow-check',
+      '--phase <phase>',
+      'Workflow phase: start|commit|merge',
+      '--config <path>',
+      '--finding-disposition <path>',
+      '--threshold-evidence <path>',
+      '--readback-evidence <path>',
+      '--pr <number-or-url>',
+    ].join('\\n'),
+    awpReviewHelp: 'Usage: spec awp-review-check\\n',
+    preflightTargetArtifactExitCode: 1,
+    preflightTargetArtifactStdout: '{"overall":"fail","checks":[{"severity":"fail","summary":"renamed artifact blocker summary","detail":"Forbidden staged artifacts: .spec-injector/out/issue-350-task-package.md","artifact_matches":[{"path":".spec-injector/out/issue-350-task-package.md","kind":"renamed-artifact-family","reason":"renamed match reason"}]}]}\n',
+  });
+
+  const result = await runSpec(['doctor', '--workflow', 'awp', '--format', 'json'], {
+    env: { ...process.env, SPEC_DOCTOR_SPEC_BIN: fakeSpec },
+  });
+
+  assert.equal(result.code, 0, result.stderr);
+  const parsed = JSON.parse(result.stdout) as {
+    status: string;
+    missing_capabilities: string[];
+    capabilities: Array<{ id: string; status: string }>;
+  };
+  assert.equal(parsed.status, 'pass');
+  assert.deepEqual(parsed.missing_capabilities, []);
+  assert.equal(parsed.capabilities.find((entry) => entry.id === 'preflight_artifact_matches_json')?.status, 'pass');
+});
+
 async function writeFakeSpec(
   t: { after(fn: () => void | Promise<void>): void },
   options: {

@@ -34,6 +34,7 @@ type DoctorResult = {
 
 const SUPPORTED_WORKFLOWS = new Set(['awp']);
 const SUPPORTED_FORMATS = new Set(['text', 'json']);
+const DOCTOR_PREFLIGHT_ARTIFACT_PATH = '.spec-injector/out/issue-350-task-package.md';
 
 export async function doctor(opts: DoctorOptions): Promise<void> {
   const workflow = parseWorkflow(opts.workflow ?? 'awp');
@@ -212,10 +213,10 @@ async function checkPreflightArtifactCapabilities(preflightHelp: { stdout: strin
       'json',
     ]);
     const output = `${result.stdout}\n${result.stderr}`;
-    const rejectedTargetArtifact = result.exitCode !== 0 &&
-      /target repo has staged spec artifacts/i.test(output) &&
-      /\.spec-injector\/out\/issue-350-task-package\.md/i.test(output);
     const hasArtifactMatches = hasExpectedPreflightArtifactMatches(result.stdout);
+    const rejectedTargetArtifact = result.exitCode !== 0 &&
+      (/target repo has staged spec artifacts/i.test(output) || hasArtifactMatches) &&
+      output.includes(DOCTOR_PREFLIGHT_ARTIFACT_PATH);
 
     return [
       {
@@ -262,16 +263,19 @@ function hasExpectedPreflightArtifactMatches(stdout: string): boolean {
       }>;
     };
     return (parsed.checks ?? []).some((check) =>
-      check.summary === 'target repo has staged spec artifacts' &&
       (check.artifact_matches ?? []).some((match) =>
-        match.path === '.spec-injector/out/issue-350-task-package.md' &&
-        match.kind === 'spec-agent-dir' &&
-        match.reason === 'spec-injector workspace artifact'
+        match.path === DOCTOR_PREFLIGHT_ARTIFACT_PATH &&
+        isNonEmptyString(match.kind) &&
+        isNonEmptyString(match.reason)
       )
     );
   } catch {
     return false;
   }
+}
+
+function isNonEmptyString(value: unknown): value is string {
+  return typeof value === 'string' && value.trim().length > 0;
 }
 
 function parseWorkflow(value: string): string {
