@@ -27,6 +27,7 @@ The AWP workflow requires `workflow-check` support for:
 - `--readback-evidence`
 - `--pr`
 - `spec preflight --target-repo <path>` target artifact gate, so staged `.spec-injector/`, generated spec output, task packages, or private context artifacts in target repos are rejected before PR evidence closeout
+- `spec preflight --target-repo <path> --format json` artifact match metadata, so target artifact blockers expose structured `artifact_matches` entries with `path`, `kind`, and `reason`
 - durable review evidence refs in `spec awp-review-check`, so actionable closeout ledger refs cannot be weak placeholders such as `done`, `ok`, or `pending`
 
 `spec doctor --workflow awp --format json` is the stable machine-readable readiness check. A `status` of `pass` means the installed CLI exposes the current AWP workflow capabilities. A `status` of `fail` means the bootstrap should use the local runner fallback below or stop for human review.
